@@ -6,7 +6,8 @@ import slick.driver.MySQLDriver.api._
 import scala.concurrent.ExecutionContext
 import com.advancedtelematic.data.DataType._
 import com.advancedtelematic.service_blueprint.db.BlueprintRepositorySupport
-import org.genivi.sota.marshalling.CirceMarshallingSupport._
+import de.heikoseeberger.akkahttpcirce.CirceSupport._
+import com.advancedtelematic.libats.codecs.AkkaCirce._
 import io.circe.generic.auto._
 
 

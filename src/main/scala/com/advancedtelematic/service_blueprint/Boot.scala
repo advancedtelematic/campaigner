@@ -3,14 +3,13 @@ package com.advancedtelematic.service_blueprint
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.{Directives, Route}
 import akka.stream.Materializer
+import com.advancedtelematic.libats.db.{BootMigrations, DatabaseConfig}
+import com.advancedtelematic.libats.http.BootApp
+import com.advancedtelematic.libats.monitoring.{DatabaseMetrics, MetricsSupport}
 import com.advancedtelematic.service_blueprint.http.ServiceBlueprintRoutes
 import com.typesafe.config.ConfigFactory
-import org.genivi.sota.db.{BootMigrations, DatabaseConfig}
-import org.genivi.sota.http.BootApp
-import org.genivi.sota.http.LogDirectives.logResponseMetrics
-import org.genivi.sota.http.VersionDirectives.versionHeaders
-import org.genivi.sota.monitoring.{DatabaseMetrics, MetricsSupport}
-
+import com.advancedtelematic.libats.http.VersionDirectives._
+import com.advancedtelematic.libats.http.LogDirectives._
 
 trait Settings {
   lazy val config = ConfigFactory.load()

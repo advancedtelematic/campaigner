@@ -2,7 +2,7 @@ package com.advancedtelematic.service_blueprint.db
 
 import com.advancedtelematic.service_blueprint.http.Errors
 import slick.driver.MySQLDriver.api._
-import org.genivi.sota.http.Errors.MissingEntity
+import com.advancedtelematic.libats.http.Errors.MissingEntity
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -12,8 +12,8 @@ trait BlueprintRepositorySupport {
 
 protected class BlueprintRepository()(implicit db: Database, ec: ExecutionContext) {
   import com.advancedtelematic.data.DataType._
-  import org.genivi.sota.db.SlickExtensions._
-  import org.genivi.sota.db.Operators._
+  import com.advancedtelematic.libats.db.SlickExtensions._
+  import com.advancedtelematic.libats.db.Operators._
 
   val NotFound = MissingEntity(classOf[Blueprint])
 

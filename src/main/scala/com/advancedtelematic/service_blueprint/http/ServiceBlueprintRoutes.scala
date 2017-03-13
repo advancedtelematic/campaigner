@@ -2,10 +2,9 @@ package com.advancedtelematic.service_blueprint.http
 
 import akka.http.scaladsl.server.{Directives, _}
 import akka.stream.Materializer
+import com.advancedtelematic.libats.http.{ErrorHandler, HealthResource}
 import com.advancedtelematic.service_blueprint.VersionInfo
-import org.genivi.sota.http.{ErrorHandler, HealthResource}
-import org.genivi.sota.rest.SotaRejectionHandler._
-
+import com.advancedtelematic.libats.http.DefaultRejectionHandler.rejectionHandler
 import scala.concurrent.ExecutionContext
 import slick.driver.MySQLDriver.api._
 

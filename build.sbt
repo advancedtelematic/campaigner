@@ -1,5 +1,5 @@
 name := "service_blueprint"
-organization := "com.advancedtelematic.com"
+organization := "com.advancedtelematic"
 scalaVersion := "2.11.8"
 
 scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8")
@@ -9,11 +9,11 @@ resolvers += "ATS Releases" at "http://nexus.prod01.internal.advancedtelematic.c
 resolvers += "ATS Snapshots" at "http://nexus.prod01.internal.advancedtelematic.com:8081/content/repositories/snapshots"
 
 libraryDependencies ++= {
-  val akkaV = "2.4.14"
-  val akkaHttpV = "10.0.0"
+  val akkaV = "2.4.17"
+  val akkaHttpV = "10.0.3"
   val scalaTestV = "3.0.0"
   val slickV = "3.1.1"
-  val sotaV = "0.2.53"
+  val libatsV = "0.0.1-19-gdad3295"
 
   Seq(
     "com.typesafe.akka" %% "akka-actor" % akkaV,
@@ -25,8 +25,7 @@ libraryDependencies ++= {
 
     "ch.qos.logback" % "logback-classic" % "1.1.3",
 
-    "org.genivi" %% "sota-common" % sotaV,
-    "org.genivi" %% "sota-common-db-test" % sotaV % "test",
+    "com.advancedtelematic" %% "libats" % libatsV,
 
     "com.typesafe.slick" %% "slick" % slickV,
     "com.typesafe.slick" %% "slick-hikaricp" % slickV,

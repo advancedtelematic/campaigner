@@ -1,8 +1,8 @@
 package com.advancedtelematic.service_blueprint.http
 
 import akka.http.scaladsl.model.StatusCodes
-import org.genivi.sota.http.Errors.RawError
-import org.genivi.sota.rest.ErrorCode
+import com.advancedtelematic.libats.http.ErrorCode
+import com.advancedtelematic.libats.http.Errors.RawError
 
 object ErrorCodes {
   val BlueprintMissing = ErrorCode("blueprint_missing")
