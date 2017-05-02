@@ -8,7 +8,6 @@ import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.util.{ResourceSpec, CampaignerSpec}
 import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import org.scalacheck.Arbitrary._
-import scala.collection.JavaConverters._
 
 class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
 
@@ -64,22 +63,6 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
 
       Post(apiUri(s"campaigns/${campaignId.show}/launch")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
-      }
-    }
-  }
-
-  property("all affected groups and devices get updates") {
-    forAll { request: CreateCampaign  =>
-
-      val campaignId = createCampaignOk(request)
-
-      director.updatedDevices.clear()
-      Post(apiUri(s"campaigns/${campaignId.show}/launch")) ~> routes ~> check {
-        status shouldBe StatusCodes.OK
-        request.groups shouldBe deviceRegistry.pseudoState.keys.asScala.toSet.intersect(request.groups)
-        request.groups.map { grp =>
-          deviceRegistry.pseudoState.get(grp)
-        }.flatten.toSet shouldBe director.updatedDevices.keys.asScala.toSet
       }
     }
   }

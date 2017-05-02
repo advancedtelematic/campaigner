@@ -1,7 +1,7 @@
 package com.advancedtelematic.campaigner.data
 
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.libats.data.{Namespace, PaginationResult}
+import com.advancedtelematic.libats.data.Namespace
 import java.time.Instant
 import org.scalacheck.Arbitrary._
 import org.scalacheck.{Arbitrary, Gen}
@@ -36,14 +36,6 @@ object Generators {
     n   <- arbitrary[String]
   } yield UpdateCampaign(n)
 
-  def genPaginationResult[T]()
-      (implicit a: Arbitrary[Seq[T]]): Gen[PaginationResult[T]] = for {
-    total  <- arbitrary[Long]
-    limit  <- arbitrary[Long]
-    offset <- arbitrary[Long]
-    values <- a.arbitrary
-  } yield PaginationResult(total, limit, offset, values)
-
   implicit lazy val arbCampaignId: Arbitrary[CampaignId] = Arbitrary(genCampaignId)
   implicit lazy val arbGroupId: Arbitrary[GroupId] = Arbitrary(genGroupId)
   implicit lazy val arbDeviceId: Arbitrary[DeviceId] = Arbitrary(genDeviceId)
@@ -52,7 +44,5 @@ object Generators {
   implicit lazy val arbCampaign: Arbitrary[Campaign] = Arbitrary(genCampaign)
   implicit lazy val arbCreateCampaign: Arbitrary[CreateCampaign] = Arbitrary(genCreateCampaign)
   implicit lazy val arbUpdateCampaign: Arbitrary[UpdateCampaign] = Arbitrary(genUpdateCampaign)
-  implicit lazy val arbPaginationResultDevices: Arbitrary[PaginationResult[DeviceId]] =
-    Arbitrary(genPaginationResult[DeviceId])
 
 }
