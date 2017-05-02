@@ -1,66 +1,79 @@
 package com.advancedtelematic.campaigner.http
 
+import akka.actor.ActorRef
 import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.server.Directives._
-import akka.stream.Materializer
-import cats.implicits._
-import com.advancedtelematic.campaigner.client._
+import akka.util.Timeout
+import com.advancedtelematic.campaigner.Settings
+import com.advancedtelematic.campaigner.actor.CampaignSupervisor
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.CampaignSupport
-import de.heikoseeberger.akkahttpcirce.CirceSupport._
+import com.advancedtelematic.libats.auth.AuthedNamespaceScope
+import com.advancedtelematic.libats.data.Namespace
+import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import scala.concurrent.{ExecutionContext, Future}
-import slick.driver.MySQLDriver.api._
+import slick.jdbc.MySQLProfile.api._
 
-class CampaignResource(deviceRegistry: DeviceRegistry, director: Director)
-  (implicit db: Database, ec: ExecutionContext, mat: Materializer) extends CampaignSupport {
+class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
+                       supervisor: ActorRef)
+                      (implicit db: Database, ec: ExecutionContext)
+  extends CampaignSupport
+  with Settings {
 
-  def createCampaign(request: CreateCampaign): Future[CampaignId] = {
-    val campaign = request.mkCampaign()
+  import CampaignSupervisor._
+  import akka.pattern.ask
+  import scala.concurrent.duration._
+
+  implicit val timeout = Timeout(10.seconds)
+
+  def createCampaign(ns: Namespace, request: CreateCampaign): Future[CampaignId] = {
+    val campaign = request.mkCampaign(ns)
 
     Campaigns.persist(campaign, request.groups)
       .map(_ => campaign.id)
   }
 
-  def getCampaign(id: CampaignId): Future[GetCampaign] = for {
-    c    <- Campaigns.find(id)
-    grps <- Campaigns.findGroups(c.id)
-  } yield GetCampaign(c, grps)
+  def getCampaign(ns: Namespace, id: CampaignId): Future[GetCampaign] = for {
+    c      <- Campaigns.findCampaign(ns, id)
+    groups <- Campaigns.findGroups(ns, c.id)
+  } yield GetCampaign(c, groups)
 
-  def updateCampaign(id: CampaignId, updated: UpdateCampaign): Future[Unit] =
-    Campaigns.update(id, updated.name).map(_ => ())
+  def updateCampaign(ns: Namespace, id: CampaignId, updated: UpdateCampaign): Future[Unit] =
+    Campaigns.update(ns, id, updated.name).map(_ => ())
 
-  def launchCampaign(id: CampaignId): Future[Unit] = {
+  def launchCampaign(ns: Namespace, id: CampaignId): Future[Unit] =  for {
+    c      <- Campaigns.findCampaign(ns, id)
+    groups <- Campaigns.findGroups(ns, id)
+    _      <- supervisor ? ScheduleCampaign(c, groups)
+  } yield ()
 
-    def launchGroup(campaign: Campaign,
-                    grp: GroupId): Future[Unit] = for {
-      devs <- deviceRegistry.getDevicesInGroup(campaign.namespace, grp)
-      _    <- devs.toList.traverse(director.setMultiUpdateTarget(campaign.namespace, _, campaign.update))
-    } yield ()
-
-    for {
-      c        <- Campaigns.find(id)
-      grps     <- Campaigns.findGroups(id)
-      _        <- grps.toList.traverse(launchGroup(c, _))
-    } yield ()
-  }
+  def getStats(ns: Namespace, id: CampaignId): Future[CampaignStatsResult] =
+    Campaigns.campaignStatsFor(ns, id).map(CampaignStatsResult(id, _))
 
   val route =
-    pathPrefix("campaigns") {
-      (post & pathEnd) {
-        entity(as[CreateCampaign]) { request =>
-          complete(StatusCodes.Created -> createCampaign(request))
-        }
-      } ~
-      pathPrefix(CampaignId.Path) { id =>
-        (get & pathEnd) {
-          complete(getCampaign(id))
+    extractAuth { auth =>
+      pathPrefix("campaigns") {
+        val ns = auth.namespace
+        (post & pathEnd) {
+          entity(as[CreateCampaign]) { request =>
+            complete(StatusCodes.Created -> createCampaign(ns, request))
+          }
         } ~
-        (put & pathEnd & entity(as[UpdateCampaign])) { updated =>
-          complete(updateCampaign(id, updated))
-        } ~
-        (post & path("launch")) {
-          complete(launchCampaign(id))
+        pathPrefix(CampaignId.Path) { id =>
+          (get & pathEnd) {
+            complete(getCampaign(ns, id))
+          } ~
+          (put & pathEnd & entity(as[UpdateCampaign])) { updated =>
+            complete(updateCampaign(ns, id, updated))
+          } ~
+          (post & path("launch")) {
+            complete(launchCampaign(ns, id))
+          } ~
+          (get & path("stats")) {
+            complete(getStats(ns, id))
+          }
         }
       }
     }

@@ -1,7 +1,7 @@
 package com.advancedtelematic.campaigner.data
 
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.libats.data.{Namespace, PaginationResult}
+import com.advancedtelematic.libats.data.Namespace
 import java.time.Instant
 import org.scalacheck.Arbitrary._
 import org.scalacheck.{Arbitrary, Gen}
@@ -15,34 +15,28 @@ object Generators {
   val genNamespace: Gen[Namespace] = arbitrary[String].map(Namespace(_))
 
   val genCampaign: Gen[Campaign] = for {
-    id     <- arbitrary[CampaignId]
     ns     <- arbitrary[Namespace]
-    n      <- arbitrary[String]
+    id     <- arbitrary[CampaignId]
+    n       = id.uuid.toString.take(5)
     update <- arbitrary[UpdateId]
-    t1      = Gen.choose(0,  Instant.MAX.getEpochSecond)
-    t2      = t1.flatMap(Gen.choose(_, Instant.MAX.getEpochSecond))
-    ca     <- t1.map(Instant.ofEpochSecond(_))
-    ua     <- t2.map(Instant.ofEpochSecond(_))
-  } yield Campaign(id, ns, n, update, ca, ua)
+    ca      = Instant.now()
+    ua      = Instant.now()
+  } yield Campaign(ns, id, n, update, ca, ua)
 
   val genCreateCampaign: Gen[CreateCampaign] = for {
-    ns  <- arbitrary[Namespace]
     n   <- arbitrary[String].suchThat(!_.isEmpty)
     update <- arbitrary[UpdateId]
     gs  <- arbitrary[Set[GroupId]]
-  } yield CreateCampaign(ns, n, update, gs)
+  } yield CreateCampaign(n, update, gs)
 
   val genUpdateCampaign: Gen[UpdateCampaign] = for {
-    n   <- arbitrary[String]
+    n   <- arbitrary[String].suchThat(!_.isEmpty)
   } yield UpdateCampaign(n)
 
-  def genPaginationResult[T]()
-      (implicit a: Arbitrary[Seq[T]]): Gen[PaginationResult[T]] = for {
-    total  <- arbitrary[Long]
-    limit  <- arbitrary[Long]
-    offset <- arbitrary[Long]
-    values <- a.arbitrary
-  } yield PaginationResult(total, limit, offset, values)
+  val genStats: Gen[Stats] = for {
+    p <- Gen.posNum[Long]
+    a <- Gen.posNum[Long]
+  } yield Stats(p, a)
 
   implicit lazy val arbCampaignId: Arbitrary[CampaignId] = Arbitrary(genCampaignId)
   implicit lazy val arbGroupId: Arbitrary[GroupId] = Arbitrary(genGroupId)
@@ -52,7 +46,6 @@ object Generators {
   implicit lazy val arbCampaign: Arbitrary[Campaign] = Arbitrary(genCampaign)
   implicit lazy val arbCreateCampaign: Arbitrary[CreateCampaign] = Arbitrary(genCreateCampaign)
   implicit lazy val arbUpdateCampaign: Arbitrary[UpdateCampaign] = Arbitrary(genUpdateCampaign)
-  implicit lazy val arbPaginationResultDevices: Arbitrary[PaginationResult[DeviceId]] =
-    Arbitrary(genPaginationResult[DeviceId])
+  implicit lazy val arbStats: Arbitrary[Stats] = Arbitrary(genStats)
 
 }

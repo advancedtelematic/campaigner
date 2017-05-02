@@ -1,25 +1,29 @@
 package com.advancedtelematic.campaigner.http
 
 import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.headers.RawHeader
 import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
+import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.util.{ResourceSpec, CampaignerSpec}
-import de.heikoseeberger.akkahttpcirce.CirceSupport._
+import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import org.scalacheck.Arbitrary._
-import scala.collection.JavaConverters._
 
 class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
 
+  def testNs = Namespace("testNs")
+  def header = RawHeader("x-ats-namespace", testNs.get)
+
   def createCampaignOk(request: CreateCampaign): CampaignId =
-    Post(apiUri("campaigns"), request) ~> routes ~> check {
+    Post(apiUri("campaigns"), request).withHeaders(header) ~> routes ~> check {
       status shouldBe StatusCodes.Created
       responseAs[CampaignId]
     }
 
   def getCampaignOk(id: CampaignId): GetCampaign =
-    Get(apiUri("campaigns/" + id.show)) ~> routes ~> check {
+    Get(apiUri("campaigns/" + id.show)).withHeaders(header) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseAs[GetCampaign]
     }
@@ -31,8 +35,8 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
 
       val campaign = getCampaignOk(id)
       campaign shouldBe GetCampaign(
+        testNs,
         id,
-        request.namespace,
         request.name,
         request.update,
         campaign.createdAt,
@@ -49,7 +53,7 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
       val id = createCampaignOk(request)
       val createdAt = getCampaignOk(id).createdAt
 
-      Put(apiUri("campaigns/" + id.show), update) ~> routes ~> check {
+      Put(apiUri("campaigns/" + id.show), update).withHeaders(header) ~> routes ~> check {
         status shouldBe StatusCodes.OK
       }
 
@@ -62,24 +66,8 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
 
       val campaignId = createCampaignOk(request)
 
-      Post(apiUri(s"campaigns/${campaignId.show}/launch")) ~> routes ~> check {
+      Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header) ~> routes ~> check {
         status shouldBe StatusCodes.OK
-      }
-    }
-  }
-
-  property("all affected groups and devices get updates") {
-    forAll { request: CreateCampaign  =>
-
-      val campaignId = createCampaignOk(request)
-
-      director.updatedDevices.clear()
-      Post(apiUri(s"campaigns/${campaignId.show}/launch")) ~> routes ~> check {
-        status shouldBe StatusCodes.OK
-        request.groups shouldBe deviceRegistry.pseudoState.keys.asScala.toSet.intersect(request.groups)
-        request.groups.map { grp =>
-          deviceRegistry.pseudoState.get(grp)
-        }.flatten.toSet shouldBe director.updatedDevices.keys.asScala.toSet
       }
     }
   }
