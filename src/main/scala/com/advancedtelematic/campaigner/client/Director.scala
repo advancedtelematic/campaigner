@@ -11,8 +11,8 @@ import scala.concurrent.{ExecutionContext, Future}
 trait Director {
 
   def setMultiUpdateTarget(ns: Namespace,
-                           device: DeviceId,
-                           update: UpdateId): Future[Unit]
+                           update: UpdateId,
+                           devices: Seq[DeviceId]): Future[Seq[DeviceId]]
 }
 
 class DirectorClient(uri: Uri)
@@ -20,15 +20,18 @@ class DirectorClient(uri: Uri)
     extends HttpClient("director", uri) with Director {
 
   import de.heikoseeberger.akkahttpcirce.CirceSupport._
+  import io.circe.syntax._
 
   override def setMultiUpdateTarget(ns: Namespace,
-                                    device: DeviceId,
-                                    update: UpdateId): Future[Unit] = {
-    val req = HttpRequest(
+                                    update: UpdateId,
+                                    devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
+    val path = uri.path / "api" / "v1" / "admin" / "multi_target_updates" / update.show
+    val req  = HttpRequest(
       method = HttpMethods.POST,
-      uri    = uri.withPath(uri.path / "api" / "v1" / "admin" / "devices" / device.show / "multi_target_update" / update.show)
+      uri    = uri.withPath(path),
+      entity = devices.asJson.noSpaces
     )
-    execHttp[Unit](ns, req).map(_ => ())
+    execHttp[Seq[DeviceId]](ns, req)
   }
 
 }

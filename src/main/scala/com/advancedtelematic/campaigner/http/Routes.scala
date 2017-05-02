@@ -1,5 +1,6 @@
 package com.advancedtelematic.campaigner.http
 
+import akka.actor.ActorSystem
 import akka.http.scaladsl.server.{Directives, Route}
 import akka.stream.Materializer
 import com.advancedtelematic.campaigner.VersionInfo
@@ -11,7 +12,8 @@ import scala.concurrent.ExecutionContext
 import slick.driver.MySQLDriver.api._
 
 class Routes(deviceRegistry: DeviceRegistry, director: Director)
-  (implicit val db: Database, ec: ExecutionContext, mat: Materializer) extends VersionInfo {
+  (implicit val db: Database, ec: ExecutionContext, mat: Materializer, system: ActorSystem)
+  extends VersionInfo {
 
   import Directives._
 
@@ -23,4 +25,5 @@ class Routes(deviceRegistry: DeviceRegistry, director: Director)
         } ~ new HealthResource(Seq(DbHealthResource.HealthCheck(db)), versionMap).route
       }
     }
+
 }
