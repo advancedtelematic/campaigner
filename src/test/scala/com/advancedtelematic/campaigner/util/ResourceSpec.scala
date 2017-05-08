@@ -1,8 +1,9 @@
 package com.advancedtelematic.util
 
 import akka.http.scaladsl.testkit.ScalatestRouteTest
+import com.advancedtelematic.campaigner.client._
+import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.test.DatabaseSpec
-import com.advancedtelematic.service_blueprint.http.ServiceBlueprintRoutes
 import org.scalatest.Suite
 
 trait ResourceSpec extends ScalatestRouteTest with DatabaseSpec {
@@ -10,7 +11,9 @@ trait ResourceSpec extends ScalatestRouteTest with DatabaseSpec {
 
   def apiUri(path: String): String = "/api/v1/" + path
 
-  lazy val routes = new ServiceBlueprintRoutes().routes
+  val deviceRegistry = new FakeDeviceRegistryClient()
+  val director = new FakeDirectorClient()
+
+  lazy val routes = new Routes(deviceRegistry, director).routes
+
 }
-
-

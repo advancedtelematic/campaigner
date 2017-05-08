@@ -1,4 +1,4 @@
-package com.advancedtelematic.service_blueprint
+package com.advancedtelematic.campaigner
 
 trait VersionInfo {
   lazy val projectName: String = buildinfo.BuildInfo.name
