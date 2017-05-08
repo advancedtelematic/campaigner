@@ -7,6 +7,7 @@ import com.advancedtelematic.libats.data.Namespace
 import java.util.concurrent.ConcurrentHashMap
 import org.scalacheck.Arbitrary._
 import org.scalacheck.Gen
+import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
 class FakeDeviceRegistryClient(implicit ec: ExecutionContext) extends DeviceRegistry {
@@ -14,14 +15,14 @@ class FakeDeviceRegistryClient(implicit ec: ExecutionContext) extends DeviceRegi
   val state: ConcurrentHashMap[GroupId, Seq[DeviceId]] = new ConcurrentHashMap()
 
   override def getDevicesInGroup(namespace: Namespace,
-                                 groupId: GroupId,
+                                 grp: GroupId,
                                  offset: Int,
                                  limit: Int): Future[Seq[DeviceId]] =
-    if (state.contains(groupId)) {
-      FastFuture.successful(state.get(groupId).drop(offset).take(limit))
+    if (state.containsKey(grp)) {
+      FastFuture.successful(state.get(grp).drop(offset).take(limit))
     } else {
       val r = arbitrary[Seq[DeviceId]].sample.get
-      state.put(groupId, r)
+      state.put(grp, r)
       FastFuture.successful(r.drop(offset).take(limit))
     }
 
@@ -29,13 +30,14 @@ class FakeDeviceRegistryClient(implicit ec: ExecutionContext) extends DeviceRegi
 
 class FakeDirectorClient(implicit ec: ExecutionContext) extends Director {
 
-  val state: ConcurrentHashMap[UpdateId, Seq[DeviceId]] = new ConcurrentHashMap()
+  val state: ConcurrentHashMap[UpdateId, Set[DeviceId]] = new ConcurrentHashMap()
 
   override def setMultiUpdateTarget(namespace: Namespace,
                                     update: UpdateId,
                                     devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
     val r = Gen.someOf(devices).sample.get
-    state.put(update, r)
+    val current = state.asScala.getOrElse(update, Set.empty)
+    state.put(update, current ++ r)
     FastFuture.successful(r)
   }
 

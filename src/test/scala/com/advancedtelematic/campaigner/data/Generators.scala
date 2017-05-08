@@ -1,5 +1,7 @@
 package com.advancedtelematic.campaigner.data
 
+
+import com.advancedtelematic.campaigner.actor.StatsCollector._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.data.Namespace
 import java.time.Instant
@@ -36,6 +38,11 @@ object Generators {
     n   <- arbitrary[String]
   } yield UpdateCampaign(n)
 
+  val genStats: Gen[Stats] = for {
+    p <- Gen.posNum[Int]
+    a <- Gen.posNum[Int]
+  } yield Stats(p, a)
+
   implicit lazy val arbCampaignId: Arbitrary[CampaignId] = Arbitrary(genCampaignId)
   implicit lazy val arbGroupId: Arbitrary[GroupId] = Arbitrary(genGroupId)
   implicit lazy val arbDeviceId: Arbitrary[DeviceId] = Arbitrary(genDeviceId)
@@ -44,5 +51,6 @@ object Generators {
   implicit lazy val arbCampaign: Arbitrary[Campaign] = Arbitrary(genCampaign)
   implicit lazy val arbCreateCampaign: Arbitrary[CreateCampaign] = Arbitrary(genCreateCampaign)
   implicit lazy val arbUpdateCampaign: Arbitrary[UpdateCampaign] = Arbitrary(genUpdateCampaign)
+  implicit lazy val arbStats: Arbitrary[Stats] = Arbitrary(genStats)
 
 }
