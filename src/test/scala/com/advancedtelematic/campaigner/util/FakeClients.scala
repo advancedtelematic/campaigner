@@ -7,13 +7,12 @@ import com.advancedtelematic.libats.data.Namespace
 import java.util.concurrent.ConcurrentHashMap
 import org.scalacheck.Arbitrary._
 import org.scalacheck.Gen
+import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
-class FakeDeviceRegistryClient(implicit ec: ExecutionContext) extends DeviceRegistryClient {
+object FakeDeviceRegistryClient {
 
-  val state: ConcurrentHashMap[GroupId, Seq[DeviceId]] = new ConcurrentHashMap()
-
-  private implicit class IntOrException(n: Long) {
+  implicit class IntOrException(n: Long) {
     def int: Int = if (n.isValidInt) {
       n.toInt
     } else {
@@ -21,11 +20,19 @@ class FakeDeviceRegistryClient(implicit ec: ExecutionContext) extends DeviceRegi
     }
   }
 
+}
+
+class FakeDeviceRegistryClient(implicit ec: ExecutionContext) extends DeviceRegistryClient {
+
+  import FakeDeviceRegistryClient._
+
+  val state: ConcurrentHashMap[GroupId, Seq[DeviceId]] = new ConcurrentHashMap()
+
   override def devicesInGroup(namespace: Namespace,
-                                 groupId: GroupId,
-                                 offset: Long,
-                                 limit: Long): Future[Seq[DeviceId]] =
-    if (state.contains(groupId)) {
+                              groupId: GroupId,
+                              offset: Long,
+                              limit: Long): Future[Seq[DeviceId]] =
+    if (state.containsKey(groupId)) {
       FastFuture.successful(state.get(groupId).drop(offset.int).take(limit.int))
     } else {
       val r = arbitrary[Seq[DeviceId]].sample.get
@@ -37,13 +44,14 @@ class FakeDeviceRegistryClient(implicit ec: ExecutionContext) extends DeviceRegi
 
 class FakeDirectorClient(implicit ec: ExecutionContext) extends DirectorClient {
 
-  val state: ConcurrentHashMap[UpdateId, Seq[DeviceId]] = new ConcurrentHashMap()
+  val state: ConcurrentHashMap[UpdateId, Set[DeviceId]] = new ConcurrentHashMap()
 
   override def setMultiUpdateTarget(namespace: Namespace,
                                     update: UpdateId,
                                     devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
     val r = Gen.someOf(devices).sample.get
-    state.put(update, r)
+    val current = state.asScala.getOrElse(update, Set.empty)
+    state.put(update, current ++ r)
     FastFuture.successful(r)
   }
 

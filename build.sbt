@@ -47,8 +47,8 @@ libraryDependencies ++= {
     "com.advancedtelematic" %% "libats-metrics" % libatsV,
     "com.advancedtelematic" %% "libats-slick" % libatsV,
 
-    "org.scalacheck" %% "scalacheck" % "1.13.5" % "test",
-    "org.scalatest" %% "scalatest" % scalaTestV % "test"
+    "org.scalacheck" %% "scalacheck" % "1.13.5" % Test,
+    "org.scalatest" %% "scalatest" % scalaTestV % Test
   )
 }
 

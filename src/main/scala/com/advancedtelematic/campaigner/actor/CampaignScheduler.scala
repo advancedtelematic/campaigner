@@ -1,47 +1,50 @@
 package com.advancedtelematic.campaigner.actor
 
-import akka.actor.{Actor, Props}
+import akka.actor.{Actor, ActorRef, Props}
 import akka.event.Logging
+import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.libats.data.Namespace
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
 
 object CampaignScheduler {
 
-  final case class LaunchCampaign()
+  private final case class LaunchCampaign()
   final case class ScheduleCampaign(grps: Set[GroupId])
-  final case class CampaignComplete(update: UpdateId)
+  final case class CampaignScheduled(campaign: CampaignId)
+  final case class CampaignComplete(campaign: CampaignId)
 
   def props(registry: DeviceRegistryClient,
             director: DirectorClient,
-            delay: FiniteDuration,
-            batchSize: Long,
-            ns: Namespace,
-            update: UpdateId)
+            collector: ActorRef,
+            campaign: Campaign)
            (implicit ec: ExecutionContext): Props =
-    Props(new CampaignScheduler(registry, director, delay, batchSize, ns, update))
+    Props(new CampaignScheduler(registry, director, collector, campaign))
 
 }
 
 class CampaignScheduler(registry: DeviceRegistryClient,
                         director: DirectorClient,
-                        delay: FiniteDuration,
-                        batchSize: Long,
-                        ns: Namespace,
-                        update: UpdateId) extends Actor {
+                        collector: ActorRef,
+                        campaign: Campaign) extends Actor with Settings {
 
   import CampaignScheduler._
   import GroupScheduler._
+  import StatsCollector._
   import context._
 
   val log = Logging(system, this)
   val scheduler = system.scheduler
 
   def schedule(grp: GroupId): Unit = {
-    val actor = actorOf(GroupScheduler.props(registry, director, batchSize, ns, update, grp))
-    scheduler.scheduleOnce(delay, actor, LaunchBatch())
+    val actor = actorOf(GroupScheduler.props(
+      registry,
+      director,
+      campaign.namespace,
+      campaign.updateId,
+      grp)
+    )
+    scheduler.scheduleOnce(schedulerDelay, actor, LaunchBatch())
     ()
   }
 
@@ -51,15 +54,18 @@ class CampaignScheduler(registry: DeviceRegistryClient,
         log.debug(s"scheduling group $grp")
         schedule(grp)
       case None =>
-        log.debug(s"campaign $update completed")
-        parent ! CampaignComplete(update)
+        log.debug(s"campaign ${campaign.updateId} completed")
+        parent ! CampaignComplete(campaign.id)
+        context stop self
     }
-    case BatchComplete(grp, _) =>
-      log.debug(s"re-scheduling $batchSize for group $grp")
-      scheduler.scheduleOnce(delay, sender, LaunchBatch())
+    case BatchComplete(grp, stats) =>
+      log.debug(s"re-scheduling for group $grp")
+      collector ! Collect(campaign.id, grp, stats)
+      scheduler.scheduleOnce(schedulerDelay, sender, LaunchBatch())
       ()
-    case GroupComplete(grp) =>
+    case GroupComplete(grp, stats) =>
       become(scheduling(grps - grp))
+      collector ! Collect(campaign.id, grp, stats)
       self ! LaunchCampaign()
     case msg => log.info(s"unexpected message: $msg")
   }
@@ -67,7 +73,8 @@ class CampaignScheduler(registry: DeviceRegistryClient,
   def receive: Receive = {
     case ScheduleCampaign(grps) =>
       become(scheduling(grps))
-      self ! LaunchCampaign()
+      self   ! LaunchCampaign()
+      sender ! CampaignScheduled(campaign.id)
     case msg => log.info(s"unexpected message: $msg")
   }
 
