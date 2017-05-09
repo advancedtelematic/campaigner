@@ -16,7 +16,7 @@ import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import scala.concurrent.{ExecutionContext, Future}
 import slick.driver.MySQLDriver.api._
 
-class CampaignResource(registry: DeviceRegistry, director: Director)
+class CampaignResource(registry: DeviceRegistryClient, director: DirectorClient)
   (implicit db: Database, ec: ExecutionContext, mat: Materializer, system: ActorSystem)
   extends CampaignSupport
   with Settings {
@@ -46,7 +46,7 @@ class CampaignResource(registry: DeviceRegistry, director: Director)
         schedulerDelay,
         schedulerBatchSize,
         c.namespace,
-        c.update
+        c.updateId
       ))
       actor ! ScheduleCampaign(grps)
       FastFuture.successful(())

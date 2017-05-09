@@ -14,10 +14,10 @@ object CampaignScheduler {
   final case class ScheduleCampaign(grps: Set[GroupId])
   final case class CampaignComplete(update: UpdateId)
 
-  def props(registry: DeviceRegistry,
-            director: Director,
+  def props(registry: DeviceRegistryClient,
+            director: DirectorClient,
             delay: FiniteDuration,
-            batchSize: Int,
+            batchSize: Long,
             ns: Namespace,
             update: UpdateId)
            (implicit ec: ExecutionContext): Props =
@@ -25,10 +25,10 @@ object CampaignScheduler {
 
 }
 
-class CampaignScheduler(registry: DeviceRegistry,
-                        director: Director,
+class CampaignScheduler(registry: DeviceRegistryClient,
+                        director: DirectorClient,
                         delay: FiniteDuration,
-                        batchSize: Int,
+                        batchSize: Long,
                         ns: Namespace,
                         update: UpdateId) extends Actor {
 

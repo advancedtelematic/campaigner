@@ -5,29 +5,29 @@ import akka.http.scaladsl.model._
 import akka.stream.Materializer
 import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.data.{Namespace, PaginationResult}
 import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import scala.concurrent.{ExecutionContext, Future}
 
-trait DeviceRegistry {
-  def getDevicesInGroup(namespace: Namespace,
-                        groupId: GroupId,
-                        offset: Int,
-                        limit: Int): Future[Seq[DeviceId]]
+trait DeviceRegistryClient {
+  def devicesInGroup(namespace: Namespace,
+                     groupId: GroupId,
+                     offset: Long,
+                     limit: Long): Future[Seq[DeviceId]]
 }
 
-class DeviceRegistryClient(uri: Uri)
+class DeviceRegistryHttpClient(uri: Uri)
     (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer)
-    extends HttpClient("device_registry", uri) with DeviceRegistry {
+    extends HttpClient("device_registry", uri) with DeviceRegistryClient {
 
-  override def getDevicesInGroup(namespace: Namespace,
-                                 groupId: GroupId,
-                                 offset: Int,
-                                 limit: Int): Future[Seq[DeviceId]] = {
+  override def devicesInGroup(namespace: Namespace,
+                              groupId: GroupId,
+                              offset: Long,
+                              limit: Long): Future[Seq[DeviceId]] = {
     val path  = uri.path / "api" / "v1" / "device_groups" / groupId.show / "devices"
     val query = Uri.Query(Map("offset" -> offset.toString, "limit" -> limit.toString))
     val req   = HttpRequest(HttpMethods.GET, uri = uri.withPath(path).withQuery(query))
-    execHttp[Seq[DeviceId]](namespace, req)
+    execHttp[PaginationResult[DeviceId]](namespace, req).map(_.values)
   }
 
 }

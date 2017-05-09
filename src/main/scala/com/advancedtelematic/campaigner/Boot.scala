@@ -27,7 +27,7 @@ trait Settings {
   val schedulerDelay =
     FiniteDuration(config.getDuration("scheduler.delay").toNanos, TimeUnit.NANOSECONDS)
   val schedulerBatchSize =
-    config.getInt("scheduler.batchSize")
+    config.getLong("scheduler.batchSize")
 }
 
 object Boot extends BootApp
@@ -43,8 +43,8 @@ object Boot extends BootApp
 
   log.info(s"Starting $version on http://$host:$port")
 
-  val deviceRegistry = new DeviceRegistryClient(deviceRegistryUri)
-  val director = new DirectorClient(directorUri)
+  val deviceRegistry = new DeviceRegistryHttpClient(deviceRegistryUri)
+  val director = new DirectorHttpClient(directorUri)
 
   val routes: Route =
     (versionHeaders(version) & logResponseMetrics(projectName)) {

@@ -23,7 +23,7 @@ object DataType {
     id: CampaignId,
     namespace: Namespace,
     name: String,
-    update: UpdateId,
+    updateId: UpdateId,
     createdAt: Instant,
     updatedAt: Instant
   )
@@ -61,7 +61,7 @@ object DataType {
         c.id,
         c.namespace,
         c.name,
-        c.update,
+        c.updateId,
         c.createdAt,
         c.updatedAt,
         grps

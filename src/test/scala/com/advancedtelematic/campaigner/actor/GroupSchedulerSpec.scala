@@ -38,7 +38,7 @@ class GroupSchedulerSpec extends TestKit(ActorSystem("GroupScheduler"))
         clearClientState()
 
         val parent = TestProbe()
-        val props  = GroupScheduler.props(registry, director, batchSize, ns, update, grp)
+        val props  = GroupScheduler.props(registry, director, batchSize.longValue, ns, update, grp)
         val ref    = parent.childActorOf(props)
         ref ! LaunchBatch()
         parent.expectMsgPF(1.seconds) {

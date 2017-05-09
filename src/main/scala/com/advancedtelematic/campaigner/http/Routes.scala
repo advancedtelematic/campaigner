@@ -11,7 +11,7 @@ import com.advancedtelematic.libats.slick.monitoring.DbHealthResource
 import scala.concurrent.ExecutionContext
 import slick.driver.MySQLDriver.api._
 
-class Routes(deviceRegistry: DeviceRegistry, director: Director)
+class Routes(deviceRegistry: DeviceRegistryClient, director: DirectorClient)
   (implicit val db: Database, ec: ExecutionContext, mat: Materializer, system: ActorSystem)
   extends VersionInfo {
 

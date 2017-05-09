@@ -8,16 +8,16 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.data.Namespace
 import scala.concurrent.{ExecutionContext, Future}
 
-trait Director {
+trait DirectorClient {
 
   def setMultiUpdateTarget(ns: Namespace,
                            update: UpdateId,
                            devices: Seq[DeviceId]): Future[Seq[DeviceId]]
 }
 
-class DirectorClient(uri: Uri)
+class DirectorHttpClient(uri: Uri)
     (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer)
-    extends HttpClient("director", uri) with Director {
+    extends HttpClient("director", uri) with DirectorClient {
 
   import de.heikoseeberger.akkahttpcirce.CirceSupport._
   import io.circe.syntax._
@@ -27,7 +27,7 @@ class DirectorClient(uri: Uri)
                                     devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
     val path = uri.path / "api" / "v1" / "admin" / "multi_target_updates" / update.show
     val req  = HttpRequest(
-      method = HttpMethods.POST,
+      method = HttpMethods.PUT,
       uri    = uri.withPath(path),
       entity = devices.asJson.noSpaces
     )
