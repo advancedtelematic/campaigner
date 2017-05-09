@@ -3,6 +3,7 @@ organization := "com.advancedtelematic"
 scalaVersion := "2.11.8"
 
 scalacOptions := Seq(
+  "-feature",
   "-unchecked",
   "-deprecation",
   "-encoding",
