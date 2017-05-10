@@ -1,9 +1,13 @@
 package com.advancedtelematic.campaigner.http
 
+import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import akka.stream.Materializer
-import cats.implicits._
+import akka.util.Timeout
+import com.advancedtelematic.campaigner.Settings
+import com.advancedtelematic.campaigner.actor.CampaignScheduler
+import com.advancedtelematic.campaigner.actor.StatsCollector
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType._
@@ -12,8 +16,17 @@ import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import scala.concurrent.{ExecutionContext, Future}
 import slick.driver.MySQLDriver.api._
 
-class CampaignResource(deviceRegistry: DeviceRegistry, director: Director)
-  (implicit db: Database, ec: ExecutionContext, mat: Materializer) extends CampaignSupport {
+class CampaignResource(registry: DeviceRegistryClient, director: DirectorClient, collector: ActorRef)
+                      (implicit db: Database, ec: ExecutionContext, mat: Materializer, system: ActorSystem)
+  extends CampaignSupport
+  with Settings {
+
+  import CampaignScheduler._
+  import StatsCollector._
+  import akka.pattern.ask
+  import scala.concurrent.duration._
+
+  implicit val timeout = Timeout(10.seconds)
 
   def createCampaign(request: CreateCampaign): Future[CampaignId] = {
     val campaign = request.mkCampaign()
@@ -30,20 +43,21 @@ class CampaignResource(deviceRegistry: DeviceRegistry, director: Director)
   def updateCampaign(id: CampaignId, updated: UpdateCampaign): Future[Unit] =
     Campaigns.update(id, updated.name).map(_ => ())
 
-  def launchCampaign(id: CampaignId): Future[Unit] = {
+  def launchCampaign(id: CampaignId): Future[Unit] =  for {
+    c    <- Campaigns.find(id)
+    grps <- Campaigns.findGroups(id)
+    actor = system.actorOf(CampaignScheduler.props(
+              registry,
+              director,
+              collector,
+              c
+            ))
+    _ <- actor ? ScheduleCampaign(grps)
+  } yield ()
 
-    def launchGroup(campaign: Campaign,
-                    grp: GroupId): Future[Unit] = for {
-      devs <- deviceRegistry.getDevicesInGroup(campaign.namespace, grp)
-      _    <- devs.toList.traverse(director.setMultiUpdateTarget(campaign.namespace, _, campaign.update))
-    } yield ()
-
-    for {
-      c        <- Campaigns.find(id)
-      grps     <- Campaigns.findGroups(id)
-      _        <- grps.toList.traverse(launchGroup(c, _))
-    } yield ()
-  }
+  def getStats(id: CampaignId): Future[CampaignStatsResult] =
+    ask(collector, Ask(id))
+      .mapTo[CampaignStatsResult]
 
   val route =
     pathPrefix("campaigns") {
@@ -61,6 +75,9 @@ class CampaignResource(deviceRegistry: DeviceRegistry, director: Director)
         } ~
         (post & path("launch")) {
           complete(launchCampaign(id))
+        } ~
+        (get & path("stats")) {
+          complete(getStats(id))
         }
       }
     }
