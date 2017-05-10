@@ -1,5 +1,6 @@
 package com.advancedtelematic.campaigner.data
 
+import cats.Monoid
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import java.time.Instant
@@ -70,6 +71,33 @@ object DataType {
 
   final case class UpdateCampaign(
     name: String
+  )
+
+  final case class Stats(processed: Int, affected: Int)
+  implicit val statsMonoid: Monoid[Stats] = new Monoid[Stats] {
+    def empty: Stats = Stats(0, 0)
+    def combine(lhs: Stats, rhs: Stats): Stats =
+      Stats(lhs.processed + rhs.processed, lhs.affected + rhs.affected)
+  }
+
+  implicit def combineMapMonoid[K, V]
+      (implicit m: Monoid[V])
+      : Monoid[Map[K, V]] = new Monoid[Map[K, V]] {
+    def empty: Map[K, V] = Map.empty
+    def combine(lhs: Map[K, V], rhs: Map[K, V]): Map[K, V] = {
+      val inter = lhs.keySet intersect rhs.keySet
+      (lhs -- inter) ++ (rhs -- inter) ++ inter.map { k =>
+        k -> m.combine(lhs(k), rhs(k))
+      }
+    }
+  }
+
+  final case class CampaignStats(
+    id: CampaignId,
+    grp: GroupId,
+    completed: Boolean,
+    processed: Int,
+    affected: Int
   )
 
 }

@@ -5,12 +5,14 @@ import akka.event.Logging
 import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
+import com.advancedtelematic.campaigner.db.CampaignSupport
 import scala.concurrent.ExecutionContext
+import slick.driver.MySQLDriver.api._
 
 object CampaignScheduler {
 
   private final case class LaunchCampaign()
-  final case class ScheduleCampaign(grps: Set[GroupId])
+  final case class ScheduleCampaign(campaign: Campaign, grpOffsets: Seq[(GroupId, Int)])
   final case class CampaignScheduled(campaign: CampaignId)
   final case class CampaignComplete(campaign: CampaignId)
 
@@ -18,7 +20,8 @@ object CampaignScheduler {
             director: Director,
             collector: ActorRef,
             campaign: Campaign)
-           (implicit ec: ExecutionContext): Props =
+           (implicit ec: ExecutionContext,
+            db: Database): Props =
     Props(new CampaignScheduler(registry, director, collector, campaign))
 
 }
@@ -26,7 +29,10 @@ object CampaignScheduler {
 class CampaignScheduler(registry: DeviceRegistry,
                         director: Director,
                         collector: ActorRef,
-                        campaign: Campaign) extends Actor with Settings {
+                        campaign: Campaign)
+                       (implicit db: Database) extends Actor
+  with CampaignSupport
+  with Settings {
 
   import CampaignScheduler._
   import GroupScheduler._
@@ -36,7 +42,7 @@ class CampaignScheduler(registry: DeviceRegistry,
   val log = Logging(system, this)
   val scheduler = system.scheduler
 
-  def schedule(grp: GroupId): Unit = {
+  def schedule(grp: GroupId, offset: Int): Unit = {
     val actor = actorOf(GroupScheduler.props(
       registry,
       director,
@@ -44,15 +50,14 @@ class CampaignScheduler(registry: DeviceRegistry,
       campaign.update,
       grp)
     )
-    scheduler.scheduleOnce(schedulerDelay, actor, LaunchBatch())
-    ()
+    val _ = scheduler.scheduleOnce(schedulerDelay, actor, StartBatch(offset))
   }
 
-  def scheduling(grps: Set[GroupId]): Receive = {
-    case LaunchCampaign() => grps.headOption match {
-      case Some(grp) =>
-        log.debug(s"scheduling group $grp")
-        schedule(grp)
+  def scheduling(grpOffsets: Seq[(GroupId, Int)]): Receive = {
+    case LaunchCampaign() => grpOffsets.headOption match {
+      case Some((grp, offset)) =>
+        log.debug(s"scheduling group $grp from $offset")
+        schedule(grp, offset)
       case None =>
         log.debug(s"campaign ${campaign.update} completed")
         parent ! CampaignComplete(campaign.id)
@@ -60,19 +65,21 @@ class CampaignScheduler(registry: DeviceRegistry,
     }
     case BatchComplete(grp, stats) =>
       log.debug(s"re-scheduling for group $grp")
+      Campaigns.completeBatch(campaign.id, grp, stats)
+      scheduler.scheduleOnce(schedulerDelay, sender, NextBatch())
       collector ! Collect(campaign.id, grp, stats)
-      scheduler.scheduleOnce(schedulerDelay, sender, LaunchBatch())
-      ()
     case GroupComplete(grp, stats) =>
-      become(scheduling(grps - grp))
+      log.debug(s"group $grp complete with $stats")
+      Campaigns.completeGroup(campaign.id, grp, stats)
+      become(scheduling(grpOffsets.filter(_._1 == grp)))
       collector ! Collect(campaign.id, grp, stats)
       self ! LaunchCampaign()
     case msg => log.info(s"unexpected message: $msg")
   }
 
   def receive: Receive = {
-    case ScheduleCampaign(grps) =>
-      become(scheduling(grps))
+    case ScheduleCampaign(c, grpOffsets) if c == campaign =>
+      become(scheduling(grpOffsets))
       self   ! LaunchCampaign()
       sender ! CampaignScheduled(campaign.id)
     case msg => log.info(s"unexpected message: $msg")

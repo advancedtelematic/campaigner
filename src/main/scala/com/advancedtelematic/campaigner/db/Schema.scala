@@ -11,10 +11,10 @@ object Schema {
   import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 
   class Campaigns(tag: Tag) extends Table[Campaign](tag, "campaigns") {
-    def        id = column[CampaignId]("uuid", O.PrimaryKey)
+    def id        = column[CampaignId]("uuid", O.PrimaryKey)
     def namespace = column[Namespace] ("namespace")
-    def      name = column[String]    ("name")
-    def    update = column[UpdateId]  ("update_id")
+    def name      = column[String]    ("name")
+    def update    = column[UpdateId]  ("update_id")
     def createdAt = column[Instant]   ("created_at")
     def updatedAt = column[Instant]   ("updated_at")
 
@@ -22,7 +22,8 @@ object Schema {
                      ((Campaign.apply _).tupled, Campaign.unapply)
   }
 
-  protected [db] val Campaigns = TableQuery[Campaigns]
+  protected [db] val campaigns = TableQuery[Campaigns]
+
 
   class CampaignGroups(tag: Tag) extends Table[(CampaignId, GroupId)](tag, "campaign_groups") {
     def campaignId = column[CampaignId]("campaign_id")
@@ -33,5 +34,22 @@ object Schema {
     override def * = (campaignId, groupId)
   }
 
-  protected [db] val CampaignGroups = TableQuery[CampaignGroups]
+  protected [db] val campaignGroups = TableQuery[CampaignGroups]
+
+
+  class CampaignStatsTable(tag: Tag) extends Table[CampaignStats](tag, "group_stats") {
+    def campaignId = column[CampaignId]("campaign_id", O.PrimaryKey)
+    def groupId    = column[GroupId]("group_id")
+    def completed  = column[Boolean]("completed")
+    def processed  = column[Int]("processed")
+    def affected   = column[Int]("affected")
+
+    def pk = primaryKey("pk", (campaignId, groupId))
+
+    override def * = (campaignId, groupId, completed, processed, affected) <>
+                     ((CampaignStats.apply _).tupled, CampaignStats.unapply)
+  }
+
+  protected [db] val campaignStats = TableQuery[CampaignStatsTable]
+
 }

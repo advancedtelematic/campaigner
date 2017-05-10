@@ -8,7 +8,6 @@ import akka.util.Timeout
 import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.actor.CampaignScheduler
 import com.advancedtelematic.campaigner.actor.StatsCollector
-import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.CampaignSupport
@@ -16,7 +15,7 @@ import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import scala.concurrent.{ExecutionContext, Future}
 import slick.driver.MySQLDriver.api._
 
-class CampaignResource(registry: DeviceRegistry, director: Director, collector: ActorRef)
+class CampaignResource(supervisor: ActorRef)
                       (implicit db: Database, ec: ExecutionContext, mat: Materializer, system: ActorSystem)
   extends CampaignSupport
   with Settings {
@@ -46,17 +45,11 @@ class CampaignResource(registry: DeviceRegistry, director: Director, collector: 
   def launchCampaign(id: CampaignId): Future[Unit] =  for {
     c    <- Campaigns.find(id)
     grps <- Campaigns.findGroups(id)
-    actor = system.actorOf(CampaignScheduler.props(
-              registry,
-              director,
-              collector,
-              c
-            ))
-    _ <- actor ? ScheduleCampaign(grps)
+    _    <- supervisor ? ScheduleCampaign(c, grps.toSeq.map((_, 0)))
   } yield ()
 
   def getStats(id: CampaignId): Future[CampaignStatsResult] =
-    ask(collector, Ask(id))
+    ask(supervisor, Ask(id))
       .mapTo[CampaignStatsResult]
 
   val route =

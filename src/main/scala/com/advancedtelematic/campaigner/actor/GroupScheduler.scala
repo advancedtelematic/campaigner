@@ -11,9 +11,8 @@ import scala.concurrent.ExecutionContext
 
 object GroupScheduler {
 
-  import StatsCollector._
-
-  final case class LaunchBatch()
+  final case class NextBatch()
+  final case class StartBatch(offset: Int)
   final case class BatchComplete(grp: GroupId, stats: Stats)
   final case class GroupComplete(grp: GroupId, stats: Stats)
 
@@ -34,7 +33,6 @@ class GroupScheduler(registry: DeviceRegistry,
   (implicit ec: ExecutionContext) extends Actor with Settings {
 
   import GroupScheduler._
-  import StatsCollector._
   import context._
   import scala.util.{Failure, Success}
 
@@ -42,7 +40,7 @@ class GroupScheduler(registry: DeviceRegistry,
   val scheduler = system.scheduler
 
   def processing(offset: Int): Receive = {
-    case LaunchBatch() =>
+    case NextBatch() =>
       log.debug(s"scheduling group $grp from $offset to ${offset + schedulerBatchSize}")
       (for {
         processed <- registry.getDevicesInGroup(ns, grp, offset, schedulerBatchSize)
@@ -63,9 +61,9 @@ class GroupScheduler(registry: DeviceRegistry,
   }
 
   def receive: Receive = {
-    case LaunchBatch() =>
+    case StartBatch(offset) =>
       become(processing(0))
-      self ! LaunchBatch()
+      self ! NextBatch()
     case msg => log.info(s"unexpected message: $msg")
   }
 

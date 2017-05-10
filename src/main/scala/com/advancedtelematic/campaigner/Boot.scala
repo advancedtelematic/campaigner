@@ -1,9 +1,8 @@
 package com.advancedtelematic.campaigner
 
-import akka.actor.Props
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.{Directives, Route}
-import com.advancedtelematic.campaigner.actor.StatsCollector
+import com.advancedtelematic.campaigner.actor._
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.http.BootApp
@@ -47,12 +46,11 @@ object Boot extends BootApp
 
   val deviceRegistry = new DeviceRegistryClient(deviceRegistryUri)
   val director = new DirectorClient(directorUri)
-  val collector = system.actorOf(Props[StatsCollector])
-  collector ! StatsCollector.Start()
+  val supervisor = system.actorOf(Supervisor.props(deviceRegistry, director))
 
   val routes: Route =
     (versionHeaders(version) & logResponseMetrics(projectName)) {
-      new Routes(deviceRegistry, director, collector).routes
+      new Routes(supervisor).routes
     }
 
   Http().bindAndHandle(routes, host, port)
