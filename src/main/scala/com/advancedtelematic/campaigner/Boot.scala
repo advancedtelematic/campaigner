@@ -2,8 +2,6 @@ package com.advancedtelematic.campaigner
 
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.{Directives, Route}
-import com.advancedtelematic.campaigner.actor._
-import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.http.BootApp
 import com.advancedtelematic.libats.http.LogDirectives._
@@ -25,6 +23,8 @@ trait Settings {
   val deviceRegistryUri = config.getString("deviceRegistry.uri")
   val directorUri = config.getString("director.uri")
 
+  val schedulerPollingTimeout =
+    FiniteDuration(config.getDuration("scheduler.pollingTimeout").toNanos, TimeUnit.NANOSECONDS)
   val schedulerDelay =
     FiniteDuration(config.getDuration("scheduler.delay").toNanos, TimeUnit.NANOSECONDS)
   val schedulerBatchSize =
@@ -44,13 +44,9 @@ object Boot extends BootApp
 
   log.info(s"Starting $version on http://$host:$port")
 
-  val deviceRegistry = new DeviceRegistryHttpClient(deviceRegistryUri)
-  val director = new DirectorHttpClient(directorUri)
-  val supervisor = system.actorOf(CampaignSupervisor.props(deviceRegistry, director))
-
   val routes: Route =
     (versionHeaders(version) & logResponseMetrics(projectName)) {
-      new Routes(supervisor).routes
+      new Routes().routes
     }
 
   Http().bindAndHandle(routes, host, port)

@@ -1,6 +1,6 @@
 package com.advancedtelematic.campaigner.http
 
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.headers.RawHeader
 import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.Codecs._
@@ -18,13 +18,13 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
 
   def createCampaignOk(request: CreateCampaign): CampaignId =
     Post(apiUri("campaigns"), request).withHeaders(header) ~> routes ~> check {
-      status shouldBe StatusCodes.Created
+      status shouldBe Created
       responseAs[CampaignId]
     }
 
   def getCampaignOk(id: CampaignId): GetCampaign =
     Get(apiUri("campaigns/" + id.show)).withHeaders(header) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
+      status shouldBe OK
       responseAs[GetCampaign]
     }
 
@@ -54,7 +54,7 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
       val createdAt = getCampaignOk(id).createdAt
 
       Put(apiUri("campaigns/" + id.show), update).withHeaders(header) ~> routes ~> check {
-        status shouldBe StatusCodes.OK
+        status shouldBe OK
       }
 
       getCampaignOk(id).updatedAt.isBefore(createdAt) shouldBe false
@@ -67,7 +67,13 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
       val campaignId = createCampaignOk(request)
 
       Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header) ~> routes ~> check {
-        status shouldBe StatusCodes.OK
+        status shouldBe OK
+      }
+
+      Get(apiUri(s"campaigns/${campaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
+        status shouldBe OK
+        responseAs[CampaignStatsResult] shouldBe
+          CampaignStatsResult(campaignId, request.groups.map(_ -> Stats(0, 0)).toMap)
       }
     }
   }
