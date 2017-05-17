@@ -33,7 +33,7 @@ object Codecs {
   implicit def uuidKeyEncoder[T <: UUIDKey]: KeyEncoder[T] =
     KeyEncoder[String].contramap(_.uuid.toString)
 
-  implicit val decoderCampaignStatsResult: Decoder[CampaignStatsResult] = deriveDecoder
-  implicit val encoderCampaignStatsResult: Encoder[CampaignStatsResult] = deriveEncoder
+  implicit val decoderCampaignStats: Decoder[CampaignStats] = deriveDecoder
+  implicit val encoderCampaignStats: Encoder[CampaignStats] = deriveEncoder
 
 }

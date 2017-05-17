@@ -26,7 +26,13 @@ object DaemonBoot extends BootApp
 
   val deviceRegistry = new DeviceRegistryHttpClient(deviceRegistryUri)
   val director = new DirectorHttpClient(directorUri)
-  val supervisor = system.actorOf(CampaignSupervisor.props(deviceRegistry, director))
+  val supervisor = system.actorOf(CampaignSupervisor.props(
+    deviceRegistry,
+    director,
+    schedulerPollingTimeout,
+    schedulerDelay,
+    schedulerBatchSize
+  ))
 
   val routes: Route = (versionHeaders(version) & logResponseMetrics(projectName)) {
     new HealthResource(Seq(DbHealthResource.HealthCheck(db)), versionMap).route

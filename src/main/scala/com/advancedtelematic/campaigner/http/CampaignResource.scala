@@ -34,8 +34,10 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope])
     ()     <- Campaigns.scheduleGroups(ns, id, groups)
   } yield ()
 
-  def getStats(ns: Namespace, id: CampaignId): Future[CampaignStatsResult] =
-    Campaigns.campaignStatsFor(ns, id).map(CampaignStatsResult(id, _))
+  def getStats(ns: Namespace, id: CampaignId): Future[CampaignStats] = for {
+    status <- Campaigns.aggregatedStatus(id)
+    stats  <- Campaigns.campaignStatsFor(ns, id)
+  } yield CampaignStats(id, status, stats)
 
   val route =
     extractAuth { auth =>
@@ -58,6 +60,9 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope])
           } ~
           (get & path("stats")) {
             complete(getStats(ns, id))
+          } ~
+          (post & path("cancel")) {
+            complete(Campaigns.cancelCampaign(ns, id).map(_ => ()))
           }
         }
       }
