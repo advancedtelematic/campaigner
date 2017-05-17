@@ -38,11 +38,14 @@ class CampaignSchedulerSpec extends TestKit(ActorSystem("CampaignSchedulerSpec")
     val parent   = TestProbe()
 
     Campaigns.persist(campaign, groups).futureValue
+    Campaigns.scheduleGroups(campaign.namespace, campaign.id, groups).futureValue
     parent.childActorOf(CampaignScheduler.props(
       registry,
       director,
       campaign,
-      groups
+      groups,
+      schedulerDelay,
+      schedulerBatchSize
     ))
     parent.expectMsg(1.minute, CampaignComplete(campaign.id))
     registry.state.keys.asScala.toSet shouldBe groups

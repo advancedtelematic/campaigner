@@ -1,7 +1,9 @@
 package com.advancedtelematic.campaigner.data
 
+import com.advancedtelematic.libats.codecs.CirceEnum
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
+import com.advancedtelematic.libats.slick.codecs.SlickEnum
 import java.time.Instant
 import java.util.UUID
 
@@ -73,15 +75,26 @@ object DataType {
 
   final case class Stats(processed: Long, affected: Long)
 
-  final case class CampaignStats(
+  object GroupStatus extends CirceEnum with SlickEnum {
+    val scheduled, launched, cancelled = Value
+  }
+
+  object CampaignStatus extends CirceEnum with SlickEnum {
+    val prepared, scheduled, launched, finished, cancelled, failed = Value
+  }
+
+  final case class GroupStats(
     id: CampaignId,
     group: GroupId,
-    completed: Boolean,
+    status: GroupStatus.Value,
     processed: Long,
     affected: Long
   )
 
-  type GroupStats = Map[GroupId, Stats]
-  final case class CampaignStatsResult(campaign: CampaignId, stats: GroupStats)
+  final case class CampaignStats(
+    campaign: CampaignId,
+    status: CampaignStatus.Value,
+    stats: Map[GroupId, Stats]
+  )
 
 }

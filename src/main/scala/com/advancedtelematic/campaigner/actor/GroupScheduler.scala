@@ -75,7 +75,6 @@ class GroupScheduler(registry: DeviceRegistryClient,
         .recover { case err => Error("could not complete batch", err) }
         .pipeTo(parent)
     case Error(msg, err) => log.error(s"$msg: ${err.getMessage}")
-
   }
 
 }

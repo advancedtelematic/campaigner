@@ -28,54 +28,96 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
       responseAs[GetCampaign]
     }
 
-  property("POST /campaigns creates a campaign, GET /campaigns returns the created campaign") {
-    forAll { request: CreateCampaign =>
+  "POST and GET /campaigns" should "create a campaign, return the created campaign" in {
+    val request = arbitrary[CreateCampaign].sample.get
+    val id = createCampaignOk(request)
 
-      val id = createCampaignOk(request)
+    val campaign = getCampaignOk(id)
+    campaign shouldBe GetCampaign(
+      testNs,
+      id,
+      request.name,
+      request.update,
+      campaign.createdAt,
+      campaign.updatedAt,
+      request.groups
+    )
+    campaign.createdAt shouldBe campaign.updatedAt
+  }
 
-      val campaign = getCampaignOk(id)
-      campaign shouldBe GetCampaign(
-        testNs,
-        id,
-        request.name,
-        request.update,
-        campaign.createdAt,
-        campaign.updatedAt,
-        request.groups
-      )
-      campaign.createdAt shouldBe campaign.updatedAt
+  "PUT /campaigns/:campaign_id" should "update a campaign" in {
+    val request = arbitrary[CreateCampaign].sample.get
+    val update  = arbitrary[UpdateCampaign].sample.get
+
+    val id = createCampaignOk(request)
+    val createdAt = getCampaignOk(id).createdAt
+
+    Put(apiUri("campaigns/" + id.show), update).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+    }
+
+    getCampaignOk(id).updatedAt.isBefore(createdAt) shouldBe false
+  }
+
+  "POST /campaigns/:campaign_id/launch" should "trigger an update" in {
+    val campaign = arbitrary[CreateCampaign].sample.get
+    val campaignId = createCampaignOk(campaign)
+    val request = Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header)
+
+    request ~> routes ~> check {
+      status shouldBe OK
+    }
+
+    Get(apiUri(s"campaigns/${campaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+      val result = responseAs[CampaignStats]
+      result.stats shouldBe campaign.groups.map(_ -> Stats(0, 0)).toMap
+    }
+
+    request ~> routes ~> check {
+      status shouldBe Conflict
     }
   }
 
-  property("PUT /campaigns/:campaign_id updates a campaign") {
-    forAll { (request: CreateCampaign, update: UpdateCampaign) =>
+  "POST /campaigns/:campaign_id/cancel" should "cancel a campaign" in {
+    val campaign = arbitrary[CreateCampaign].sample.get
+    val campaignId = createCampaignOk(campaign)
 
-      val id = createCampaignOk(request)
-      val createdAt = getCampaignOk(id).createdAt
-
-      Put(apiUri("campaigns/" + id.show), update).withHeaders(header) ~> routes ~> check {
-        status shouldBe OK
-      }
-
-      getCampaignOk(id).updatedAt.isBefore(createdAt) shouldBe false
+    Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
     }
+
+    Post(apiUri(s"campaigns/${campaignId.show}/cancel")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+    }
+
   }
 
-  property("POST /campaigns/:campaign_id/launch triggers an update") {
-    forAll { request: CreateCampaign  =>
-
-      val campaignId = createCampaignOk(request)
-
-      Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header) ~> routes ~> check {
-        status shouldBe OK
-      }
-
-      Get(apiUri(s"campaigns/${campaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
-        status shouldBe OK
-        responseAs[CampaignStatsResult] shouldBe
-          CampaignStatsResult(campaignId, request.groups.map(_ -> Stats(0, 0)).toMap)
-      }
+  def checkStatus(id: CampaignId, expected: CampaignStatus.Value) =
+    Get(apiUri(s"campaigns/${id.show}/stats")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+      val result = responseAs[CampaignStats]
+      result.campaign shouldBe id
+      result.status shouldBe expected
     }
+
+  "campaign resource" should "undergo proper status transitions" in {
+    val request = arbitrary[CreateCampaign].sample.get
+    val id = createCampaignOk(request)
+
+    checkStatus(id, CampaignStatus.prepared)
+
+    Post(apiUri(s"campaigns/${id.show}/launch")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+    }
+
+    checkStatus(id, CampaignStatus.scheduled)
+
+    Post(apiUri(s"campaigns/${id.show}/cancel")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+    }
+
+    checkStatus(id, CampaignStatus.cancelled)
   }
 
 }

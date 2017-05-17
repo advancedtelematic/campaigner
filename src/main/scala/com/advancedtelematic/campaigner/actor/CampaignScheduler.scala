@@ -1,11 +1,11 @@
 package com.advancedtelematic.campaigner.actor
 
 import akka.actor.{Actor, ActorLogging, Props}
-import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.CampaignSupport
 import slick.jdbc.MySQLProfile.api._
+import scala.concurrent.duration._
 
 object CampaignScheduler {
 
@@ -17,20 +17,23 @@ object CampaignScheduler {
   def props(registry: DeviceRegistryClient,
             director: DirectorClient,
             campaign: Campaign,
-            groups: Set[GroupId])
+            groups: Set[GroupId],
+            delay: FiniteDuration,
+            batchSize: Long)
            (implicit db: Database): Props =
-    Props(new CampaignScheduler(registry, director, campaign, groups))
+    Props(new CampaignScheduler(registry, director, campaign, groups, delay, batchSize))
 
 }
 
 class CampaignScheduler(registry: DeviceRegistryClient,
                         director: DirectorClient,
                         campaign: Campaign,
-                        groups: Set[GroupId])
+                        groups: Set[GroupId],
+                        delay: FiniteDuration,
+                        batchSize: Long)
                        (implicit db: Database) extends Actor
   with ActorLogging
-  with CampaignSupport
-  with Settings {
+  with CampaignSupport {
 
   import CampaignScheduler._
   import GroupScheduler._
@@ -38,17 +41,14 @@ class CampaignScheduler(registry: DeviceRegistryClient,
   import context._
 
   override def preStart() =
-    Campaigns.scheduleGroups(campaign.namespace, campaign.id, groups)
-      .map(_ => NextGroup)
-      .recover { case err => Error("could not retrieve groups to be scheduled", err) }
-      .pipeTo(self)
+    self ! NextGroup
 
   private def schedule(group: GroupId): Unit =
     actorOf(GroupScheduler.props(
       registry,
       director,
-      schedulerDelay,
-      schedulerBatchSize,
+      delay,
+      batchSize,
       campaign,
       group)
     )
