@@ -35,9 +35,11 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope])
   } yield ()
 
   def getStats(ns: Namespace, id: CampaignId): Future[CampaignStats] = for {
-    status <- Campaigns.aggregatedStatus(id)
-    stats  <- Campaigns.campaignStatsFor(ns, id)
-  } yield CampaignStats(id, status, stats)
+    status   <- Campaigns.aggregatedStatus(id)
+    finished <- Campaigns.countFinished(ns, id)
+    failed   <- Campaigns.failedDevices(ns, id)
+    stats    <- Campaigns.campaignStatsFor(ns, id)
+  } yield CampaignStats(id, status, finished, failed, stats)
 
   val route =
     extractAuth { auth =>

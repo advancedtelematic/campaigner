@@ -9,6 +9,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.CampaignSupport
 import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.concurrent.ScalaFutures
@@ -50,8 +51,8 @@ class CampaignSupervisorSpec1 extends TestKit(ActorSystem("CampaignSupervisorSpe
   "campaign supervisor" should "pick up unfinished and fresh campaigns" in {
     val campaign1 = arbitrary[Campaign].sample.get
     val campaign2 = arbitrary[Campaign].sample.get
-    val group    = GroupId.generate
-    val parent   = TestProbe()
+    val group     = GroupId.generate
+    val parent    = TestProbe()
 
     Campaigns.persist(campaign1, Set(group)).futureValue
     Campaigns.persist(campaign2, Set(group)).futureValue

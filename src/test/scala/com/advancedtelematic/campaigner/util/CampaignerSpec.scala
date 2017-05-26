@@ -1,4 +1,4 @@
-package com.advancedtelematic.util
+package com.advancedtelematic.campaigner.util
 
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{Matchers, FlatSpec}

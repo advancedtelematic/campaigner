@@ -17,18 +17,16 @@ object CampaignScheduler {
   def props(registry: DeviceRegistryClient,
             director: DirectorClient,
             campaign: Campaign,
-            groups: Set[GroupId],
             delay: FiniteDuration,
             batchSize: Long)
            (implicit db: Database): Props =
-    Props(new CampaignScheduler(registry, director, campaign, groups, delay, batchSize))
+    Props(new CampaignScheduler(registry, director, campaign, delay, batchSize))
 
 }
 
 class CampaignScheduler(registry: DeviceRegistryClient,
                         director: DirectorClient,
                         campaign: Campaign,
-                        groups: Set[GroupId],
                         delay: FiniteDuration,
                         batchSize: Long)
                        (implicit db: Database) extends Actor
@@ -60,13 +58,13 @@ class CampaignScheduler(registry: DeviceRegistryClient,
         .recover { case err => Error("could not retrieve remaining groups", err) }
         .pipeTo(self)
     case Some(group: GroupId) =>
-      log.debug(s"scheduling group $group")
+      log.debug(s"scheduling $group")
       schedule(group)
     case None =>
       parent ! CampaignComplete(campaign.id)
       context.stop(self)
     case GroupComplete(group) =>
-      log.debug(s"group $group complete")
+      log.debug(s"$group complete")
       self ! NextGroup
     case Error(msg, err) => log.error(s"$msg: ${err.getMessage}")
   }

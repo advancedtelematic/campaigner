@@ -9,10 +9,8 @@ import com.advancedtelematic.libats.slick.monitoring.DbHealthResource
 import scala.concurrent.ExecutionContext
 import slick.jdbc.MySQLProfile.api._
 
-class Routes
-  (implicit val db: Database,
-   ec: ExecutionContext)
-  extends VersionInfo {
+class Routes(implicit val db: Database, ec: ExecutionContext)
+    extends VersionInfo {
 
   import Directives._
 
@@ -22,7 +20,7 @@ class Routes
     handleRejections(rejectionHandler) {
       ErrorHandler.handleErrors {
         pathPrefix("api" / "v1") {
-            new CampaignResource(extractAuth).route
+          new CampaignResource(extractAuth).route
         } ~ new HealthResource(Seq(DbHealthResource.HealthCheck(db)), versionMap).route
       }
     }

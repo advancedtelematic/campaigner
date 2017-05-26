@@ -3,6 +3,7 @@ package com.advancedtelematic.campaigner.db
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.http.Errors
 import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import scala.concurrent.{ExecutionContext, Future}
@@ -73,24 +74,48 @@ protected class Campaigns()(implicit db: Database, ec: ExecutionContext) {
         .handleIntegrityErrors(Errors.CampaignAlreadyLaunched)
     }
 
-  def aggregatedStatus(campaign: CampaignId): Future[CampaignStatus.Value] =
+  def aggregatedStatus(campaign: CampaignId): Future[CampaignStatus.Value] = {
+    def groupStats(status: GroupStatus.Value) =
+      Schema.groupStats
+        .filter(_.campaignId === campaign)
+        .filter(_.status === status)
+        .length.result
+
     db.run {
-      def q(status: GroupStatus.Value) =
-        Schema.groupStats
-          .filter(_.campaignId === campaign)
-          .filter(_.status === status)
-          .length.result
       for {
-        scheduled <- q(GroupStatus.scheduled)
-        launched  <- q(GroupStatus.launched)
-        cancelled <- q(GroupStatus.cancelled)
+        scheduled <- groupStats(GroupStatus.scheduled)
+        launched  <- groupStats(GroupStatus.launched)
+        cancelled <- groupStats(GroupStatus.cancelled)
         status     = (scheduled, launched, cancelled) match {
           case (_, _, c) if c > 0 => CampaignStatus.cancelled
           case (0, l, _) if l > 0 => CampaignStatus.launched
-          case (0, 0, 0)          => CampaignStatus.prepared
+          case (0, 0, _)          => CampaignStatus.prepared
           case _                  => CampaignStatus.scheduled
         }
       } yield status
+    }
+  }
+
+  def groupStatusFor(campaign: CampaignId, group: GroupId): Future[Option[GroupStatus.Value]] =
+    db.run {
+      Schema.groupStats
+        .filter(_.campaignId === campaign)
+        .filter(_.groupId === group)
+        .map(_.status)
+        .result
+        .headOption
+    }
+
+  def failedDevices(ns: Namespace, campaign: CampaignId): Future[Set[DeviceId]] =
+    db.run {
+      find(ns, campaign).flatMap { _ =>
+        Schema.deviceUpdates
+          .filter(_.campaignId === campaign)
+          .filter(_.status === DeviceStatus.failed)
+          .map(_.deviceId)
+          .result
+          .map(_.toSet)
+      }
     }
 
   def campaignStatsFor(ns: Namespace, campaign: CampaignId): Future[Map[GroupId, Stats]] =
@@ -143,33 +168,48 @@ protected class Campaigns()(implicit db: Database, ec: ExecutionContext) {
         .headOption
     }
 
-  private[db] def progressGroup(ns: Namespace,
-                                campaign: CampaignId,
-                                group: GroupId,
-                                status: GroupStatus.Value,
-                                stats: Stats): Future[Unit] =
+  private[db] def progressGroup(
+    ns: Namespace,
+    campaign: CampaignId,
+    group: GroupId,
+    status: GroupStatus.Value,
+    stats: Stats): Future[Unit] =
     db.run {
-      find(ns, campaign).flatMap { _ =>
-        Schema.groupStats
-          .insertOrUpdate(GroupStats(campaign, group, status, stats.processed, stats.affected))
-          .map(_ => ())
-      }
+      if (stats.affected > stats.processed)
+        DBIO.failed(Errors.InvalidCounts)
+      else
+        find(ns, campaign).flatMap { _ =>
+          Schema.groupStats
+            .filter(_.campaignId === campaign)
+            .filter(_.groupId === group)
+            .filter(s => s.affected <= s.processed)
+            .map(s => (s.status, s.processed, s.affected))
+            .update((status, stats.processed, stats.affected))
+            .flatMap {
+            case 0 => Schema.groupStats += GroupStats(campaign, group, status, stats.processed, stats.affected)
+            case _ =>  DBIO.successful(())
+          }
+        }.map(_ => ()).transactionally
+          .handleIntegrityErrors(Errors.CampaignMissing)
     }
 
-  def completeBatch(ns: Namespace,
-                    campaign: CampaignId,
-                    group: GroupId,
-                    stats: Stats): Future[Unit] =
+  def completeBatch(
+    ns: Namespace,
+    campaign: CampaignId,
+    group: GroupId,
+    stats: Stats): Future[Unit] =
     progressGroup(ns, campaign, group, GroupStatus.scheduled, stats)
 
-  def completeGroup(ns: Namespace,
-                    campaign: CampaignId,
-                    group: GroupId,
-                    stats: Stats): Future[Unit] =
+  def completeGroup(
+    ns: Namespace,
+    campaign: CampaignId,
+    group: GroupId,
+    stats: Stats): Future[Unit] =
     progressGroup(ns, campaign, group, GroupStatus.launched, stats)
 
-  def cancelCampaign(ns: Namespace,
-                     campaign: CampaignId): Future[Unit] =
+  def cancelCampaign(
+    ns: Namespace,
+    campaign: CampaignId) : Future[Unit] =
     db.run {
       find(ns, campaign).flatMap { _ =>
         Schema.groupStats
@@ -179,5 +219,41 @@ protected class Campaigns()(implicit db: Database, ec: ExecutionContext) {
           .map(_ => ())
       }
     }
+
+  def scheduleDevice(campaign: CampaignId, update: UpdateId, device: DeviceId): Future[Unit] =
+    db.run {
+      (Schema.deviceUpdates += DeviceUpdate(campaign, update, device, DeviceStatus.scheduled))
+        .map(_ => ())
+    }
+
+  def finishDevice(update: UpdateId, device: DeviceId, status: DeviceStatus.Value): Future[Unit] =
+    db.run {
+      Schema.deviceUpdates
+        .filter(_.updateId === update)
+        .filter(_.deviceId === device)
+        .map(_.status)
+        .update(status)
+        .flatMap {
+        case 0 => DBIO.failed(Errors.DeviceNotScheduled)
+        case _ => DBIO.successful(())
+      }.map(_ => ())
+    }
+
+  def countFinished(ns: Namespace, campaignId: CampaignId): Future[Long] =
+    db.run {
+      Schema.campaigns
+        .filter(_.namespace === ns)
+        .filter(_.id === campaignId)
+        .flatMap { campaign =>
+        Schema.deviceUpdates
+          .filter(_.campaignId === campaign.id)
+          .filter(_.updateId === campaign.update)
+          .filter(d => d.status === DeviceStatus.successful ||
+                       d.status === DeviceStatus.failed)
+          .map(_.deviceId)
+      }.distinct
+        .length
+        .result
+    }.map(_.toLong)
 
 }

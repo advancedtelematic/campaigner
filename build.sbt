@@ -45,6 +45,8 @@ libraryDependencies ++= {
     "com.advancedtelematic" %% "libats" % libatsV,
     "com.advancedtelematic" %% "libats-auth" % libatsV,
     "com.advancedtelematic" %% "libats-metrics" % libatsV,
+    "com.advancedtelematic" %% "libats-messaging" % libatsV,
+    "com.advancedtelematic" %% "libats-messaging-datatype" % libatsV,
     "com.advancedtelematic" %% "libats-slick" % libatsV,
 
     "org.scalacheck" %% "scalacheck" % "1.13.5" % Test,
@@ -98,4 +100,3 @@ Versioning.settings
 Release.settings
 
 enablePlugins(Versioning.Plugin)
-

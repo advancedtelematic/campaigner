@@ -5,6 +5,7 @@ import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import java.time.Instant
 import slick.jdbc.MySQLProfile.api._
 
@@ -51,5 +52,20 @@ object Schema {
   }
 
   protected [db] val groupStats = TableQuery[GroupStatsTable]
+
+
+  class DeviceUpdatesTable(tag: Tag) extends Table[DeviceUpdate](tag, "device_updates") {
+    def campaignId = column[CampaignId]("campaign_id")
+    def updateId   = column[UpdateId]("update_id")
+    def deviceId   = column[DeviceId]("device_id")
+    def status     = column[DeviceStatus.Value]("status")
+
+    def pk = primaryKey("device_updates_pk", (campaignId, deviceId))
+
+    override def * = (campaignId, updateId, deviceId, status) <>
+                     ((DeviceUpdate.apply _).tupled, DeviceUpdate.unapply)
+  }
+
+  protected [db] val deviceUpdates = TableQuery[DeviceUpdatesTable]
 
 }

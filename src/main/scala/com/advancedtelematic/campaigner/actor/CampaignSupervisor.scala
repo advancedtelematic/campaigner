@@ -14,7 +14,7 @@ object CampaignSupervisor {
   private final object PickUpCampaigns
   private final case class CancelCampaigns(campaigns: Set[CampaignId])
   private final case class ResumeCampaigns(campaigns: Set[Campaign])
-  final case class ScheduleCampaign(campaign: Campaign, groups: Set[GroupId])
+  final case class ScheduleCampaign(campaign: Campaign)
   final case class CampaignsScheduled(campaigns: Set[CampaignId])
   final case class CampaignsCancelled(campaigns: Set[CampaignId])
   private final case class Error(msg: String, error: Throwable)
@@ -40,7 +40,7 @@ class CampaignSupervisor(registry: DeviceRegistryClient,
 
   import CampaignScheduler._
   import CampaignSupervisor._
-  import akka.pattern._
+  import akka.pattern.pipe
   import context._
 
   val scheduler = system.scheduler
@@ -69,24 +69,22 @@ class CampaignSupervisor(registry: DeviceRegistryClient,
       .pipeTo(self)
   }
 
-  def scheduleCampaign(campaign: Campaign, groups: Set[GroupId]): ActorRef =
+  def scheduleCampaign(campaign: Campaign): ActorRef =
     context.actorOf(CampaignScheduler.props(
       registry,
       director,
       campaign,
-      groups,
       delay,
       batchSize
     ))
 
   def supervising(campaignSchedulers: Map[CampaignId, ActorRef]): Receive = {
     case CleanUpCampaigns =>
-      Future.sequence(campaignSchedulers.keySet
-        .map { campaign =>
+      Future.traverse(campaignSchedulers.keySet) { campaign =>
         Campaigns.aggregatedStatus(campaign).map { status => (campaign, status) }
-      })
-        .map(_.filter(_._2 == CampaignStatus.cancelled))
-        .map(campaignStatus => CancelCampaigns(campaignStatus.map(_._1)))
+      }
+        .map(_.collect { case (campaign, CampaignStatus.cancelled) => campaign })
+        .map(CancelCampaigns(_))
         .recover { case err => Error("could not get campaigns to be cancelled", err) }
         .pipeTo(self)
     case PickUpCampaigns =>
@@ -106,15 +104,15 @@ class CampaignSupervisor(registry: DeviceRegistryClient,
       val newlyScheduled =
         campaigns
           .filter(c => !campaignSchedulers.keySet.contains(c.id))
-          .map(c => c.id -> scheduleCampaign(c, Set.empty))
+          .map(c => c.id -> scheduleCampaign(c))
           .toMap
       if (!newlyScheduled.keySet.isEmpty) {
         become(supervising(campaignSchedulers ++ newlyScheduled))
         parent ! CampaignsScheduled(newlyScheduled.keySet)
       }
-    case ScheduleCampaign(campaign, groups) =>
+    case ScheduleCampaign(campaign) =>
       log.info(s"${campaign.id} scheduled")
-      scheduleCampaign(campaign, groups)
+      scheduleCampaign(campaign)
       parent ! CampaignsScheduled(Set(campaign.id))
     case CampaignComplete(id) =>
       log.info(s"$id completed")

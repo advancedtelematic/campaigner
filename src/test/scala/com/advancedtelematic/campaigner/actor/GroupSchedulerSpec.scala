@@ -10,6 +10,7 @@ import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.CampaignSupport
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.test.DatabaseSpec
+import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
@@ -28,11 +29,10 @@ class GroupSchedulerSpec extends TestKit(ActorSystem("GroupSchedulerSpec"))
   import GroupScheduler._
   import scala.concurrent.duration._
 
-  implicit lazy val ec = system.dispatcher
-
   val batch = schedulerBatchSize.toInt
   lazy val registry = new FakeDeviceRegistryClient()
   lazy val director = new FakeDirectorClient()
+  implicit lazy val ec = system.dispatcher
 
   def clearClientState() = {
     registry.state.clear()

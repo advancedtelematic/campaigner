@@ -1,4 +1,4 @@
-package com.advancedtelematic.util
+package com.advancedtelematic.campaigner.util
 
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import com.advancedtelematic.campaigner.http.Routes

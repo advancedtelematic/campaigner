@@ -43,7 +43,6 @@ class CampaignSchedulerSpec extends TestKit(ActorSystem("CampaignSchedulerSpec")
       registry,
       director,
       campaign,
-      groups,
       schedulerDelay,
       schedulerBatchSize
     ))

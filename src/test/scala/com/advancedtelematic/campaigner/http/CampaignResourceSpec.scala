@@ -6,8 +6,8 @@ import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
+import com.advancedtelematic.campaigner.util.{ResourceSpec, CampaignerSpec}
 import com.advancedtelematic.libats.data.Namespace
-import com.advancedtelematic.util.{ResourceSpec, CampaignerSpec}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import org.scalacheck.Arbitrary._
 
@@ -70,8 +70,13 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
 
     Get(apiUri(s"campaigns/${campaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
-      val result = responseAs[CampaignStats]
-      result.stats shouldBe campaign.groups.map(_ -> Stats(0, 0)).toMap
+      responseAs[CampaignStats] shouldBe CampaignStats(
+        campaignId,
+        CampaignStatus.scheduled,
+        0,
+        Set.empty,
+        campaign.groups.map(_ -> Stats(0, 0)).toMap
+      )
     }
 
     request ~> routes ~> check {
@@ -102,8 +107,8 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
     }
 
   "campaign resource" should "undergo proper status transitions" in {
-    val request = arbitrary[CreateCampaign].sample.get
-    val id = createCampaignOk(request)
+    val campaign = arbitrary[CreateCampaign].sample.get
+    val id = createCampaignOk(campaign)
 
     checkStatus(id, CampaignStatus.prepared)
 
