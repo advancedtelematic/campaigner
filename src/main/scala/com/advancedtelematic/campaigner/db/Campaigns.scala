@@ -1,8 +1,8 @@
 package com.advancedtelematic.campaigner.db
 
 import com.advancedtelematic.campaigner.data.DataType._
+import com.advancedtelematic.campaigner.http.Errors
 import com.advancedtelematic.libats.data.Namespace
-import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import scala.concurrent.{ExecutionContext, Future}
@@ -16,8 +16,6 @@ protected class Campaigns()(implicit db: Database, ec: ExecutionContext) {
 
   import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 
-  val NotFound = MissingEntity[Campaign]
-
   def persist(campaign: Campaign, groups: Set[GroupId]): Future[Unit] =
     db.run {
       val f = for {
@@ -26,37 +24,39 @@ protected class Campaigns()(implicit db: Database, ec: ExecutionContext) {
       } yield ()
 
       f.transactionally
+        .handleIntegrityErrors(Errors.ConflictingCampaign)
     }
 
-  private[db] def find(ns: Namespace, id: CampaignId): DBIO[Campaign] =
+  private[db] def find(ns: Namespace, campaign: CampaignId): DBIO[Campaign] =
     Schema.campaigns
       .filter(_.namespace === ns)
-      .filter(_.id === id)
+      .filter(_.id === campaign)
       .result
-      .failIfNotSingle(NotFound)
+      .failIfNotSingle(Errors.CampaignMissing)
 
-  def findCampaign(ns: Namespace, id: CampaignId): Future[Campaign] =
-    db.run(find(ns, id))
+  def findCampaign(ns: Namespace, campaign: CampaignId): Future[Campaign] =
+    db.run(find(ns, campaign))
 
-  def findGroups(ns: Namespace, id: CampaignId): Future[Set[GroupId]] =
+  def findGroups(ns: Namespace, campaign: CampaignId): Future[Set[GroupId]] =
     db.run {
-      find(ns, id).flatMap { _ =>
+      find(ns, campaign).flatMap { _ =>
         Schema.campaignGroups
-          .filter(_.campaignId === id)
+          .filter(_.campaignId === campaign)
           .map(_.groupId)
           .result
           .map(_.toSet)
       }
     }
 
-  def update(ns: Namespace, id: CampaignId, name: String): Future[Unit] =
+  def update(ns: Namespace, campaign: CampaignId, name: String): Future[Unit] =
     db.run {
-      find(ns, id).flatMap { _ =>
+      find(ns, campaign).flatMap { _ =>
         Schema.campaigns
-          .filter(_.id === id)
+          .filter(_.id === campaign)
           .map(_.name)
           .update(name)
           .map(_ => ())
+          .handleIntegrityErrors(Errors.ConflictingCampaign)
       }
     }
 
@@ -64,17 +64,17 @@ protected class Campaigns()(implicit db: Database, ec: ExecutionContext) {
     db.run {
       for {
         _ <- find(ns, campaign)
-        _ <- DBIO.sequence(groups.toSeq.map { g =>
-          Schema.campaignStats += CampaignStats(campaign, g, false, 0, 0)
+        _ <- DBIO.sequence(groups.toSeq.map { group =>
+          Schema.campaignStats += CampaignStats(campaign, group, false, 0, 0)
         })
       } yield ()
     }
 
-  def campaignStatsFor(ns: Namespace, id: CampaignId): Future[Map[GroupId, Stats]] =
+  def campaignStatsFor(ns: Namespace, campaign: CampaignId): Future[Map[GroupId, Stats]] =
     db.run {
-      find(ns, id).flatMap { _ =>
+      find(ns, campaign).flatMap { _ =>
         Schema.campaignStats
-          .filter(_.campaignId === id)
+          .filter(_.campaignId === campaign)
           .map(r => (r.groupId, r.processed, r.affected))
           .result
       }
@@ -90,10 +90,20 @@ protected class Campaigns()(implicit db: Database, ec: ExecutionContext) {
         .result
     }
 
-  def remainingGroups(id: CampaignId): Future[Seq[GroupId]] =
+  def freshCampaigns(): Future[Seq[Campaign]] =
+    db.run {
+      Schema.campaignStats.join(Schema.campaigns).on(_.campaignId === _.id)
+        .filter(!_._1.completed)
+        .filter(_._1.processed === 0L)
+        .filter(_._1.affected  === 0L)
+        .map(_._2)
+        .result
+    }
+
+  def remainingGroups(campaign: CampaignId): Future[Seq[GroupId]] =
     db.run {
       Schema.campaignStats
-        .filter(_.campaignId === id)
+        .filter(_.campaignId === campaign)
         .filter(!_.completed)
         .map(_.groupId)
         .result

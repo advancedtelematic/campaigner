@@ -8,13 +8,12 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.CampaignSupport
 import com.advancedtelematic.libats.test.DatabaseSpec
-import org.scalacheck.Arbitrary
+import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
-import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
 
-class CampaignSchedulerSpec extends TestKit(ActorSystem("CampaignSchedulerSpec"))
+class CampaignSupervisorSpec extends TestKit(ActorSystem("CampaignSupervisorSpec"))
   with CampaignSupport
   with FlatSpecLike
   with Matchers
@@ -24,28 +23,41 @@ class CampaignSchedulerSpec extends TestKit(ActorSystem("CampaignSchedulerSpec")
   with DatabaseSpec {
 
   import Arbitrary._
-  import CampaignScheduler._
+  import CampaignSupervisor._
   import scala.concurrent.duration._
 
   implicit lazy val ec: ExecutionContext = system.dispatcher
   lazy val registry = new FakeDeviceRegistryClient()
   lazy val director = new FakeDirectorClient()
 
-  "campaign scheduler" should "trigger updates for each group" in {
+  "campaign supervisor" should "pick up unfinished and fresh campaigns" in {
 
-    val campaign = arbitrary[Campaign].sample.get
-    val groups   = arbitrary[Set[GroupId]].sample.get
+    val campaign1 = arbitrary[Campaign].sample.get
+    val campaign2 = arbitrary[Campaign].sample.get
+    val group    = GroupId.generate
     val parent   = TestProbe()
 
-    Campaigns.persist(campaign, groups).futureValue
-    parent.childActorOf(CampaignScheduler.props(
+    Campaigns.persist(campaign1, Set(group)).futureValue
+    Campaigns.persist(campaign2, Set(group)).futureValue
+
+    Campaigns.completeBatch(
+      campaign1.namespace,
+      campaign1.id,
+      group,
+      Stats(Gen.posNum[Long].sample.get,
+            Gen.posNum[Long].sample.get)
+    ).futureValue
+
+    parent.childActorOf(CampaignSupervisor.props(
       registry,
-      director,
-      campaign,
-      groups
+      director
     ))
-    parent.expectMsg(1.minute, CampaignComplete(campaign.id))
-    registry.state.keys.asScala.toSet shouldBe groups
+
+    parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign1.id)))
+
+    Campaigns.scheduleGroups(campaign2.namespace, campaign2.id, Set(group)).futureValue
+
+    parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign2.id)))
   }
 
   override def afterAll(): Unit = {
@@ -55,3 +67,4 @@ class CampaignSchedulerSpec extends TestKit(ActorSystem("CampaignSchedulerSpec")
   }
 
 }
+
