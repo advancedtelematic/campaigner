@@ -20,24 +20,23 @@ object DataType {
   object UpdateId extends UUIDKeyObj[UpdateId]
 
   final case class Campaign(
-    id: CampaignId,
     namespace: Namespace,
+    id: CampaignId,
     name: String,
-    update: UpdateId,
+    updateId: UpdateId,
     createdAt: Instant,
     updatedAt: Instant
   )
 
   final case class CreateCampaign(
-    namespace: Namespace,
     name: String,
     update: UpdateId,
     groups: Set[GroupId]
   ) {
-    def mkCampaign(): Campaign =
+    def mkCampaign(ns: Namespace): Campaign =
       Campaign(
+        ns,
         CampaignId.generate(),
-        namespace,
         name,
         update,
         Instant.now(),
@@ -46,8 +45,8 @@ object DataType {
   }
 
   final case class GetCampaign(
-    id: CampaignId,
     namespace: Namespace,
+    id: CampaignId,
     name: String,
     update: UpdateId,
     createdAt: Instant,
@@ -56,20 +55,33 @@ object DataType {
   )
 
   object GetCampaign {
-    def apply(c: Campaign, grps: Set[GroupId]): GetCampaign =
+    def apply(c: Campaign, groups: Set[GroupId]): GetCampaign =
       GetCampaign(
-        c.id,
         c.namespace,
+        c.id,
         c.name,
-        c.update,
+        c.updateId,
         c.createdAt,
         c.updatedAt,
-        grps
+        groups
       )
   }
 
   final case class UpdateCampaign(
     name: String
   )
+
+  final case class Stats(processed: Long, affected: Long)
+
+  final case class CampaignStats(
+    id: CampaignId,
+    group: GroupId,
+    completed: Boolean,
+    processed: Long,
+    affected: Long
+  )
+
+  type GroupStats = Map[GroupId, Stats]
+  final case class CampaignStatsResult(campaign: CampaignId, stats: GroupStats)
 
 }

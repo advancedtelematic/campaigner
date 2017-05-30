@@ -1,8 +1,9 @@
 name := "campaigner"
 organization := "com.advancedtelematic"
-scalaVersion := "2.11.8"
+scalaVersion := "2.12.2"
 
 scalacOptions := Seq(
+  "-feature",
   "-unchecked",
   "-deprecation",
   "-encoding",
@@ -11,7 +12,6 @@ scalacOptions := Seq(
   "-Yno-adapted-args",
   "-Ywarn-dead-code",
   "-Ywarn-numeric-widen",
-  "-Ywarn-value-discard",
   "-Ywarn-unused-import"
   )
 
@@ -25,9 +25,9 @@ resolvers += "ATS Snapshots" at "http://nexus.prod01.internal.advancedtelematic.
 libraryDependencies ++= {
   val akkaHttpV = "10.0.3"
   val akkaV = "2.4.17"
-  val libatsV = "0.0.1-52-g6695d44"
+  val libatsV = "0.0.1-63-g8dcff8c"
   val scalaTestV = "3.0.0"
-  val slickV = "3.1.1"
+  val slickV = "3.2.0"
 
   Seq(
     "ch.qos.logback" % "logback-classic" % "1.1.3",
@@ -43,11 +43,12 @@ libraryDependencies ++= {
     "org.typelevel" %% "cats" % "0.9.0",
 
     "com.advancedtelematic" %% "libats" % libatsV,
+    "com.advancedtelematic" %% "libats-auth" % libatsV,
     "com.advancedtelematic" %% "libats-metrics" % libatsV,
     "com.advancedtelematic" %% "libats-slick" % libatsV,
 
-    "org.scalacheck" %% "scalacheck" % "1.13.5" % "test",
-    "org.scalatest" %% "scalatest" % scalaTestV % "test"
+    "org.scalacheck" %% "scalacheck" % "1.13.5" % Test,
+    "org.scalatest" %% "scalatest" % scalaTestV % Test
   )
 }
 
