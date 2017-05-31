@@ -40,7 +40,7 @@
   "cpus": $USE_CPU,
   "mem": $USE_MEM,
   "instances": 1,
-  "args": ["-main", "com.advancedtelematic.campaigner.daemon.DaemonBoot"],
+  "args": ["-main", "com.advancedtelematic.campaigner.DaemonBoot"],
    "container": {
     "type": "DOCKER",
     "docker": {
