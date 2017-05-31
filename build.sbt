@@ -65,6 +65,7 @@ flywayUser := sys.env.getOrElse("DB_USER", "campaigner")
 
 flywayPassword := sys.env.getOrElse("DB_PASSWORD", "campaigner")
 
+mainClass in Compile := Some("com.advancedtelematic.campaigner.Boot")
 
 import com.typesafe.sbt.packager.docker._
 
