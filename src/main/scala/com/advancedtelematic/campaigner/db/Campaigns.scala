@@ -62,18 +62,41 @@ protected class Campaigns()(implicit db: Database, ec: ExecutionContext) {
 
   def scheduleGroups(ns: Namespace, campaign: CampaignId, groups: Set[GroupId]): Future[Unit] =
     db.run {
-      for {
+      val f = for {
         _ <- find(ns, campaign)
         _ <- DBIO.sequence(groups.toSeq.map { group =>
-          Schema.campaignStats += CampaignStats(campaign, group, false, 0, 0)
+          Schema.groupStats += GroupStats(campaign, group, GroupStatus.scheduled, 0, 0)
         })
       } yield ()
+
+      f.transactionally
+        .handleIntegrityErrors(Errors.CampaignAlreadyLaunched)
+    }
+
+  def aggregatedStatus(campaign: CampaignId): Future[CampaignStatus.Value] =
+    db.run {
+      def q(status: GroupStatus.Value) =
+        Schema.groupStats
+          .filter(_.campaignId === campaign)
+          .filter(_.status === status)
+          .length.result
+      for {
+        scheduled <- q(GroupStatus.scheduled)
+        launched  <- q(GroupStatus.launched)
+        cancelled <- q(GroupStatus.cancelled)
+        status     = (scheduled, launched, cancelled) match {
+          case (_, _, c) if c > 0 => CampaignStatus.cancelled
+          case (0, l, _) if l > 0 => CampaignStatus.launched
+          case (0, 0, 0)          => CampaignStatus.prepared
+          case _                  => CampaignStatus.scheduled
+        }
+      } yield status
     }
 
   def campaignStatsFor(ns: Namespace, campaign: CampaignId): Future[Map[GroupId, Stats]] =
     db.run {
       find(ns, campaign).flatMap { _ =>
-        Schema.campaignStats
+        Schema.groupStats
           .filter(_.campaignId === campaign)
           .map(r => (r.groupId, r.processed, r.affected))
           .result
@@ -84,16 +107,16 @@ protected class Campaigns()(implicit db: Database, ec: ExecutionContext) {
 
   def remainingCampaigns(): Future[Seq[Campaign]] =
     db.run {
-      Schema.campaignStats.join(Schema.campaigns).on(_.campaignId === _.id)
-        .filter(!_._1.completed)
+      Schema.groupStats.join(Schema.campaigns).on(_.campaignId === _.id)
+        .filter(_._1.status === GroupStatus.scheduled)
         .map(_._2)
         .result
     }
 
   def freshCampaigns(): Future[Seq[Campaign]] =
     db.run {
-      Schema.campaignStats.join(Schema.campaigns).on(_.campaignId === _.id)
-        .filter(!_._1.completed)
+      Schema.groupStats.join(Schema.campaigns).on(_.campaignId === _.id)
+        .filter(_._1.status === GroupStatus.scheduled)
         .filter(_._1.processed === 0L)
         .filter(_._1.affected  === 0L)
         .map(_._2)
@@ -102,19 +125,19 @@ protected class Campaigns()(implicit db: Database, ec: ExecutionContext) {
 
   def remainingGroups(campaign: CampaignId): Future[Seq[GroupId]] =
     db.run {
-      Schema.campaignStats
+      Schema.groupStats
         .filter(_.campaignId === campaign)
-        .filter(!_.completed)
+        .filter(_.status === GroupStatus.scheduled)
         .map(_.groupId)
         .result
     }
 
   def remainingBatches(campaign: CampaignId, group: GroupId): Future[Option[Long]] =
     db.run {
-      Schema.campaignStats
+      Schema.groupStats
         .filter(_.campaignId === campaign)
         .filter(_.groupId === group)
-        .filter(!_.completed)
+        .filter(_.status === GroupStatus.scheduled)
         .map(_.processed)
         .result
         .headOption
@@ -123,12 +146,12 @@ protected class Campaigns()(implicit db: Database, ec: ExecutionContext) {
   private[db] def progressGroup(ns: Namespace,
                                 campaign: CampaignId,
                                 group: GroupId,
-                                complete: Boolean,
+                                status: GroupStatus.Value,
                                 stats: Stats): Future[Unit] =
     db.run {
       find(ns, campaign).flatMap { _ =>
-        Schema.campaignStats
-          .insertOrUpdate(CampaignStats(campaign, group, complete, stats.processed, stats.affected))
+        Schema.groupStats
+          .insertOrUpdate(GroupStats(campaign, group, status, stats.processed, stats.affected))
           .map(_ => ())
       }
     }
@@ -137,12 +160,24 @@ protected class Campaigns()(implicit db: Database, ec: ExecutionContext) {
                     campaign: CampaignId,
                     group: GroupId,
                     stats: Stats): Future[Unit] =
-    progressGroup(ns, campaign, group, false, stats)
+    progressGroup(ns, campaign, group, GroupStatus.scheduled, stats)
 
   def completeGroup(ns: Namespace,
                     campaign: CampaignId,
                     group: GroupId,
                     stats: Stats): Future[Unit] =
-    progressGroup(ns, campaign, group, true, stats)
+    progressGroup(ns, campaign, group, GroupStatus.launched, stats)
+
+  def cancelCampaign(ns: Namespace,
+                     campaign: CampaignId): Future[Unit] =
+    db.run {
+      find(ns, campaign).flatMap { _ =>
+        Schema.groupStats
+          .filter(_.campaignId === campaign)
+          .map(_.status)
+          .update(GroupStatus.cancelled)
+          .map(_ => ())
+      }
+    }
 
 }
