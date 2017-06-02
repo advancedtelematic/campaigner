@@ -1,7 +1,10 @@
 package com.advancedtelematic.campaigner.data
 
+import com.advancedtelematic.libats.codecs.CirceEnum
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
+import com.advancedtelematic.libats.slick.codecs.SlickEnum
 import java.time.Instant
 import java.util.UUID
 
@@ -10,14 +13,8 @@ object DataType {
   final case class CampaignId(uuid: UUID) extends UUIDKey
   object CampaignId extends UUIDKeyObj[CampaignId]
 
-  final case class DeviceId(uuid: UUID) extends UUIDKey
-  object DeviceId extends UUIDKeyObj[DeviceId]
-
   final case class GroupId(uuid: UUID) extends UUIDKey
   object GroupId extends UUIDKeyObj[GroupId]
-
-  final case class UpdateId(uuid: UUID) extends UUIDKey
-  object UpdateId extends UUIDKeyObj[UpdateId]
 
   final case class Campaign(
     namespace: Namespace,
@@ -73,15 +70,39 @@ object DataType {
 
   final case class Stats(processed: Long, affected: Long)
 
-  final case class CampaignStats(
-    id: CampaignId,
+  object GroupStatus extends CirceEnum with SlickEnum {
+    val scheduled, launched, cancelled = Value
+  }
+
+  object CampaignStatus extends CirceEnum {
+    val prepared, scheduled, launched, finished, cancelled = Value
+  }
+
+  object DeviceStatus extends Enumeration with SlickEnum {
+    val scheduled, successful, cancelled, failed = Value
+  }
+
+  final case class GroupStats(
+    campaign: CampaignId,
     group: GroupId,
-    completed: Boolean,
+    status: GroupStatus.Value,
     processed: Long,
     affected: Long
   )
 
-  type GroupStats = Map[GroupId, Stats]
-  final case class CampaignStatsResult(campaign: CampaignId, stats: GroupStats)
+  final case class CampaignStats(
+    campaign: CampaignId,
+    status: CampaignStatus.Value,
+    finished: Long,
+    failed: Set[DeviceId],
+    stats: Map[GroupId, Stats]
+  )
+
+  final case class DeviceUpdate(
+    campaign: CampaignId,
+    update: UpdateId,
+    device: DeviceId,
+    status: DeviceStatus.Value
+  )
 
 }

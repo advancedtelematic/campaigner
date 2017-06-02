@@ -6,7 +6,7 @@ import akka.stream.Materializer
 import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.data.{Namespace, PaginationResult}
-import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import scala.concurrent.{ExecutionContext, Future}
 
 trait DeviceRegistryClient {
@@ -19,6 +19,8 @@ trait DeviceRegistryClient {
 class DeviceRegistryHttpClient(uri: Uri)
     (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer)
     extends HttpClient("device_registry", uri) with DeviceRegistryClient {
+
+  import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
   override def devicesInGroup(namespace: Namespace,
                               groupId: GroupId,

@@ -5,6 +5,8 @@ import com.advancedtelematic.campaigner.client.DirectorClient
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.CampaignSupport
+import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
+import scala.concurrent.Future
 import scala.concurrent.duration._
 import slick.jdbc.MySQLProfile.api._
 import scala.concurrent.Future
@@ -12,7 +14,7 @@ import scala.concurrent.Future
 object GroupScheduler {
 
   private object NextBatch
-  private final case class ScheduleBatch(offset: Long, processed: Long, affected: Long)
+  private final case class ScheduleBatch(offset: Long, processed: Long, affected: Seq[DeviceId])
   final case class BatchComplete(group: GroupId, offset: Long)
   final case class GroupComplete(group: GroupId)
   private final case class Error(msg: String, error: Throwable)
@@ -51,7 +53,7 @@ class GroupScheduler(registry: DeviceRegistryClient,
     offset     = offsetOpt.getOrElse(0L)
     processed <- registry.devicesInGroup(campaign.namespace, group, offset, batchSize)
     affected  <- director.setMultiUpdateTarget(campaign.namespace, campaign.updateId, processed)
-  } yield ScheduleBatch(offset, processed.length.toLong, affected.length.toLong)
+  } yield ScheduleBatch(offset, processed.length.toLong, affected)
 
   def receive: Receive = {
     case NextBatch =>
@@ -59,8 +61,8 @@ class GroupScheduler(registry: DeviceRegistryClient,
         .recover { case err => Error("could not resume batch", err) }
         .pipeTo(self)
     case ScheduleBatch(_, processed, affected) if processed < batchSize =>
-      log.debug(s"group $group complete")
-      val stats = Stats(processed, affected)
+      log.debug(s"$group complete")
+      val stats = Stats(processed, affected.length.toLong)
       Campaigns.completeGroup(campaign.namespace, campaign.id, group, stats)
         .map(_ => GroupComplete(group))
         .recover { case err => Error("could not persist progress", err) }
@@ -68,14 +70,16 @@ class GroupScheduler(registry: DeviceRegistryClient,
         .andThen { case _ => context.stop(self) }
     case ScheduleBatch(offset, processed, affected) =>
       val frontier = offset + processed
-      log.debug(s"batch complete for group $group from $processed to $frontier")
+      log.debug(s"batch complete for $group from $offset to $frontier")
       scheduler.scheduleOnce(delay, self, NextBatch)
-      Campaigns.completeBatch(campaign.namespace, campaign.id, group, Stats(frontier, affected))
-        .map(_ => BatchComplete(group, frontier))
-        .recover { case err => Error("could not complete batch", err) }
-        .pipeTo(parent)
+      Future.traverse(affected)(Campaigns.scheduleDevice(campaign.id, campaign.updateId, _))
+        .flatMap { _ =>
+        Campaigns.completeBatch(campaign.namespace, campaign.id, group, Stats(frontier, affected.length.toLong))
+          .map(_ => BatchComplete(group, frontier))
+          .recover { case err => Error("could not complete batch", err) }
+          .pipeTo(parent)
+      }
     case Error(msg, err) => log.error(s"$msg: ${err.getMessage}")
-
   }
 
 }

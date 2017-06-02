@@ -2,13 +2,14 @@ package com.advancedtelematic.campaigner.db
 
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.slick.db.SlickAnyVal._
+import com.advancedtelematic.libats.slick.db.SlickExtensions._
+import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import java.time.Instant
 import slick.jdbc.MySQLProfile.api._
 
 object Schema {
-  import com.advancedtelematic.libats.slick.db.SlickAnyVal._
-  import com.advancedtelematic.libats.slick.db.SlickExtensions._
-  import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 
   class Campaigns(tag: Tag) extends Table[Campaign](tag, "campaigns") {
     def namespace = column[Namespace] ("namespace")
@@ -37,19 +38,34 @@ object Schema {
   protected [db] val campaignGroups = TableQuery[CampaignGroups]
 
 
-  class CampaignStatsTable(tag: Tag) extends Table[CampaignStats](tag, "campaign_stats") {
+  class GroupStatsTable(tag: Tag) extends Table[GroupStats](tag, "group_stats") {
     def campaignId = column[CampaignId]("campaign_id")
     def groupId    = column[GroupId]("group_id")
-    def completed  = column[Boolean]("completed")
+    def status     = column[GroupStatus.Value]("status")
     def processed  = column[Long]("processed")
     def affected   = column[Long]("affected")
 
-    def pk = primaryKey("campaign_stats_pk", (campaignId, groupId))
+    def pk = primaryKey("group_stats_pk", (campaignId, groupId))
 
-    override def * = (campaignId, groupId, completed, processed, affected) <>
-                     ((CampaignStats.apply _).tupled, CampaignStats.unapply)
+    override def * = (campaignId, groupId, status, processed, affected) <>
+                     ((GroupStats.apply _).tupled, GroupStats.unapply)
   }
 
-  protected [db] val campaignStats = TableQuery[CampaignStatsTable]
+  protected [db] val groupStats = TableQuery[GroupStatsTable]
+
+
+  class DeviceUpdatesTable(tag: Tag) extends Table[DeviceUpdate](tag, "device_updates") {
+    def campaignId = column[CampaignId]("campaign_id")
+    def updateId   = column[UpdateId]("update_id")
+    def deviceId   = column[DeviceId]("device_id")
+    def status     = column[DeviceStatus.Value]("status")
+
+    def pk = primaryKey("device_updates_pk", (campaignId, deviceId))
+
+    override def * = (campaignId, updateId, deviceId, status) <>
+                     ((DeviceUpdate.apply _).tupled, DeviceUpdate.unapply)
+  }
+
+  protected [db] val deviceUpdates = TableQuery[DeviceUpdatesTable]
 
 }

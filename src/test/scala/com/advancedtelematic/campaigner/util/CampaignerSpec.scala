@@ -1,11 +1,9 @@
-package com.advancedtelematic.util
+package com.advancedtelematic.campaigner.util
 
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.prop.PropertyChecks
-import org.scalatest.{Matchers, PropSpec}
+import org.scalatest.{Matchers, FlatSpec}
 
 abstract class CampaignerSpec extends
-       PropSpec
+       FlatSpec
   with Matchers
   with ScalaFutures
-  with PropertyChecks
