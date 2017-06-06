@@ -1,48 +1,18 @@
 package com.advancedtelematic.campaigner.actor
 
-import akka.actor.ActorSystem
 import akka.http.scaladsl.util.FastFuture
-import akka.testkit.{TestKit, TestProbe}
-import com.advancedtelematic.campaigner.Settings
+import akka.testkit.TestProbe
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.CampaignSupport
+import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
-import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.{Arbitrary, Gen}
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 import scala.concurrent.duration._
-import scala.concurrent.{Future, ExecutionContext}
+import scala.concurrent.Future
 
-trait CampaignSupervisorSpec extends CampaignSupport
-  with FlatSpecLike
-  with Matchers
-  with ScalaFutures
-  with Settings
-  with BeforeAndAfterAll
-  with DatabaseSpec {
-
-  self: TestKit =>
-
-  implicit lazy val ec: ExecutionContext = system.dispatcher
-  lazy val registry = new FakeDeviceRegistryClient()
-  lazy val director = new FakeDirectorClient()
-  val batch = schedulerBatchSize.toInt
-
-  override def afterAll(): Unit = {
-    super.afterAll()
-    TestKit.shutdownActorSystem(system)
-    system.terminate()
-  }
-
-}
-
-
-class CampaignSupervisorSpec1 extends TestKit(ActorSystem("CampaignSupervisorSpec1"))
-  with CampaignSupervisorSpec {
+class CampaignSupervisorSpec1 extends ActorSpec[CampaignSupervisor] with CampaignerSpec {
 
   import Arbitrary._
   import CampaignScheduler._
@@ -77,9 +47,7 @@ class CampaignSupervisorSpec1 extends TestKit(ActorSystem("CampaignSupervisorSpe
 
 }
 
-
-class CampaignSupervisorSpec2 extends TestKit(ActorSystem("CampaignSupervisorSpec2"))
-  with CampaignSupervisorSpec {
+class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with CampaignerSpec {
 
   import Arbitrary._
   import CampaignSupervisor._
