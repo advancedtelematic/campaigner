@@ -1,38 +1,21 @@
 package com.advancedtelematic.campaigner.actor
 
-import akka.actor.ActorSystem
+import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
 import akka.http.scaladsl.util.FastFuture
-import akka.testkit.{TestKit, TestProbe}
-import com.advancedtelematic.campaigner.Settings
+import akka.testkit.TestProbe
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.CampaignSupport
 import com.advancedtelematic.libats.data.Namespace
-import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.scalacheck.{Arbitrary, Gen}
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 import scala.concurrent.Future
 
-class GroupSchedulerSpec extends TestKit(ActorSystem("GroupSchedulerSpec"))
-  with CampaignSupport
-  with FlatSpecLike
-  with Matchers
-  with ScalaFutures
-  with Settings
-  with BeforeAndAfterAll
-  with DatabaseSpec {
+class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
 
   import Arbitrary._
   import GroupScheduler._
   import scala.concurrent.duration._
-
-  val batch = schedulerBatchSize.toInt
-  lazy val registry = new FakeDeviceRegistryClient()
-  lazy val director = new FakeDirectorClient()
-  implicit lazy val ec = system.dispatcher
 
   def clearClientState() = {
     registry.state.clear()
@@ -87,13 +70,6 @@ class GroupSchedulerSpec extends TestKit(ActorSystem("GroupSchedulerSpec"))
     director.state.get(campaign.updateId).toSet.subsetOf(
       devs.toSet
     ) shouldBe true
-  }
-
-  override def afterAll(): Unit = {
-    super.afterAll()
-    TestKit.shutdownActorSystem(system)
-    system.terminate()
-    ()
   }
 
 }

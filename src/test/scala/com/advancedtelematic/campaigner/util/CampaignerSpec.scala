@@ -1,9 +1,10 @@
 package com.advancedtelematic.campaigner.util
 
+import com.advancedtelematic.libats.test.LongTest
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{Matchers, FlatSpec}
+import org.scalatest.{Matchers, FlatSpecLike}
 
-abstract class CampaignerSpec extends
-       FlatSpec
-  with Matchers
-  with ScalaFutures
+trait CampaignerSpec extends FlatSpecLike
+    with Matchers
+    with ScalaFutures
+    with LongTest

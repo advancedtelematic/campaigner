@@ -1,35 +1,17 @@
 package com.advancedtelematic.campaigner.actor
 
-import akka.actor.ActorSystem
-import akka.testkit.{TestKit, TestProbe}
-import com.advancedtelematic.campaigner.Settings
-import com.advancedtelematic.campaigner.client._
+import akka.testkit.TestProbe
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.CampaignSupport
-import com.advancedtelematic.libats.test.DatabaseSpec
+import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
 import org.scalacheck.Arbitrary
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 import scala.collection.JavaConverters._
-import scala.concurrent.ExecutionContext
 
-class CampaignSchedulerSpec extends TestKit(ActorSystem("CampaignSchedulerSpec"))
-  with CampaignSupport
-  with FlatSpecLike
-  with Matchers
-  with ScalaFutures
-  with Settings
-  with BeforeAndAfterAll
-  with DatabaseSpec {
+class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with CampaignerSpec {
 
   import Arbitrary._
   import CampaignScheduler._
   import scala.concurrent.duration._
-
-  implicit lazy val ec: ExecutionContext = system.dispatcher
-  lazy val registry = new FakeDeviceRegistryClient()
-  lazy val director = new FakeDirectorClient()
 
   "campaign scheduler" should "trigger updates for each group" in {
 
@@ -48,12 +30,6 @@ class CampaignSchedulerSpec extends TestKit(ActorSystem("CampaignSchedulerSpec")
     ))
     parent.expectMsg(1.minute, CampaignComplete(campaign.id))
     registry.state.keys.asScala.toSet shouldBe groups
-  }
-
-  override def afterAll(): Unit = {
-    super.afterAll()
-    TestKit.shutdownActorSystem(system)
-    system.terminate()
   }
 
 }
