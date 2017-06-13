@@ -6,9 +6,11 @@ import akka.testkit.TestProbe
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
+import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.scalacheck.{Arbitrary, Gen}
+
 import scala.concurrent.Future
 
 class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
@@ -22,6 +24,8 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
     director.state.clear()
   }
 
+  val campaigns = Campaigns()
+
   "group scheduler" should "trigger updates for each device in batch" in {
     val campaign = arbitrary[Campaign].sample.get
     val group    = GroupId.generate()
@@ -29,7 +33,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
     val props  = GroupScheduler.props(registry, director, 10.minutes, schedulerBatchSize, campaign, group)
 
     clearClientState()
-    Campaigns.persist(campaign, Set(group)).futureValue
+    campaigns.create(campaign, Set(group)).futureValue
 
     parent.childActorOf(props)
     parent.expectMsgPF(10.seconds) {
@@ -47,7 +51,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
     val n        = Gen.choose(batch, batch * 10).sample.get
     val devs     = Gen.listOfN(n, genDeviceId).sample.get
 
-    Campaigns.persist(campaign, Set(group)).futureValue
+    campaigns.create(campaign, Set(group)).futureValue
 
     val registry = new DeviceRegistryClient {
       override def devicesInGroup(_ns: Namespace,
@@ -67,7 +71,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
       parent.expectMsg(BatchComplete(group, (i+1).toLong * batch))
     }
     parent.expectMsg(GroupComplete(group))
-    director.state.get(campaign.updateId).toSet.subsetOf(
+    director.state.get(campaign.updateId).subsetOf(
       devs.toSet
     ) shouldBe true
   }

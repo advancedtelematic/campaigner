@@ -4,9 +4,10 @@ import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.headers.RawHeader
 import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.Codecs._
+import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.util.{ResourceSpec, CampaignerSpec}
+import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
 import com.advancedtelematic.libats.data.Namespace
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import org.scalacheck.Arbitrary._
@@ -98,7 +99,7 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
 
   }
 
-  def checkStatus(id: CampaignId, expected: CampaignStatus.Value) =
+  def checkStatus(id: CampaignId, expected: CampaignStatus) =
     Get(apiUri(s"campaigns/${id.show}/stats")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
       val result = responseAs[CampaignStats]

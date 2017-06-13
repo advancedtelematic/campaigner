@@ -25,7 +25,7 @@ resolvers += "ATS Snapshots" at "http://nexus.prod01.internal.advancedtelematic.
 libraryDependencies ++= {
   val akkaHttpV = "10.0.3"
   val akkaV = "2.4.17"
-  val libatsV = "0.0.1-63-g8dcff8c"
+  val libatsV = "0.0.1-77-g30137be"
   val scalaTestV = "3.0.0"
   val slickV = "3.2.0"
 
@@ -59,13 +59,6 @@ enablePlugins(BuildInfoPlugin)
 buildInfoOptions += BuildInfoOption.ToMap
 
 buildInfoOptions += BuildInfoOption.BuildTime
-
-
-flywayUrl := sys.env.getOrElse("DB_URL", "jdbc:mysql://localhost:3306/campaigner")
-
-flywayUser := sys.env.getOrElse("DB_USER", "campaigner")
-
-flywayPassword := sys.env.getOrElse("DB_PASSWORD", "campaigner")
 
 mainClass in Compile := Some("com.advancedtelematic.campaigner.Boot")
 

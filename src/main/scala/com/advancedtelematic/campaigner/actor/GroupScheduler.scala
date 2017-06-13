@@ -4,11 +4,12 @@ import akka.actor.{Actor, ActorLogging, Props}
 import com.advancedtelematic.campaigner.client.DirectorClient
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.campaigner.db.CampaignSupport
+import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
-import scala.concurrent.Future
+
 import scala.concurrent.duration._
 import slick.jdbc.MySQLProfile.api._
+
 import scala.concurrent.Future
 
 object GroupScheduler {
@@ -36,8 +37,7 @@ class GroupScheduler(registry: DeviceRegistryClient,
                      campaign: Campaign,
                      group: GroupId)
                     (implicit db: Database) extends Actor
-  with ActorLogging
-  with CampaignSupport {
+  with ActorLogging {
 
   import GroupScheduler._
   import akka.pattern._
@@ -45,12 +45,15 @@ class GroupScheduler(registry: DeviceRegistryClient,
 
   val scheduler = system.scheduler
 
+  val campaigns = Campaigns()
+
   override def preStart() =
     self ! NextBatch
 
   private def resumeBatch(campaign: Campaign, group: GroupId): Future[ScheduleBatch] = for {
-    offsetOpt <- Campaigns.remainingBatches(campaign.id, group)
+    offsetOpt <- campaigns.remainingBatches(campaign.id, group)
     offset     = offsetOpt.getOrElse(0L)
+    // TODO: This offset is not currently stable. We are not sorting the devices on device registry before pagination
     processed <- registry.devicesInGroup(campaign.namespace, group, offset, batchSize)
     affected  <- director.setMultiUpdateTarget(campaign.namespace, campaign.updateId, processed)
   } yield ScheduleBatch(offset, processed.length.toLong, affected)
@@ -60,10 +63,10 @@ class GroupScheduler(registry: DeviceRegistryClient,
       resumeBatch(campaign, group)
         .recover { case err => Error("could not resume batch", err) }
         .pipeTo(self)
-    case ScheduleBatch(_, processed, affected) if processed < batchSize =>
+    case ScheduleBatch(_, processed, affected) if processed < batchSize => // TODO: Why not <= ?
       log.debug(s"$group complete")
       val stats = Stats(processed, affected.length.toLong)
-      Campaigns.completeGroup(campaign.namespace, campaign.id, group, stats)
+      campaigns.completeGroup(campaign.namespace, campaign.id, group, stats)
         .map(_ => GroupComplete(group))
         .recover { case err => Error("could not persist progress", err) }
         .pipeTo(parent)
@@ -72,12 +75,12 @@ class GroupScheduler(registry: DeviceRegistryClient,
       val frontier = offset + processed
       log.debug(s"batch complete for $group from $offset to $frontier")
       scheduler.scheduleOnce(delay, self, NextBatch)
-      Future.traverse(affected)(Campaigns.scheduleDevice(campaign.id, campaign.updateId, _))
+      Future.traverse(affected)(campaigns.scheduleDevice(campaign.id, campaign.updateId, _))
         .flatMap { _ =>
-        Campaigns.completeBatch(campaign.namespace, campaign.id, group, Stats(frontier, affected.length.toLong))
-          .map(_ => BatchComplete(group, frontier))
-          .recover { case err => Error("could not complete batch", err) }
-          .pipeTo(parent)
+          campaigns.completeBatch(campaign.namespace, campaign.id, group, Stats(frontier, affected.length.toLong))
+            .map(_ => BatchComplete(group, frontier))
+            .recover { case err => Error("could not complete batch", err) }
+            .pipeTo(parent)
       }
     case Error(msg, err) => log.error(s"$msg: ${err.getMessage}")
   }
