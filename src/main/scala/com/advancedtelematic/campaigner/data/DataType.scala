@@ -8,6 +8,10 @@ import com.advancedtelematic.libats.slick.codecs.SlickEnum
 import java.time.Instant
 import java.util.UUID
 
+import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
+import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
+import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
+
 object DataType {
 
   final case class CampaignId(uuid: UUID) extends UUIDKey
@@ -71,28 +75,31 @@ object DataType {
   final case class Stats(processed: Long, affected: Long)
 
   object GroupStatus extends CirceEnum with SlickEnum {
+    type GroupStatus = Value
     val scheduled, launched, cancelled = Value
   }
 
   object CampaignStatus extends CirceEnum {
+    type CampaignStatus = Value
     val prepared, scheduled, launched, finished, cancelled = Value
   }
 
   object DeviceStatus extends Enumeration with SlickEnum {
+    type DeviceStatus = Value
     val scheduled, successful, cancelled, failed = Value
   }
 
   final case class GroupStats(
     campaign: CampaignId,
     group: GroupId,
-    status: GroupStatus.Value,
+    status: GroupStatus,
     processed: Long,
     affected: Long
   )
 
   final case class CampaignStats(
     campaign: CampaignId,
-    status: CampaignStatus.Value,
+    status: CampaignStatus,
     finished: Long,
     failed: Set[DeviceId],
     stats: Map[GroupId, Stats]
@@ -102,7 +109,6 @@ object DataType {
     campaign: CampaignId,
     update: UpdateId,
     device: DeviceId,
-    status: DeviceStatus.Value
+    status: DeviceStatus
   )
-
 }

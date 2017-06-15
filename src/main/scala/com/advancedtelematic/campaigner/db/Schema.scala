@@ -7,11 +7,14 @@ import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import java.time.Instant
+
+import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
+import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 import slick.jdbc.MySQLProfile.api._
 
 object Schema {
 
-  class Campaigns(tag: Tag) extends Table[Campaign](tag, "campaigns") {
+  class CampaignsTable(tag: Tag) extends Table[Campaign](tag, "campaigns") {
     def namespace = column[Namespace] ("namespace")
     def id        = column[CampaignId]("uuid", O.PrimaryKey)
     def name      = column[String]    ("name")
@@ -23,10 +26,13 @@ object Schema {
                      ((Campaign.apply _).tupled, Campaign.unapply)
   }
 
-  protected [db] val campaigns = TableQuery[Campaigns]
+  protected [db] val campaigns = TableQuery[CampaignsTable]
 
 
-  class CampaignGroups(tag: Tag) extends Table[(CampaignId, GroupId)](tag, "campaign_groups") {
+  // There is already an association between campaigns and groups in GroupStatsTable. Why do we need this?
+  // If it's just for the campaign resource, we can have a new GroupStatus => created and create that when we create
+  // a campaign
+  class CampaignGroupsTable(tag: Tag) extends Table[(CampaignId, GroupId)](tag, "campaign_groups") {
     def campaignId = column[CampaignId]("campaign_id")
     def groupId    = column[GroupId]("group_id")
 
@@ -35,13 +41,13 @@ object Schema {
     override def * = (campaignId, groupId)
   }
 
-  protected [db] val campaignGroups = TableQuery[CampaignGroups]
+  protected [db] val campaignGroups = TableQuery[CampaignGroupsTable]
 
 
   class GroupStatsTable(tag: Tag) extends Table[GroupStats](tag, "group_stats") {
     def campaignId = column[CampaignId]("campaign_id")
     def groupId    = column[GroupId]("group_id")
-    def status     = column[GroupStatus.Value]("status")
+    def status     = column[GroupStatus]("status")
     def processed  = column[Long]("processed")
     def affected   = column[Long]("affected")
 
@@ -58,7 +64,7 @@ object Schema {
     def campaignId = column[CampaignId]("campaign_id")
     def updateId   = column[UpdateId]("update_id")
     def deviceId   = column[DeviceId]("device_id")
-    def status     = column[DeviceStatus.Value]("status")
+    def status     = column[DeviceStatus]("status")
 
     def pk = primaryKey("device_updates_pk", (campaignId, deviceId))
 

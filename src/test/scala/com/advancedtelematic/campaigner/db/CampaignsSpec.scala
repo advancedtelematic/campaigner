@@ -12,16 +12,19 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{AsyncFlatSpec, Matchers}
 
 class CampaignsSpec extends AsyncFlatSpec
-    with CampaignSupport
-    with DatabaseSpec
-    with Matchers
-    with ScalaFutures {
+  with DatabaseSpec
+  with Matchers
+  with ScalaFutures
+  with CampaignSupport
+  with GroupStatsSupport {
 
   import Arbitrary._
+  
+  val campaigns = Campaigns()
 
   "complete batch" should "fail if the campaign does not exist" in {
     recoverToSucceededIf[CampaignMissing.type] {
-      Campaigns.completeBatch(
+      campaigns.completeBatch(
         arbitrary[Namespace].sample.get,
         CampaignId.generate(),
         GroupId.generate(),
@@ -31,22 +34,21 @@ class CampaignsSpec extends AsyncFlatSpec
   }
 
   "complete batch" should "update campaign stats for a group" in {
-
     val campaign  = arbitrary[Campaign].sample.get
     val group     = GroupId.generate()
     val processed = Gen.posNum[Long].sample.get
     val affected  = Gen.chooseNum[Long](0, processed).sample.get
 
     for {
-      _ <- Campaigns.persist(campaign, Set(group))
-      _ <- Campaigns.completeBatch(
+      _ <- campaignRepo.persist(campaign, Set(group))
+      _ <- campaigns.completeBatch(
         campaign.namespace,
         campaign.id,
         group,
         Stats(processed, affected)
       )
-      status <- Campaigns.groupStatusFor(campaign.id, group)
-      stats <- Campaigns.campaignStatsFor(campaign.namespace, campaign.id)
+      status <- groupStatsRepo.groupStatusFor(campaign.id, group)
+      stats <- campaigns.campaignStatsFor(campaign.namespace, campaign.id)
     } yield {
       status shouldBe Some(GroupStatus.scheduled)
       stats  shouldBe Map(group -> Stats(processed, affected))
@@ -55,7 +57,7 @@ class CampaignsSpec extends AsyncFlatSpec
 
   "complete group" should "fail if the campaign does not exist" in {
     recoverToSucceededIf[CampaignMissing.type] {
-      Campaigns.completeGroup(
+      campaigns.completeGroup(
         arbitrary[Namespace].sample.get,
         CampaignId.generate(),
         GroupId.generate(),
@@ -72,15 +74,15 @@ class CampaignsSpec extends AsyncFlatSpec
     val affected  = Gen.chooseNum[Long](0, processed).sample.get
 
     for {
-      _ <- Campaigns.persist(campaign, Set(group))
-      _ <- Campaigns.completeGroup(
+      _ <- campaignRepo.persist(campaign, Set(group))
+      _ <- campaigns.completeGroup(
         campaign.namespace,
         campaign.id,
         group,
         Stats(processed, affected)
       )
-      status <- Campaigns.groupStatusFor(campaign.id, group)
-      stats  <- Campaigns.campaignStatsFor(campaign.namespace, campaign.id)
+      status <- groupStatsRepo.groupStatusFor(campaign.id, group)
+      stats  <- campaigns.campaignStatsFor(campaign.namespace, campaign.id)
     } yield {
       status shouldBe Some(GroupStatus.launched)
       stats  shouldBe Map(group -> Stats(processed, affected))
@@ -89,17 +91,17 @@ class CampaignsSpec extends AsyncFlatSpec
 
   "finishing one device" should "work with several campaigns" in {
 
-    val ns        = arbitrary[Namespace].sample.get
-    val campaigns = arbitrary[Seq[Campaign]].sample.get
-    val update    = UpdateId.generate()
-    val group     = GroupId.generate()
-    val device    = DeviceId.generate()
+    val ns = arbitrary[Namespace].sample.get
+    val newCampaigns = arbitrary[Seq[Campaign]].sample.get
+    val update = UpdateId.generate()
+    val group = GroupId.generate()
+    val device = DeviceId.generate()
 
     for {
-      _ <- FastFuture.traverse(campaigns)(c => Campaigns.persist(c.copy(namespace = ns, updateId = update), Set(group)))
-      _ <- FastFuture.traverse(campaigns)(c => Campaigns.scheduleDevice(c.id, update, device))
-      _ <- Campaigns.finishDevice(update, device, DeviceStatus.successful)
-      c <- Campaigns.countFinished(ns, campaigns(0).id)
+      _ <- FastFuture.traverse(newCampaigns)(c => campaignRepo.persist(c.copy(namespace = ns, updateId = update), Set(group)))
+      _ <- FastFuture.traverse(newCampaigns)(c => campaigns.scheduleDevice(c.id, update, device))
+      _ <- campaigns.finishDevice(update, device, DeviceStatus.successful)
+      c <- campaigns.countFinished(ns, newCampaigns.head.id)
     } yield c shouldBe 1
   }
 
@@ -110,10 +112,10 @@ class CampaignsSpec extends AsyncFlatSpec
     val devices  = arbitrary[Seq[DeviceId]].sample.get
 
     for {
-      _ <- Campaigns.persist(campaign, Set(group))
-      _ <- FastFuture.traverse(devices)(d => Campaigns.scheduleDevice(campaign.id, campaign.updateId, d))
-      _ <- FastFuture.traverse(devices)(d => Campaigns.finishDevice(campaign.updateId, d, DeviceStatus.failed))
-      c <- Campaigns.countFinished(campaign.namespace, campaign.id)
+      _ <- campaignRepo.persist(campaign, Set(group))
+      _ <- FastFuture.traverse(devices)(d => campaigns.scheduleDevice(campaign.id, campaign.updateId, d))
+      _ <- FastFuture.traverse(devices)(d => campaigns.finishDevice(campaign.updateId, d, DeviceStatus.failed))
+      c <- campaigns.countFinished(campaign.namespace, campaign.id)
     } yield c shouldBe devices.length
   }
 

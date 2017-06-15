@@ -3,8 +3,9 @@ package com.advancedtelematic.campaigner.actor
 import akka.actor.{Actor, ActorLogging, Props}
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.campaigner.db.CampaignSupport
+import com.advancedtelematic.campaigner.db.Campaigns
 import slick.jdbc.MySQLProfile.api._
+
 import scala.concurrent.duration._
 
 object CampaignScheduler {
@@ -30,15 +31,16 @@ class CampaignScheduler(registry: DeviceRegistryClient,
                         delay: FiniteDuration,
                         batchSize: Long)
                        (implicit db: Database) extends Actor
-  with ActorLogging
-  with CampaignSupport {
+  with ActorLogging {
 
   import CampaignScheduler._
   import GroupScheduler._
   import akka.pattern.pipe
   import context._
 
-  override def preStart() =
+  val campaigns = Campaigns()
+
+  override def preStart(): Unit =
     self ! NextGroup
 
   private def schedule(group: GroupId): Unit =
@@ -53,7 +55,7 @@ class CampaignScheduler(registry: DeviceRegistryClient,
 
   def receive: Receive = {
     case NextGroup =>
-      Campaigns.remainingGroups(campaign.id)
+      campaigns.remainingGroups(campaign.id)
         .map(_.headOption)
         .recover { case err => Error("could not retrieve remaining groups", err) }
         .pipeTo(self)
