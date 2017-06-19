@@ -1,5 +1,13 @@
 # ATS campaigner
 
+Schedule campaigns in batches for devices within groups.
+
+Depends on:
+```
+- device-registry
+- director
+```
+
 ## Running tests
 
 You'll need a mariadb instance running with the users configured in
@@ -9,6 +17,9 @@ a database with the proper permissions.
 
 To run tests simply run `sbt test`.
 
+## API
+
+[Campaigner](http://advancedtelematic.github.io/rvi_sota_server/swagger/campaigner.html?url=https://s3.eu-central-1.amazonaws.com/ats-end-to-end-tests/swagger-docs/latest/Campaigner.json)
 
 ## Teamcity jobs
 
