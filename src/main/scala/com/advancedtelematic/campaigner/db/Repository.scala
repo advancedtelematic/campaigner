@@ -7,10 +7,10 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Schema.{GroupStatsTable}
 import com.advancedtelematic.campaigner.http.Errors
 import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
-
 import scala.concurrent.{ExecutionContext, Future}
 import slick.jdbc.MySQLProfile.api._
 
@@ -139,9 +139,6 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
       f.transactionally.handleIntegrityErrors(Errors.ConflictingCampaign)
     }
 
-  def find(ns: Namespace, campaign: CampaignId): Future[Campaign] =
-    db.run(findAction(ns, campaign))
-
   protected[db] def findAction(ns: Namespace, campaign: CampaignId): DBIO[Campaign] =
     Schema.campaigns
       .filter(_.namespace === ns)
@@ -149,8 +146,16 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
       .result
       .failIfNotSingle(Errors.CampaignMissing)
 
-  def findCampaign(ns: Namespace, campaign: CampaignId): Future[Campaign] =
+  def find(ns: Namespace, campaign: CampaignId): Future[Campaign] =
     db.run(findAction(ns, campaign))
+
+  def all(ns: Namespace, offset: Long, limit: Long): Future[PaginationResult[CampaignId]] =
+    db.run {
+      Schema.campaigns
+        .filter(_.namespace === ns)
+        .map(_.id)
+        .paginateResult(offset = offset, limit = limit)
+    }
 
   def findAllScheduled(filter: GroupStatsTable => Rep[Boolean] = _ => true.bind): Future[Seq[Campaign]] = {
     db.run {

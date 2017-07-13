@@ -9,6 +9,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
 import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.data.PaginationResult
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import org.scalacheck.Arbitrary._
 
@@ -29,6 +30,12 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
       responseAs[GetCampaign]
     }
 
+  def getCampaignsOk(): PaginationResult[CampaignId] =
+    Get(apiUri("campaigns")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+      responseAs[PaginationResult[CampaignId]]
+    }
+
   "POST and GET /campaigns" should "create a campaign, return the created campaign" in {
     val request = arbitrary[CreateCampaign].sample.get
     val id = createCampaignOk(request)
@@ -44,6 +51,9 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
       request.groups
     )
     campaign.createdAt shouldBe campaign.updatedAt
+
+    val campaigns = getCampaignsOk()
+    campaigns.values should contain (id)
   }
 
   "PUT /campaigns/:campaign_id" should "update a campaign" in {

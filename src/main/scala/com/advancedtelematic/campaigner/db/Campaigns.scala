@@ -6,12 +6,12 @@ import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.http.Errors
 import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
-import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
-
 import scala.concurrent.{ExecutionContext, Future}
+import slick.jdbc.MySQLProfile.api._
 
 object Campaigns {
   def apply()(implicit db: Database, ec: ExecutionContext): Campaigns = new Campaigns()
@@ -73,8 +73,11 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def countFinished(ns: Namespace, campaignId: CampaignId): Future[Long] =
     campaignRepo.countFinished(ns, campaignId)
 
+  def allCampaigns(ns: Namespace, offset: Long, limit: Long): Future[PaginationResult[CampaignId]] =
+    campaignRepo.all(ns, offset, limit)
+
   def findCampaign(ns: Namespace, campaignId: CampaignId): Future[GetCampaign] = for {
-    c <- campaignRepo.findCampaign(ns, campaignId)
+    c <- campaignRepo.find(ns, campaignId)
     groups <- findGroups(ns, c.id)
   } yield GetCampaign(c, groups)
 
