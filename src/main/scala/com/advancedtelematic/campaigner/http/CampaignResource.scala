@@ -10,7 +10,6 @@ import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.auth.AuthedNamespaceScope
 import com.advancedtelematic.libats.data.Namespace
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-
 import scala.concurrent.{ExecutionContext, Future}
 import slick.jdbc.MySQLProfile.api._
 
@@ -29,17 +28,24 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope])
     extractAuth { auth =>
       pathPrefix("campaigns") {
         val ns = auth.namespace
-        (post & pathEnd) {
-          entity(as[CreateCampaign]) { request =>
+        pathEnd {
+          (get & parameters('limit.as[Long].?) & parameters('offset.as[Long].?)) { (mLimit, mOffset) =>
+            val offset = mOffset.getOrElse(0L)
+            val limit  = mLimit.getOrElse(50L)
+            complete(campaigns.allCampaigns(ns, offset, limit))
+          } ~
+          (post & entity(as[CreateCampaign])) { request =>
             complete(StatusCodes.Created -> createCampaign(ns, request))
           }
         } ~
         pathPrefix(CampaignId.Path) { id =>
-          (get & pathEnd) {
-            complete(campaigns.findCampaign(ns, id))
-          } ~
-          (put & pathEnd & entity(as[UpdateCampaign])) { updated =>
-            complete(campaigns.update(ns, id, updated.name))
+          pathEnd {
+            get {
+              complete(campaigns.findCampaign(ns, id))
+            } ~
+            (put & entity(as[UpdateCampaign])) { updated =>
+              complete(campaigns.update(ns, id, updated.name))
+            }
           } ~
           (post & path("launch")) {
             complete(campaigns.launch(ns, id))
