@@ -19,7 +19,7 @@ class Routes(implicit val db: Database, ec: ExecutionContext)
   val routes: Route =
     handleRejections(rejectionHandler) {
       ErrorHandler.handleErrors {
-        pathPrefix("api" / "v1") {
+        pathPrefix("api" / "v2") {
           new CampaignResource(extractAuth).route
         } ~ new HealthResource(Seq(DbHealthResource.HealthCheck(db)), versionMap).route
       }
