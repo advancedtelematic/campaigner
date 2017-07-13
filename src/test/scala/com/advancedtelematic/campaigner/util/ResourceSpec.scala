@@ -9,7 +9,7 @@ trait ResourceSpec extends ScalatestRouteTest
   with DatabaseSpec {
   self: Suite =>
 
-  def apiUri(path: String): String = "/api/v1/" + path
+  def apiUri(path: String): String = "/api/v2/" + path
 
   lazy val routes = new Routes().routes
 
