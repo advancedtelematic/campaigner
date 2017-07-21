@@ -18,9 +18,9 @@ scalacOptions := Seq(
 // allow imports in the console on a single line
 scalacOptions in (Compile, console) ~= (_ filterNot (_ == "-Ywarn-unused-import"))
 
-resolvers += "ATS Releases" at "http://nexus.prod01.internal.advancedtelematic.com:8081/content/repositories/releases"
+resolvers += "ATS Releases" at "http://nexus.advancedtelematic.com:8081/content/repositories/releases"
 
-resolvers += "ATS Snapshots" at "http://nexus.prod01.internal.advancedtelematic.com:8081/content/repositories/snapshots"
+resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content/repositories/snapshots"
 
 libraryDependencies ++= {
   val akkaHttpV = "10.0.3"
