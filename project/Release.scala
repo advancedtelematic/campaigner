@@ -16,7 +16,8 @@ object Release {
     Seq(
       releaseProcess := Seq(
         checkSnapshotDependencies,
-        ReleaseStep(releaseStepTask(publish in Docker))
+        ReleaseStep(releaseStepTask(publish in Docker)),
+        releaseStepCommand("mkVersionArtifacts")
       ),
       releaseIgnoreUntrackedFiles := true
     )
