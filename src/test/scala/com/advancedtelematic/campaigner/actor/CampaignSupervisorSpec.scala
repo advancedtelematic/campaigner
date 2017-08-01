@@ -19,7 +19,7 @@ class CampaignSupervisorSpec1 extends ActorSpec[CampaignSupervisor] with Campaig
   import Arbitrary._
   import CampaignScheduler._
   import CampaignSupervisor._
-  
+
   val campaigns = Campaigns()
 
   "campaign supervisor" should "pick up unfinished and fresh campaigns" in {
@@ -82,12 +82,10 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
       10.seconds,
       schedulerBatchSize
     ))
+    parent.expectMsg(2.seconds, CampaignsScheduled(Set(campaign.id)))
+    parent.expectNoMsg(2.seconds)
 
-    parent.expectMsg(1.seconds, CampaignsScheduled(Set(campaign.id)))
-
-    parent.expectNoMsg(1.seconds)
     campaigns.cancelCampaign(campaign.namespace, campaign.id).futureValue
-
     parent.expectMsg(2.seconds, CampaignsCancelled(Set(campaign.id)))
     parent.expectNoMsg(2.seconds)
   }

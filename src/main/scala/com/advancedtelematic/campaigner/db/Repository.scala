@@ -83,16 +83,33 @@ protected [db] class GroupStatsRepository()(implicit db: Database, ec: Execution
         .filter(_.status === status)
         .length.result
 
+    def affectedDevices() =
+      Schema.groupStats
+        .filter(_.campaignId === campaign)
+        .map(_.affected)
+        .sum.result.map(_.getOrElse(0L))
+
+    def finishedDevices() =
+      Schema.deviceUpdates
+        .filter(_.campaignId === campaign)
+        .map(_.status)
+        .filter(_ =!= DeviceStatus.scheduled)
+        .length.result
+
     db.run {
       for {
+        groups    <- findByCampaignAction(campaign).map(_.length)
         scheduled <- groupStats(GroupStatus.scheduled)
         launched  <- groupStats(GroupStatus.launched)
         cancelled <- groupStats(GroupStatus.cancelled)
-        status     = (scheduled, launched, cancelled) match {
-          case (_, _, c) if c > 0 => CampaignStatus.cancelled
-          case (0, l, _) if l > 0 => CampaignStatus.launched
-          case (0, 0, _)          => CampaignStatus.prepared
-          case _                  => CampaignStatus.scheduled
+        affected  <- affectedDevices()
+        finished  <- finishedDevices()
+        status     = (groups, scheduled, launched, cancelled, affected, finished) match {
+          case (_, _, _, c, _, _) if c > 0           => CampaignStatus.cancelled
+          case (g, 0, _, _, a, f) if g > 0 && a == f => CampaignStatus.finished
+          case (0, 0, 0, _, _, _)                    => CampaignStatus.prepared
+          case (_, 0, _, _, _, _)                    => CampaignStatus.launched
+          case _                                     => CampaignStatus.scheduled
         }
       } yield status
     }
