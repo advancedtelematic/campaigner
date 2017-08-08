@@ -59,6 +59,12 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     }
   }
 
+  def scheduledDevices(ns: Namespace, campaign: CampaignId): Future[Set[DeviceId]] = db.run {
+    campaignRepo.findAction(ns, campaign).flatMap { _ =>
+      deviceUpdateRepo.findByCampaignAction(campaign, DeviceStatus.scheduled)
+    }
+  }
+
   def freshCampaigns(): Future[Seq[Campaign]] =
     campaignRepo.findAllScheduled { groupStats =>
       groupStats.processed === 0L && groupStats.affected === 0L
