@@ -1,16 +1,15 @@
 package com.advancedtelematic.campaigner.actor
 
-import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
 import akka.http.scaladsl.util.FastFuture
 import akka.testkit.TestProbe
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.Campaigns
+import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.scalacheck.{Arbitrary, Gen}
-
 import scala.concurrent.Future
 
 class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
@@ -22,6 +21,11 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
   def clearClientState() = {
     registry.state.clear()
     director.state.clear()
+  }
+
+  def fakeRegistry(devs: Seq[DeviceId]) = new DeviceRegistryClient {
+    override def devicesInGroup(ns: Namespace, grp: GroupId, offset: Long, limit: Long): Future[Seq[DeviceId]] =
+      FastFuture.successful(devs.drop(offset.toInt).take(limit.toInt))
   }
 
   val campaigns = Campaigns()
@@ -53,18 +57,10 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
 
     campaigns.create(campaign, Set(group)).futureValue
 
-    val registry = new DeviceRegistryClient {
-      override def devicesInGroup(_ns: Namespace,
-                                  _grp: GroupId,
-                                  offset: Long,
-                                  limit: Long): Future[Seq[DeviceId]] =
-        FastFuture.successful(devs.drop(offset.toInt).take(limit.toInt))
-    }
-
     clearClientState()
 
     val parent = TestProbe()
-    val props  = GroupScheduler.props(registry, director, schedulerDelay, schedulerBatchSize, campaign, group)
+    val props  = GroupScheduler.props(fakeRegistry(devs), director, schedulerDelay, schedulerBatchSize, campaign, group)
     parent.childActorOf(props)
 
     Range(0, n/batch).foreach { i =>
@@ -74,6 +70,27 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
     director.state.get(campaign.updateId).subsetOf(
       devs.toSet
     ) shouldBe true
+  }
+
+  "PRO-3745: group scheduler" should "properly set devices to `scheduled` when affected devices < batch size" in {
+    val campaign = arbitrary[Campaign].sample.get
+    val group    = GroupId.generate()
+    val n        = Gen.choose(0, batch-1).sample.get
+    println(n)
+    val devs     = Gen.listOfN(n, genDeviceId).sample.get
+
+    campaigns.create(campaign, Set(group)).futureValue
+
+    clearClientState()
+
+    val parent = TestProbe()
+    val props  = GroupScheduler.props(fakeRegistry(devs), director, schedulerDelay, schedulerBatchSize, campaign, group)
+    parent.childActorOf(props)
+
+    parent.expectMsg(GroupComplete(group))
+
+    director.state.get(campaign.updateId) should be
+      campaigns.scheduledDevices(campaign.namespace, campaign.id).futureValue
   }
 
 }

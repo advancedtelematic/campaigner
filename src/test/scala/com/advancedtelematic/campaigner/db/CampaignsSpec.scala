@@ -19,7 +19,7 @@ class CampaignsSpec extends AsyncFlatSpec
   with GroupStatsSupport {
 
   import Arbitrary._
-  
+
   val campaigns = Campaigns()
 
   "complete batch" should "fail if the campaign does not exist" in {

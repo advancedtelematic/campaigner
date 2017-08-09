@@ -58,30 +58,40 @@ class GroupScheduler(registry: DeviceRegistryClient,
     affected  <- director.setMultiUpdateTarget(campaign.namespace, campaign.updateId, processed)
   } yield ScheduleBatch(offset, processed.length.toLong, affected)
 
+  private def scheduleDevices(devs: Seq[DeviceId]): Future[Unit] =
+    Future.traverse(devs)(campaigns.scheduleDevice(campaign.id, campaign.updateId, _))
+      .map(_ => ())
+
   def receive: Receive = {
     case NextBatch =>
+      log.debug(s"next batch")
       resumeBatch(campaign, group)
         .recover { case err => Error("could not resume batch", err) }
         .pipeTo(self)
     case ScheduleBatch(_, processed, affected) if processed < batchSize => // TODO: Why not <= ?
       log.debug(s"$group complete")
       val stats = Stats(processed, affected.length.toLong)
-      campaigns.completeGroup(campaign.namespace, campaign.id, group, stats)
-        .map(_ => GroupComplete(group))
-        .recover { case err => Error("could not persist progress", err) }
+      scheduleDevices(affected)
+        .flatMap { _ =>
+          campaigns.completeGroup(campaign.namespace, campaign.id, group, stats)
+            .map(_ => GroupComplete(group))
+            .recover { case err => Error("could not persist progress", err) }
+        }
+        .recover { case err => Error("could not schedule devices", err) }
         .pipeTo(parent)
         .andThen { case _ => context.stop(self) }
     case ScheduleBatch(offset, processed, affected) =>
       val frontier = offset + processed
       log.debug(s"batch complete for $group from $offset to $frontier")
       scheduler.scheduleOnce(delay, self, NextBatch)
-      Future.traverse(affected)(campaigns.scheduleDevice(campaign.id, campaign.updateId, _))
+      scheduleDevices(affected)
         .flatMap { _ =>
           campaigns.completeBatch(campaign.namespace, campaign.id, group, Stats(frontier, affected.length.toLong))
             .map(_ => BatchComplete(group, frontier))
             .recover { case err => Error("could not complete batch", err) }
-            .pipeTo(parent)
-      }
+        }
+        .recover { case err => Error("could not schedule devices", err) }
+        .pipeTo(parent)
     case Error(msg, err) => log.error(s"$msg: ${err.getMessage}")
   }
 

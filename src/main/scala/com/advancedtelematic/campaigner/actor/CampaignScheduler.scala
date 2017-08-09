@@ -55,6 +55,7 @@ class CampaignScheduler(registry: DeviceRegistryClient,
 
   def receive: Receive = {
     case NextGroup =>
+      log.debug(s"next group")
       campaigns.remainingGroups(campaign.id)
         .map(_.headOption)
         .recover { case err => Error("could not retrieve remaining groups", err) }
