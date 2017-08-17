@@ -1,13 +1,10 @@
 package com.advancedtelematic.campaigner.daemon
 
-import akka.actor.{ActorSystem, Props}
 import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.campaigner.http.Errors
-import com.advancedtelematic.libats.messaging.MessageListener
 import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceUpdateReport
-import com.typesafe.config.Config
 
 import org.slf4j.LoggerFactory
 import scala.concurrent.{ExecutionContext, Future}
@@ -30,8 +27,4 @@ object DeviceUpdateReportListener {
         _log.info(s"Got DeviceUpdateReport for device ${msg.device.show} which is not scheduled by campaigner, ignoring this message.")
         ()
     }
-
-  def props(config: Config)
-      (implicit db:Database, ec: ExecutionContext, system: ActorSystem): Props  =
-    MessageListener.props[DeviceUpdateReport](config, apply)
 }
