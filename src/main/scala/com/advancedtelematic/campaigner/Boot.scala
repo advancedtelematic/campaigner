@@ -9,26 +9,27 @@ import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.monitoring.MetricsSupport
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
+import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport
 
 trait Settings {
   import com.typesafe.config.ConfigFactory
   import java.util.concurrent.TimeUnit
   import scala.concurrent.duration._
 
-  lazy val config = ConfigFactory.load()
+  private lazy val _config = ConfigFactory.load()
 
-  val host = config.getString("server.host")
-  val port = config.getInt("server.port")
+  val host = _config.getString("server.host")
+  val port = _config.getInt("server.port")
 
-  val deviceRegistryUri = config.getString("deviceRegistry.uri")
-  val directorUri = config.getString("director.uri")
+  val deviceRegistryUri = _config.getString("deviceRegistry.uri")
+  val directorUri = _config.getString("director.uri")
 
   val schedulerPollingTimeout =
-    FiniteDuration(config.getDuration("scheduler.pollingTimeout").toNanos, TimeUnit.NANOSECONDS)
+    FiniteDuration(_config.getDuration("scheduler.pollingTimeout").toNanos, TimeUnit.NANOSECONDS)
   val schedulerDelay =
-    FiniteDuration(config.getDuration("scheduler.delay").toNanos, TimeUnit.NANOSECONDS)
+    FiniteDuration(_config.getDuration("scheduler.delay").toNanos, TimeUnit.NANOSECONDS)
   val schedulerBatchSize =
-    config.getLong("scheduler.batchSize")
+    _config.getLong("scheduler.batchSize")
 }
 
 object Boot extends BootApp
@@ -38,7 +39,8 @@ object Boot extends BootApp
   with DatabaseConfig
   with BootMigrations
   with MetricsSupport
-  with DatabaseMetrics {
+  with DatabaseMetrics
+  with InfluxdbMetricsReporterSupport {
 
   implicit val _db = db
 
