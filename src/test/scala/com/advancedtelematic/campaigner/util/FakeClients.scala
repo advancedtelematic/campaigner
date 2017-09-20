@@ -42,4 +42,11 @@ class FakeDirectorClient extends DirectorClient {
     FastFuture.successful(devs)
   }
 
+  override def cancelUpdate(
+    ns: Namespace,
+    devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
+    val devs = Gen.someOf(devices).sample.get
+    FastFuture.successful(devs)
+  }
+
 }

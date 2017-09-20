@@ -2,6 +2,7 @@ package com.advancedtelematic.campaigner
 
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.{Directives, Route}
+import com.advancedtelematic.campaigner.client.DirectorHttpClient
 import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.http.BootApp
 import com.advancedtelematic.libats.http.LogDirectives._
@@ -46,9 +47,11 @@ object Boot extends BootApp
 
   log.info(s"Starting $version on http://$host:$port")
 
+  val director = new DirectorHttpClient(directorUri)
+
   val routes: Route =
     (versionHeaders(version) & logResponseMetrics(projectName)) {
-      new Routes().routes
+      new Routes(director).routes
     }
 
   Http().bindAndHandle(routes, host, port)

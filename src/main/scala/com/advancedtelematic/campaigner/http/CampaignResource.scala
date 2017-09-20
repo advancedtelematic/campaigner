@@ -4,6 +4,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.server.Directives._
 import com.advancedtelematic.campaigner.Settings
+import com.advancedtelematic.campaigner.client.DirectorClient
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
@@ -13,7 +14,8 @@ import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import scala.concurrent.{ExecutionContext, Future}
 import slick.jdbc.MySQLProfile.api._
 
-class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope])
+class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
+                       director: DirectorClient)
                       (implicit db: Database, ec: ExecutionContext)
   extends Settings {
 
@@ -23,6 +25,12 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope])
     val campaign = request.mkCampaign(ns)
     campaigns.create(campaign, request.groups)
   }
+
+  def cancelCampaign(ns: Namespace, id: CampaignId): Future[Unit] = for {
+    devs     <- campaigns.cancelCampaign(ns, id)
+    affected <- director.cancelUpdate(ns, devs.toSeq)
+    _        <- campaigns.finishDevices(id, affected, DeviceStatus.cancelled)
+  } yield ()
 
   val route =
     extractAuth { auth =>
@@ -54,7 +62,7 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope])
             complete(campaigns.campaignStats(ns, id))
           } ~
           (post & path("cancel")) {
-            complete(campaigns.cancelCampaign(ns, id))
+            complete(cancelCampaign(ns, id))
           }
         }
       }

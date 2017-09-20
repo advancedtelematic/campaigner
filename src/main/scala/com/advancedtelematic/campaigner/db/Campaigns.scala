@@ -33,25 +33,26 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       .map(_.map(_.processed))
 
   def completeBatch(
-                     ns: Namespace,
-                     campaign: CampaignId,
-                     group: GroupId,
-                     stats: Stats): Future[Unit] =
+    ns: Namespace,
+    campaign: CampaignId,
+    group: GroupId,
+    stats: Stats): Future[Unit] =
     progressGroup(ns, campaign, group, GroupStatus.scheduled, stats)
 
   def completeGroup(
-                     ns: Namespace,
-                     campaign: CampaignId,
-                     group: GroupId,
-                     stats: Stats): Future[Unit] =
+    ns: Namespace,
+    campaign: CampaignId,
+    group: GroupId,
+    stats: Stats): Future[Unit] =
     progressGroup(ns, campaign, group, GroupStatus.launched, stats)
 
   def cancelCampaign(
-                      ns: Namespace,
-                      campaign: CampaignId) : Future[Unit] =
-    campaignRepo.find(ns, campaign).flatMap { _ =>
-      groupStatsRepo.cancel(campaign)
-    }
+    ns: Namespace,
+    campaign: CampaignId): Future[Set[DeviceId]] = for {
+      _    <- campaignRepo.find(ns, campaign)
+      _    <- groupStatsRepo.cancel(campaign)
+      devs <- scheduledDevices(ns, campaign)
+    } yield devs
 
   def failedDevices(ns: Namespace, campaign: CampaignId): Future[Set[DeviceId]] = db.run {
     campaignRepo.findAction(ns, campaign).flatMap { _ =>
@@ -75,6 +76,9 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 
   def finishDevice(update: UpdateId, device: DeviceId, status: DeviceStatus): Future[Unit] =
     deviceUpdateRepo.setUpdateStatus(update, device, status)
+
+  def finishDevices(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus): Future[Unit] =
+    deviceUpdateRepo.setUpdateStatus(campaign, devices, status)
 
   def countFinished(ns: Namespace, campaignId: CampaignId): Future[Long] =
     campaignRepo.countFinished(ns, campaignId)
