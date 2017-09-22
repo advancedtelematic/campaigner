@@ -32,7 +32,7 @@ object Errors {
   )
   val DeviceNotScheduled = RawError(
     ErrorCodes.DeviceNotScheduled,
-    StatusCodes.InternalServerError,
+    StatusCodes.PreconditionFailed,
     "The device has not been scheduled."
   )
 

@@ -48,6 +48,18 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
       }.map(_ => ())
   }
 
+  def setUpdateStatus(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus): Future[Unit] = db.run {
+    Schema.deviceUpdates
+      .filter(_.campaignId === campaign)
+      .filter(_.deviceId inSet devices)
+      .map(_.status)
+      .update(status)
+      .flatMap {
+        case n if devices.length == n => DBIO.successful(())
+        case _ => DBIO.failed(Errors.DeviceNotScheduled)
+      }.map(_ => ())
+  }
+
   def persist(update: DeviceUpdate): Future[Unit] = db.run {
     (Schema.deviceUpdates += update).map(_ => ())
   }
@@ -162,6 +174,13 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
       .filter(_.id === campaign)
       .result
       .failIfNotSingle(Errors.CampaignMissing)
+
+  protected[db] def findByUpdateAction(ns: Namespace, update: UpdateId): DBIO[Seq[CampaignId]] =
+    Schema.campaigns
+      .filter(_.namespace === ns)
+      .filter(_.update === update)
+      .map(_.id)
+      .result
 
   def find(ns: Namespace, campaign: CampaignId): Future[Campaign] =
     db.run(findAction(ns, campaign))

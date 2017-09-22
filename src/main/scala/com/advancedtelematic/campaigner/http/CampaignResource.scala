@@ -1,19 +1,24 @@
 package com.advancedtelematic.campaigner.http
 
+import akka.event.LoggingAdapter
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.Settings
+import com.advancedtelematic.campaigner.client.DirectorClient
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.auth.AuthedNamespaceScope
 import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
+import concurrent.{ExecutionContext, Future}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-import scala.concurrent.{ExecutionContext, Future}
 import slick.jdbc.MySQLProfile.api._
 
-class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope])
+class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
+                       director: DirectorClient)
                       (implicit db: Database, ec: ExecutionContext)
   extends Settings {
 
@@ -24,10 +29,31 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope])
     campaigns.create(campaign, request.groups)
   }
 
+  def cancelCampaign(ns: Namespace, id: CampaignId): Future[Unit] = for {
+    devs     <- campaigns.cancelCampaign(ns, id)
+    affected <- director.cancelUpdate(ns, devs.toSeq)
+    _        <- campaigns.finishDevices(id, affected, DeviceStatus.cancelled)
+  } yield ()
+
+  def cancelDeviceUpdate(
+    ns: Namespace,
+    update: UpdateId,
+    device: DeviceId)
+    (implicit log: LoggingAdapter): Future[Unit] =
+    director.cancelUpdate(ns, device).flatMap { _ =>
+      campaigns.findCampaignsByUpdate(ns, update).flatMap {
+        case cs if cs.isEmpty =>
+          log.info(s"No campaign exists for $device.");
+          FastFuture.successful(())
+        case _ =>
+          campaigns.finishDevice(update, device, DeviceStatus.cancelled)
+      }
+    }
+
   val route =
     extractAuth { auth =>
+      val ns = auth.namespace
       pathPrefix("campaigns") {
-        val ns = auth.namespace
         pathEnd {
           (get & parameters('limit.as[Long].?) & parameters('offset.as[Long].?)) { (mLimit, mOffset) =>
             val offset = mOffset.getOrElse(0L)
@@ -54,7 +80,16 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope])
             complete(campaigns.campaignStats(ns, id))
           } ~
           (post & path("cancel")) {
-            complete(campaigns.cancelCampaign(ns, id))
+            complete(cancelCampaign(ns, id))
+          }
+        }
+      } ~
+      extractLog { implicit log =>
+        (pathPrefix("update") & pathPrefix(UpdateId.Path)) { update =>
+          (pathPrefix("device") & pathPrefix(DeviceId.Path)) { device =>
+            (post & path("cancel")) {
+              complete(cancelDeviceUpdate(ns, update, device))
+            }
           }
         }
       }
