@@ -68,7 +68,7 @@ class GroupScheduler(registry: DeviceRegistryClient,
       resumeBatch(campaign, group)
         .recover { case err => Error("could not resume batch", err) }
         .pipeTo(self)
-    case ScheduleBatch(_, processed, affected) if processed < batchSize => // TODO: Why not <= ?
+    case ScheduleBatch(_, processed, affected) if processed < batchSize =>
       log.debug(s"$group complete")
       val stats = Stats(processed, affected.length.toLong)
       scheduleDevices(affected)
@@ -83,7 +83,6 @@ class GroupScheduler(registry: DeviceRegistryClient,
     case ScheduleBatch(offset, processed, affected) =>
       val frontier = offset + processed
       log.debug(s"batch complete for $group from $offset to $frontier")
-      scheduler.scheduleOnce(delay, self, NextBatch)
       scheduleDevices(affected)
         .flatMap { _ =>
           campaigns.completeBatch(campaign.namespace, campaign.id, group, Stats(frontier, affected.length.toLong))
@@ -91,6 +90,7 @@ class GroupScheduler(registry: DeviceRegistryClient,
             .recover { case err => Error("could not complete batch", err) }
         }
         .recover { case err => Error("could not schedule devices", err) }
+        .andThen { case _ => scheduler.scheduleOnce(delay, self, NextBatch)}
         .pipeTo(parent)
     case Error(msg, err) => log.error(s"$msg: ${err.getMessage}")
   }

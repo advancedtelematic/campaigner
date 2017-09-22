@@ -77,7 +77,6 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
     val campaign = arbitrary[Campaign].sample.get
     val group    = GroupId.generate()
     val n        = Gen.choose(0, batch-1).sample.get
-    println(n)
     val devs     = Gen.listOfN(n, genDeviceId).sample.get
 
     campaigns.create(campaign, Set(group)).futureValue
@@ -93,5 +92,4 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
     director.updates.get(campaign.updateId) should be
       campaigns.scheduledDevices(campaign.namespace, campaign.id).futureValue
   }
-
 }
