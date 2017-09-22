@@ -19,6 +19,10 @@ trait DirectorClient {
     ns: Namespace,
     devices: Seq[DeviceId]): Future[Seq[DeviceId]]
 
+  def cancelUpdate(
+    ns: Namespace,
+    device: DeviceId): Future[Unit]
+
 }
 
 class DirectorHttpClient(uri: Uri)
@@ -55,6 +59,18 @@ class DirectorHttpClient(uri: Uri)
       entity = entity
     )
     execHttp[Seq[DeviceId]](ns, req)
+  }
+
+  override def cancelUpdate(
+    ns: Namespace,
+    device: DeviceId): Future[Unit] = {
+
+    val path = uri.path / "api" / "v1" / "admin" / "devices" / device.show / "cancel"
+    val req  = HttpRequest(
+      method = HttpMethods.PUT,
+      uri    = uri.withPath(path),
+    )
+    execHttp[Unit](ns, req)
   }
 
 }

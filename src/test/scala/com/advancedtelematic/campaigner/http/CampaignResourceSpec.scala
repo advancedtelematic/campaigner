@@ -7,13 +7,19 @@ import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
+import com.advancedtelematic.campaigner.db.{Campaigns, CampaignSupport}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import org.scalacheck.Arbitrary._
 
-class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
+class CampaignResourceSpec extends CampaignerSpec
+    with ResourceSpec
+    with CampaignSupport {
+
+  val campaigns = Campaigns()
 
   def testNs = Namespace("testNs")
   def header = RawHeader("x-ats-namespace", testNs.get)
@@ -106,7 +112,50 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec {
     Post(apiUri(s"campaigns/${campaignId.show}/cancel")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
     }
+  }
 
+  "POST /update/:update_id/device/:device_id/cancel" should "cancel a single device update" in {
+    val campaign   = arbitrary[CreateCampaign].sample.get
+    val campaignId = createCampaignOk(campaign)
+    val update     = campaign.update
+    val device     = DeviceId.generate()
+
+    Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+    }
+
+    campaigns.scheduleDevice(campaignId, update, device).futureValue
+
+    Post(apiUri(s"update/${update.show}/device/${device.show}/cancel")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+      director.cancelled.containsKey(device) shouldBe true
+    }
+  }
+
+  it should "fail if device has not been scheduled" in {
+    val campaign   = arbitrary[CreateCampaign].sample.get
+    val campaignId = createCampaignOk(campaign)
+    val update     = campaign.update
+    val device     = DeviceId.generate()
+
+    Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+    }
+
+    Post(apiUri(s"update/${update.show}/device/${device.show}/cancel")).withHeaders(header) ~> routes ~> check {
+      status shouldBe PreconditionFailed
+      director.cancelled.containsKey(device) shouldBe true
+    }
+  }
+
+  it should "accept request to cancel device if no campaign is associated" in {
+    val update = UpdateId.generate()
+    val device = DeviceId.generate()
+
+    Post(apiUri(s"update/${update.show}/device/${device.show}/cancel")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+      director.cancelled.containsKey(device) shouldBe true
+    }
   }
 
   def checkStatus(id: CampaignId, expected: CampaignStatus) =

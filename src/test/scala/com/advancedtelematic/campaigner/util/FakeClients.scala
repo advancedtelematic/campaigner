@@ -31,14 +31,15 @@ class FakeDeviceRegistryClient extends DeviceRegistryClient {
 
 class FakeDirectorClient extends DirectorClient {
 
-  val state: ConcurrentHashMap[UpdateId, Set[DeviceId]] = new ConcurrentHashMap()
+  val updates:   ConcurrentHashMap[UpdateId, Set[DeviceId]] = new ConcurrentHashMap()
+  val cancelled: ConcurrentHashMap[DeviceId, Unit]          = new ConcurrentHashMap()
 
   override def setMultiUpdateTarget(namespace: Namespace,
                                     update: UpdateId,
                                     devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
     val devs = Gen.someOf(devices).sample.get
-    val current = state.asScala.getOrElse(update, Set.empty)
-    state.put(update, current ++ devs)
+    val current = updates.asScala.getOrElse(update, Set.empty)
+    updates.put(update, current ++ devs)
     FastFuture.successful(devs)
   }
 
@@ -46,7 +47,14 @@ class FakeDirectorClient extends DirectorClient {
     ns: Namespace,
     devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
     val devs = Gen.someOf(devices).sample.get
+    cancelled.putAll(devs.map((_, ())).toMap.asJava)
     FastFuture.successful(devs)
   }
 
+  override def cancelUpdate(
+    ns: Namespace,
+    device: DeviceId): Future[Unit] = {
+    cancelled.put(device, ())
+    FastFuture.successful(())
+  }
 }

@@ -175,6 +175,13 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
       .result
       .failIfNotSingle(Errors.CampaignMissing)
 
+  protected[db] def findByUpdateAction(ns: Namespace, update: UpdateId): DBIO[Seq[CampaignId]] =
+    Schema.campaigns
+      .filter(_.namespace === ns)
+      .filter(_.update === update)
+      .map(_.id)
+      .result
+
   def find(ns: Namespace, campaign: CampaignId): Future[Campaign] =
     db.run(findAction(ns, campaign))
 

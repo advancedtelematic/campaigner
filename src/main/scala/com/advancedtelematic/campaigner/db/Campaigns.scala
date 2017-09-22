@@ -91,6 +91,9 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     groups <- findGroups(ns, c.id)
   } yield GetCampaign(c, groups)
 
+  def findCampaignsByUpdate(ns: Namespace, update: UpdateId): Future[Seq[CampaignId]] =
+    db.run(campaignRepo.findByUpdateAction(ns, update))
+
   def status(campaign: CampaignId): Future[CampaignStatus] =
     groupStatsRepo.aggregatedStatus(campaign)
 

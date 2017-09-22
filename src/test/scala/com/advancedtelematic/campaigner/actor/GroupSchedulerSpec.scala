@@ -20,7 +20,8 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
 
   def clearClientState() = {
     registry.state.clear()
-    director.state.clear()
+    director.updates.clear()
+    director.cancelled.clear()
   }
 
   def fakeRegistry(devs: Seq[DeviceId]) = new DeviceRegistryClient {
@@ -45,7 +46,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
       case GroupComplete(grp)    => grp
     }
     registry.state.get(group).take(batch).toSet should contain allElementsOf (
-      director.state.get(campaign.updateId).toSet
+      director.updates.get(campaign.updateId).toSet
     )
   }
 
@@ -67,7 +68,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
       parent.expectMsg(BatchComplete(group, (i+1).toLong * batch))
     }
     parent.expectMsg(GroupComplete(group))
-    director.state.get(campaign.updateId).subsetOf(
+    director.updates.get(campaign.updateId).subsetOf(
       devs.toSet
     ) shouldBe true
   }
@@ -89,7 +90,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
 
     parent.expectMsg(GroupComplete(group))
 
-    director.state.get(campaign.updateId) should be
+    director.updates.get(campaign.updateId) should be
       campaigns.scheduledDevices(campaign.namespace, campaign.id).futureValue
   }
 
