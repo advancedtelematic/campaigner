@@ -9,6 +9,7 @@ import java.time.Instant
 import java.util.UUID
 
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
+import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 
@@ -89,6 +90,11 @@ object DataType {
     val scheduled, successful, cancelled, failed = Value
   }
 
+  object CancelTaskStatus extends Enumeration with SlickEnum {
+    type CancelTaskStatus = Value
+    val error, pending, inprogress, completed = Value
+  }
+
   final case class GroupStats(
     campaign: CampaignId,
     group: GroupId,
@@ -111,5 +117,10 @@ object DataType {
     update: UpdateId,
     device: DeviceId,
     status: DeviceStatus
+  )
+
+  final case class CancelTask(
+    campaign: CampaignId,
+    status: CancelTaskStatus
   )
 }

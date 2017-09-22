@@ -29,12 +29,6 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
     campaigns.create(campaign, request.groups)
   }
 
-  def cancelCampaign(ns: Namespace, id: CampaignId): Future[Unit] = for {
-    devs     <- campaigns.cancelCampaign(ns, id)
-    affected <- director.cancelUpdate(ns, devs.toSeq)
-    _        <- campaigns.finishDevices(id, affected, DeviceStatus.cancelled)
-  } yield ()
-
   def cancelDeviceUpdate(
     ns: Namespace,
     update: UpdateId,
@@ -80,7 +74,7 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
             complete(campaigns.campaignStats(ns, id))
           } ~
           (post & path("cancel")) {
-            complete(cancelCampaign(ns, id))
+            complete(campaigns.cancelCampaign(ns, id))
           }
         }
       } ~

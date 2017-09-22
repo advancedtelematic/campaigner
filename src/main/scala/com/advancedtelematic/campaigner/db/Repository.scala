@@ -1,5 +1,8 @@
 package com.advancedtelematic.campaigner.db
 
+import akka.NotUsed
+import akka.stream.scaladsl.Source
+import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus._
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus._
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus._
@@ -9,6 +12,7 @@ import com.advancedtelematic.campaigner.http.Errors
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
+import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import scala.concurrent.{ExecutionContext, Future}
@@ -26,6 +30,10 @@ trait DeviceUpdateSupport {
   def deviceUpdateRepo(implicit db: Database, ec: ExecutionContext) = new DeviceUpdateRepository()
 }
 
+trait CancelTaskSupport {
+  def cancelTaskRepo(implicit db: Database, ec: ExecutionContext) = new CancelTaskRepository()
+}
+
 protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: ExecutionContext) {
 
   protected [db] def findByCampaignAction(campaign: CampaignId, status: DeviceStatus): DBIO[Set[DeviceId]] =
@@ -35,6 +43,17 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
       .map(_.deviceId)
       .result
       .map(_.toSet)
+
+  def findByCampaignStream(campaign: CampaignId, status: DeviceStatus): Source[DeviceId, NotUsed] =
+    Source.fromPublisher {
+      db.stream {
+        Schema.deviceUpdates
+          .filter(_.campaignId === campaign)
+          .filter(_.status === status)
+          .map(_.deviceId)
+          .result
+      }
+    }
 
   def setUpdateStatus(update: UpdateId, device: DeviceId, status: DeviceStatus): Future[Unit] = db.run {
     Schema.deviceUpdates
@@ -228,4 +247,38 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
       .map(_.toLong)
   }
 
+}
+
+
+protected class CancelTaskRepository()(implicit db: Database, ec: ExecutionContext) {
+  def cancel(campaign: CampaignId): Future[CancelTask] = db.run {
+    val cancel = CancelTask(campaign, CancelTaskStatus.pending)
+    (Schema.cancelTasks += cancel)
+      .map(_ => cancel)
+  }
+
+  def setStatus(campaign: CampaignId, status: CancelTaskStatus): Future[Unit] = db.run {
+    Schema.cancelTasks
+      .filter(_.campaignId === campaign)
+      .map(_.taskStatus)
+      .update(status)
+      .map(_ => ())
+  }
+
+  private def findStatus(status: CancelTaskStatus): DBIO[Seq[(Namespace, CampaignId)]] =
+    Schema.cancelTasks
+      .filter(_.taskStatus === status)
+      .join(Schema.campaigns).on{case (task, campaign) => task.campaignId === campaign.id}
+      .map(_._2)
+      .map (c => (c.namespace, c.id))
+      .distinct
+      .result
+
+  def findPending(): Future[Seq[(Namespace, CampaignId)]] = db.run {
+    findStatus(CancelTaskStatus.pending)
+  }
+
+  def findInprogress(): Future[Seq[(Namespace, CampaignId)]] = db.run {
+    findStatus(CancelTaskStatus.inprogress)
+  }
 }

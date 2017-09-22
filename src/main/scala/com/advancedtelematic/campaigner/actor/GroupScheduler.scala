@@ -68,7 +68,7 @@ class GroupScheduler(registry: DeviceRegistryClient,
       resumeBatch(campaign, group)
         .recover { case err => Error("could not resume batch", err) }
         .pipeTo(self)
-    case ScheduleBatch(_, processed, affected) if processed < batchSize =>
+    case ScheduleBatch(_, processed, affected) if processed < batchSize => // last batch
       log.debug(s"$group complete")
       val stats = Stats(processed, affected.length.toLong)
       scheduleDevices(affected)
