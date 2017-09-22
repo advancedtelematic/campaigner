@@ -65,7 +65,7 @@ class DirectorHttpClient(uri: Uri)
     ns: Namespace,
     device: DeviceId): Future[Unit] = {
 
-    val path = uri.path / "api" / "v1" / "admin" / "devices" / device.show / "cancel"
+    val path = uri.path / "api" / "v1" / "admin" / "devices" / device.show / "queue" / "cancel"
     val req  = HttpRequest(
       method = HttpMethods.PUT,
       uri    = uri.withPath(path),
