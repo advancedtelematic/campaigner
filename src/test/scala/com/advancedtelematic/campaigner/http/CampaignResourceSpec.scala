@@ -42,6 +42,18 @@ class CampaignResourceSpec extends CampaignerSpec
       responseAs[PaginationResult[CampaignId]]
     }
 
+  def checkStats(
+    id: CampaignId,
+    campaignStatus: CampaignStatus,
+    stats: Map[GroupId, Stats] = Map.empty,
+    finished: Long = 0,
+    failed: Set[DeviceId] = Set.empty,
+    cancelled: Long = 0): Unit =
+    Get(apiUri(s"campaigns/${id.show}/stats")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+      responseAs[CampaignStats] shouldBe CampaignStats(id, campaignStatus, finished, failed, cancelled, stats)
+    }
+
   "POST and GET /campaigns" should "create a campaign, return the created campaign" in {
     val request = arbitrary[CreateCampaign].sample.get
     val id = createCampaignOk(request)
@@ -60,6 +72,8 @@ class CampaignResourceSpec extends CampaignerSpec
 
     val campaigns = getCampaignsOk()
     campaigns.values should contain (id)
+
+    checkStats(id, CampaignStatus.prepared)
   }
 
   "PUT /campaigns/:campaign_id" should "update a campaign" in {
@@ -74,6 +88,8 @@ class CampaignResourceSpec extends CampaignerSpec
     }
 
     getCampaignOk(id).updatedAt.isBefore(createdAt) shouldBe false
+
+    checkStats(id, CampaignStatus.prepared)
   }
 
   "POST /campaigns/:campaign_id/launch" should "trigger an update" in {
@@ -85,16 +101,8 @@ class CampaignResourceSpec extends CampaignerSpec
       status shouldBe OK
     }
 
-    Get(apiUri(s"campaigns/${campaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
-      status shouldBe OK
-      responseAs[CampaignStats] shouldBe CampaignStats(
-        campaignId,
-        CampaignStatus.scheduled,
-        0,
-        Set.empty,
-        campaign.groups.map(_ -> Stats(0, 0)).toMap
-      )
-    }
+    checkStats(campaignId, CampaignStatus.scheduled,
+      campaign.groups.map(_ -> Stats(0, 0)).toMap)
 
     request ~> routes ~> check {
       status shouldBe Conflict
@@ -109,10 +117,17 @@ class CampaignResourceSpec extends CampaignerSpec
       status shouldBe OK
     }
 
+    checkStats(campaignId, CampaignStatus.scheduled,
+      campaign.groups.map(_ -> Stats(0, 0)).toMap)
+
     Post(apiUri(s"campaigns/${campaignId.show}/cancel")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
     }
+
+    checkStats(campaignId, CampaignStatus.cancelled,
+      campaign.groups.map(_ -> Stats(0, 0)).toMap)
   }
+
 
   "POST /update/:update_id/device/:device_id/cancel" should "cancel a single device update" in {
     val campaign   = arbitrary[CreateCampaign].sample.get
@@ -124,12 +139,18 @@ class CampaignResourceSpec extends CampaignerSpec
       status shouldBe OK
     }
 
+    checkStats(campaignId, CampaignStatus.scheduled,
+      campaign.groups.map(_ -> Stats(0, 0)).toMap)
+
     campaigns.scheduleDevice(campaignId, update, device).futureValue
 
     Post(apiUri(s"update/${update.show}/device/${device.show}/cancel")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
       director.cancelled.containsKey(device) shouldBe true
     }
+
+    checkStats(campaignId, CampaignStatus.scheduled,
+      campaign.groups.map(_ -> Stats(0, 0)).toMap, 0, Set.empty, 1)
   }
 
   it should "fail if device has not been scheduled" in {
@@ -142,10 +163,16 @@ class CampaignResourceSpec extends CampaignerSpec
       status shouldBe OK
     }
 
+    checkStats(campaignId, CampaignStatus.scheduled,
+      campaign.groups.map(_ -> Stats(0, 0)).toMap)
+
     Post(apiUri(s"update/${update.show}/device/${device.show}/cancel")).withHeaders(header) ~> routes ~> check {
       status shouldBe PreconditionFailed
       director.cancelled.containsKey(device) shouldBe true
     }
+
+    checkStats(campaignId, CampaignStatus.scheduled,
+      campaign.groups.map(_ -> Stats(0, 0)).toMap)
   }
 
   it should "accept request to cancel device if no campaign is associated" in {
@@ -158,31 +185,26 @@ class CampaignResourceSpec extends CampaignerSpec
     }
   }
 
-  def checkStatus(id: CampaignId, expected: CampaignStatus) =
-    Get(apiUri(s"campaigns/${id.show}/stats")).withHeaders(header) ~> routes ~> check {
-      status shouldBe OK
-      val result = responseAs[CampaignStats]
-      result.campaign shouldBe id
-      result.status shouldBe expected
-    }
-
   "campaign resource" should "undergo proper status transitions" in {
     val campaign = arbitrary[CreateCampaign].sample.get
     val id = createCampaignOk(campaign)
 
-    checkStatus(id, CampaignStatus.prepared)
+    checkStats(id, CampaignStatus.prepared)
 
     Post(apiUri(s"campaigns/${id.show}/launch")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
     }
 
-    checkStatus(id, CampaignStatus.scheduled)
+    checkStats(id, CampaignStatus.scheduled,
+      campaign.groups.map(_ -> Stats(0, 0)).toMap)
+
 
     Post(apiUri(s"campaigns/${id.show}/cancel")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
     }
 
-    checkStatus(id, CampaignStatus.cancelled)
+    checkStats(id, CampaignStatus.cancelled,
+      campaign.groups.map(_ -> Stats(0, 0)).toMap)
   }
 
 }

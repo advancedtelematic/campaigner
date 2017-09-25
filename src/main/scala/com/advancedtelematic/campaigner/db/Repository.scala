@@ -215,16 +215,17 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
       }
     }
 
-  def countFinished(ns: Namespace, campaign: CampaignId): Future[Long] = db.run {
+  def countDevices(ns: Namespace, campaign: CampaignId)(filterExpr: Rep[DeviceStatus] => Rep[Boolean]): Future[Long] = db.run {
     Schema.campaigns
       .filter(_.namespace === ns)
       .filter(_.id === campaign)
       .join(Schema.deviceUpdates)
-      .on { case (campaign, update) => campaign.update === update.updateId && campaign.id === update.campaignId}
-      .filter { case (_, update) => update.status === DeviceStatus.successful || update.status === DeviceStatus.failed }
+      .on { case (campaign, update) => campaign.update === update.updateId && campaign.id === update.campaignId }
+      .filter { case (_, update) => filterExpr(update.status) }
       .distinct
       .length
       .result
       .map(_.toLong)
   }
+
 }

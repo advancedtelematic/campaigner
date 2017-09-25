@@ -102,6 +102,7 @@ object DataType {
     status: CampaignStatus,
     finished: Long,
     failed: Set[DeviceId],
+    cancelled: Long,
     stats: Map[GroupId, Stats]
   )
 

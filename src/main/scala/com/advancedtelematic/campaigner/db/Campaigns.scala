@@ -81,7 +81,14 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     deviceUpdateRepo.setUpdateStatus(campaign, devices, status)
 
   def countFinished(ns: Namespace, campaignId: CampaignId): Future[Long] =
-    campaignRepo.countFinished(ns, campaignId)
+    campaignRepo.countDevices(ns, campaignId) { status =>
+      status === DeviceStatus.successful || status === DeviceStatus.failed
+    }
+
+  def countCancelled(ns: Namespace, campaignId: CampaignId): Future[Long] =
+    campaignRepo.countDevices(ns, campaignId) { status =>
+      status === DeviceStatus.cancelled
+    }
 
   def allCampaigns(ns: Namespace, offset: Long, limit: Long): Future[PaginationResult[CampaignId]] =
     campaignRepo.all(ns, offset, limit)
@@ -98,11 +105,12 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     groupStatsRepo.aggregatedStatus(campaign)
 
   def campaignStats(ns: Namespace, campaign: CampaignId): Future[CampaignStats] = for {
-    status   <- status(campaign)
-    finished <- countFinished(ns, campaign)
-    failed   <- failedDevices(ns, campaign)
-    stats    <- campaignStatsFor(ns, campaign)
-  } yield CampaignStats(campaign, status, finished, failed, stats)
+    status    <- status(campaign)
+    finished  <- countFinished(ns, campaign)
+    cancelled <- countCancelled(ns, campaign)
+    failed    <- failedDevices(ns, campaign)
+    stats     <- campaignStatsFor(ns, campaign)
+  } yield CampaignStats(campaign, status, finished, failed, cancelled, stats)
 
   def launch(ns: Namespace, id: CampaignId): Future[Unit] = for {
     groups <- findGroups(ns, id)
