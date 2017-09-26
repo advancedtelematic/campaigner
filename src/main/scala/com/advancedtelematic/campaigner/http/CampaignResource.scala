@@ -85,13 +85,17 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
         }
       } ~
       extractLog { implicit log =>
-        (pathPrefix("update") & pathPrefix(UpdateId.Path)) { update =>
-          (pathPrefix("device") & pathPrefix(DeviceId.Path)) { device =>
-            (post & path("cancel")) {
-              complete(cancelDeviceUpdate(ns, update, device))
-            }
-          }
+        (post & path("cancel_device_update_campaign") & entity(as[CancelDeviceUpdateCampaign])) { cancelDevice =>
+              complete(cancelDeviceUpdate(ns, cancelDevice.update, cancelDevice.device))
         }
       }
     }
+}
+
+final case class CancelDeviceUpdateCampaign(update: UpdateId, device: DeviceId)
+
+object CancelDeviceUpdateCampaign {
+  import io.circe.{Decoder, Encoder}
+  implicit val encoder: Encoder[CancelDeviceUpdateCampaign] = io.circe.generic.semiauto.deriveEncoder
+  implicit val decoder: Decoder[CancelDeviceUpdateCampaign] = io.circe.generic.semiauto.deriveDecoder
 }

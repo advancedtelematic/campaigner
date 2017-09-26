@@ -13,6 +13,8 @@ import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import io.circe.Json
+import io.circe.syntax._
 import org.scalacheck.Arbitrary._
 
 class CampaignResourceSpec extends CampaignerSpec
@@ -128,8 +130,7 @@ class CampaignResourceSpec extends CampaignerSpec
       campaign.groups.map(_ -> Stats(0, 0)).toMap)
   }
 
-
-  "POST /update/:update_id/device/:device_id/cancel" should "cancel a single device update" in {
+  "POST /cancel_device_update_campaign" should "cancel a single device update" in {
     val campaign   = arbitrary[CreateCampaign].sample.get
     val campaignId = createCampaignOk(campaign)
     val update     = campaign.update
@@ -144,7 +145,8 @@ class CampaignResourceSpec extends CampaignerSpec
 
     campaigns.scheduleDevice(campaignId, update, device).futureValue
 
-    Post(apiUri(s"update/${update.show}/device/${device.show}/cancel")).withHeaders(header) ~> routes ~> check {
+    val entity = Json.obj("update" -> update.asJson, "device" -> device.asJson)
+    Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
       director.cancelled.containsKey(device) shouldBe true
     }
@@ -166,7 +168,8 @@ class CampaignResourceSpec extends CampaignerSpec
     checkStats(campaignId, CampaignStatus.scheduled,
       campaign.groups.map(_ -> Stats(0, 0)).toMap)
 
-    Post(apiUri(s"update/${update.show}/device/${device.show}/cancel")).withHeaders(header) ~> routes ~> check {
+    val entity = Json.obj("update" -> update.asJson, "device" -> device.asJson)
+    Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe PreconditionFailed
       director.cancelled.containsKey(device) shouldBe true
     }
@@ -179,7 +182,8 @@ class CampaignResourceSpec extends CampaignerSpec
     val update = UpdateId.generate()
     val device = DeviceId.generate()
 
-    Post(apiUri(s"update/${update.show}/device/${device.show}/cancel")).withHeaders(header) ~> routes ~> check {
+    val entity = Json.obj("update" -> update.asJson, "device" -> device.asJson)
+    Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
       director.cancelled.containsKey(device) shouldBe true
     }
