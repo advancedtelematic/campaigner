@@ -8,6 +8,7 @@ import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import java.time.Instant
 
+import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 import slick.jdbc.MySQLProfile.api._
@@ -74,4 +75,12 @@ object Schema {
 
   protected [db] val deviceUpdates = TableQuery[DeviceUpdatesTable]
 
+  class CancelTaskTable(tag: Tag) extends Table[CancelTask](tag, "campaign_cancels") {
+    def campaignId = column[CampaignId]("campaign_id", O.PrimaryKey)
+    def taskStatus = column[CancelTaskStatus]("status")
+
+    override def * = (campaignId, taskStatus) <>
+      ((CancelTask.apply _).tupled, CancelTask.unapply)
+  }
+  protected [db] val cancelTasks = TableQuery[CancelTaskTable]
 }

@@ -1,7 +1,7 @@
 package com.advancedtelematic.campaigner
 
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.server.{Directives, Route}
+import akka.http.scaladsl.server.Route
 import com.advancedtelematic.campaigner.client.DirectorHttpClient
 import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.http.BootApp
@@ -34,7 +34,6 @@ trait Settings {
 }
 
 object Boot extends BootApp
-  with Directives
   with Settings
   with VersionInfo
   with DatabaseConfig

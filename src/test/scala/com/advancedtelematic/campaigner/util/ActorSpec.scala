@@ -1,6 +1,7 @@
 package com.advancedtelematic.campaigner.util
 
 import akka.actor.ActorSystem
+import akka.stream.{ActorMaterializer, Materializer}
 import akka.testkit.TestKit
 import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.client._
@@ -16,6 +17,7 @@ abstract class ActorSpec[T](implicit m: reflect.Manifest[T])
     with DatabaseSpec {
 
   implicit lazy val ec: ExecutionContext = system.dispatcher
+  implicit val mat: Materializer = ActorMaterializer()
   lazy val registry = new FakeDeviceRegistryClient()
   lazy val director = new FakeDirectorClient()
   val batch = schedulerBatchSize.toInt

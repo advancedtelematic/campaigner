@@ -20,7 +20,10 @@ object Campaigns {
 protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   extends GroupStatsSupport
     with CampaignSupport
-    with DeviceUpdateSupport {
+    with DeviceUpdateSupport
+    with CancelTaskSupport {
+
+  def remainingCancelling(): Future[Seq[(Namespace, CampaignId)]] = cancelTaskRepo.findInprogress()
 
   def remainingCampaigns(): Future[Seq[Campaign]] = campaignRepo.findAllScheduled()
 
@@ -48,11 +51,11 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 
   def cancelCampaign(
     ns: Namespace,
-    campaign: CampaignId): Future[Set[DeviceId]] = for {
-      _    <- campaignRepo.find(ns, campaign)
-      _    <- groupStatsRepo.cancel(campaign)
-      devs <- scheduledDevices(ns, campaign)
-    } yield devs
+    campaign: CampaignId): Future[Unit] = for {
+      _ <- campaignRepo.find(ns, campaign)
+      _ <- cancelTaskRepo.cancel(campaign)
+      _ <- groupStatsRepo.cancel(campaign)
+    } yield ()
 
   def failedDevices(ns: Namespace, campaign: CampaignId): Future[Set[DeviceId]] = db.run {
     campaignRepo.findAction(ns, campaign).flatMap { _ =>
@@ -65,6 +68,9 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       deviceUpdateRepo.findByCampaignAction(campaign, DeviceStatus.scheduled)
     }
   }
+
+  def freshCancelled(): Future[Seq[(Namespace, CampaignId)]] =
+    cancelTaskRepo.findPending()
 
   def freshCampaigns(): Future[Seq[Campaign]] =
     campaignRepo.findAllScheduled { groupStats =>
