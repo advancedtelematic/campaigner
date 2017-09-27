@@ -101,32 +101,27 @@ protected [db] class GroupStatsRepository()(implicit db: Database, ec: Execution
         .map(_.affected)
         .sum.result.map(_.getOrElse(0L))
 
-    def devicesWith(filterExpr: Rep[DeviceStatus.Value] => Rep[Boolean]) =
+    def finishedDevices() =
       Schema.deviceUpdates
         .filter(_.campaignId === campaign)
         .map(_.status)
-        .filter(filterExpr)
+        .filter(_ =!= DeviceStatus.scheduled)
         .length.result
 
     db.run {
       for {
-        // groups
         groups    <- findByCampaignAction(campaign).map(_.length)
         scheduled <- groupStats(GroupStatus.scheduled)
         launched  <- groupStats(GroupStatus.launched)
         cancelled <- groupStats(GroupStatus.cancelled)
-
-        //devices
-        affected      <- affectedDevices()
-        finished      <- devicesWith(_ =!= DeviceStatus.scheduled)
-        cancelledDevs <- devicesWith(_ === DeviceStatus.cancelled)
-
-        status     = (groups, scheduled, launched, cancelled, affected, finished, cancelledDevs) match {
-          case (g, 0, _, _, a, f, c) if g > 0 && a == f + c => CampaignStatus.finished
-          case (_, _, _, c, _, _, _) if c > 0               => CampaignStatus.cancelled
-          case (0, 0, 0, _, _, _, _)                        => CampaignStatus.prepared
-          case (_, 0, _, _, _, _, _)                        => CampaignStatus.launched
-          case _                                            => CampaignStatus.scheduled
+        affected  <- affectedDevices()
+        finished  <- finishedDevices()
+        status     = (groups, scheduled, launched, cancelled, affected, finished) match {
+          case (_, _, _, c, _, _) if c > 0           => CampaignStatus.cancelled
+          case (g, 0, _, _, a, f) if g > 0 && a == f => CampaignStatus.finished
+          case (0, 0, 0, _, _, _)                    => CampaignStatus.prepared
+          case (_, 0, _, _, _, _)                    => CampaignStatus.launched
+          case _                                     => CampaignStatus.scheduled
         }
       } yield status
     }
