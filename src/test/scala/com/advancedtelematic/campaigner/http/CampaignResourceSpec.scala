@@ -115,8 +115,6 @@ class CampaignResourceSpec extends CampaignerSpec
     val campaign = arbitrary[CreateCampaign].sample.get
     val campaignId = createCampaignOk(campaign)
 
-    checkStats(campaignId, CampaignStatus.prepared)
-
     Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
     }
@@ -128,7 +126,7 @@ class CampaignResourceSpec extends CampaignerSpec
       status shouldBe OK
     }
 
-    checkStats(campaignId, CampaignStatus.finished,
+    checkStats(campaignId, CampaignStatus.cancelled,
       campaign.groups.map(_ -> Stats(0, 0)).toMap)
   }
 
@@ -189,6 +187,28 @@ class CampaignResourceSpec extends CampaignerSpec
       status shouldBe OK
       director.cancelled.containsKey(device) shouldBe true
     }
+  }
+
+  "campaign resource" should "undergo proper status transitions" in {
+    val campaign = arbitrary[CreateCampaign].sample.get
+    val id = createCampaignOk(campaign)
+
+    checkStats(id, CampaignStatus.prepared)
+
+    Post(apiUri(s"campaigns/${id.show}/launch")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+    }
+
+    checkStats(id, CampaignStatus.scheduled,
+      campaign.groups.map(_ -> Stats(0, 0)).toMap)
+
+
+    Post(apiUri(s"campaigns/${id.show}/cancel")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+    }
+
+    checkStats(id, CampaignStatus.cancelled,
+      campaign.groups.map(_ -> Stats(0, 0)).toMap)
   }
 
 }
