@@ -129,15 +129,18 @@ protected [db] class GroupStatsRepository()(implicit db: Database, ec: Execution
 
     db.run {
       for {
+        // groups
         groups    <- findByCampaignAction(campaign).map(_.length)
         scheduled <- groupStats(GroupStatus.scheduled)
         launched  <- groupStats(GroupStatus.launched)
         cancelled <- groupStats(GroupStatus.cancelled)
-        affected  <- affectedDevices()
-        finished  <- finishedDevices()
-        status     = (groups, scheduled, launched, cancelled, affected, finished) match {
-          case (_, _, _, c, _, _) if c > 0           => CampaignStatus.cancelled
+
+        // devices
+        affected <- affectedDevices()
+        finished <- finishedDevices()
+        status    = (groups, scheduled, launched, cancelled, affected, finished) match {
           case (g, 0, _, _, a, f) if g > 0 && a == f => CampaignStatus.finished
+          case (_, _, _, c, _, _) if c > 0           => CampaignStatus.cancelled
           case (0, 0, 0, _, _, _)                    => CampaignStatus.prepared
           case (_, 0, _, _, _, _)                    => CampaignStatus.launched
           case _                                     => CampaignStatus.scheduled
