@@ -8,7 +8,7 @@ import com.advancedtelematic.libats.http.BootApp
 import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.monitoring.MetricsSupport
-import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
+import com.advancedtelematic.libats.slick.db.DatabaseConfig
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport
 
@@ -37,7 +37,6 @@ object Boot extends BootApp
   with Settings
   with VersionInfo
   with DatabaseConfig
-  with BootMigrations
   with MetricsSupport
   with DatabaseMetrics
   with InfluxdbMetricsReporterSupport {
