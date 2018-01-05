@@ -1,32 +1,88 @@
-# ATS campaigner
+# OTA Campaigner
 
-## Background
+A service to create and schedule campaigns for a given update, targeting all devices in a given device group.
 
-Schedule campaigns in batches for devices within groups.
+- The Campaigner processes a campaign in configurable intervals, fetching batches of devices (by device group) from the Device-Registry service.
+- For each device, it will initiate the given update in the Director service.
+- The Director indicates whether the targeted device is affected by the update in the API response.
+- For all affected devices, Campaigner tracks the status of the update when it receives the `DeviceUpdateReport` message event.
+- For all campaigns, it tracks the count of processed and affected devices, and completed and failed updates.
 
-## Building
+The API documentation is here:
 
-Depends on:
+[Campaigner API](http://advancedtelematic.github.io/rvi_sota_server/swagger/sota-core.html?url=https://s3.eu-central-1.amazonaws.com/ats-end-to-end-tests/swagger-docs/latest/Campaigner.json)
+
+See [arch.mmd](docs/arch.mmd) for a diagram of the dependencies.
+
+## Build
+
+To build a docker image and push it to dockerhub:
+
 ```
-- device-registry
-- director
+  sbt release
 ```
 
-## Testing
+To build an image locally without pushing it to dockerhub:
 
-You'll need a mariadb instance running with the users configured in `application.conf`. If you want it quick you can use `deploy/ci_setup.sh`. This will create a new docker container running a database with the proper permissions.
+```
+  sbt docker:publishLocal
+```
 
-To run tests simply run `sbt test`.
+## Run
 
-## Deploying
+To run the service as a docker container:
 
-See [service.json](deploy/service.json) and [arch.mmd](docs/arch.mmd) for environment variables and dependencies, respectively.
+```
+  docker run -d -p 8084:8084 --env ENV_NAME=env-value --name campaigner advancedtelematic/campaigner:latest
+```
 
-## Usage
+To run the service from `sbt` without docker:
 
-The API is straightforward:
+```
+  sbt run
+```
 
-[Campaigner](http://advancedtelematic.github.io/rvi_sota_server/swagger/sota-core.html?url=https://s3.eu-central-1.amazonaws.com/ats-end-to-end-tests/swagger-docs/latest/Campaigner.json)
+The service is now accessible at `localhost:8084`.
+
+## Deployment
+
+The service is configured by setting environment variables:
+
+Variable                    | Description
+-------------------:        | :------------------
+`DB_MIGRATE`                | Whether to auto update the database schema
+`DB_URL`                    | Database URL
+`DB_USER`                   | Database username
+`DB_PASSWORD`               | Database password
+`DEVICE_REGISTRY_HOST`      | Host of Device Registry service
+`DEVICE_REGISTRY_PORT`      | Port of Device Registry service
+`DIRECTOR_HOST`             | Host of Director service
+`DIRECTOR_PORT`             | Port of Director service
+`KAFKA_HOST`                | Kafka bootstrap servers
+`SCHEDULER_BATCH_SIZE`      | Number of devices to process at a time
+`SCHEDULER_DELAY`           | Delay between processing batches
+`SCHEDULER_POLLING_TIMEOUT` | Interval between processing unfinished campaigns
+
+For a description of the Device Registry and Director services, refer to their respective repositories:
+
+Service                     | Repository
+-------------------:        | :------------------
+Device Registry             | https://github.com/advancedtelematic/ota-device-registry
+Director                    | https://github.com/advancedtelematic/director
+
+## Test
+
+To setup a database instance (inside a docker container) for testing:
+
+```
+  ./deploy/ci_setup.sh
+```
+
+To run the tests:
+
+```
+sbt test
+```
 
 ## License
 
