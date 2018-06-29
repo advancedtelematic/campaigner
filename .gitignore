@@ -15,4 +15,8 @@ project/target
 .worksheet
 .idea/
 
+# Ensime specific
+.ensime
+.ensime_cache/
+
 campaigner_entrypoint.d

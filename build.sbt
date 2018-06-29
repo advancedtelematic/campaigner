@@ -1,6 +1,6 @@
 name := "campaigner"
 organization := "com.advancedtelematic"
-scalaVersion := "2.12.2"
+scalaVersion in ThisBuild := "2.12.2"
 
 scalacOptions := Seq(
   "-feature",
