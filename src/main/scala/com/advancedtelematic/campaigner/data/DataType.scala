@@ -1,10 +1,9 @@
 package com.advancedtelematic.campaigner.data
 
-import com.advancedtelematic.libats.codecs.CirceEnum
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
-import com.advancedtelematic.libats.slick.codecs.SlickEnum
+import com.advancedtelematic.libats.slick.codecs.SlickEnumMapper
 import java.time.Instant
 import java.util.UUID
 
@@ -75,25 +74,29 @@ object DataType {
 
   final case class Stats(processed: Long, affected: Long)
 
-  object GroupStatus extends CirceEnum with SlickEnum {
+  object GroupStatus extends Enumeration {
     type GroupStatus = Value
     val scheduled, launched, cancelled = Value
   }
 
-  object CampaignStatus extends CirceEnum {
+  object CampaignStatus extends Enumeration {
     type CampaignStatus = Value
     val prepared, scheduled, launched, finished, cancelled = Value
   }
 
-  object DeviceStatus extends Enumeration with SlickEnum {
+  object DeviceStatus extends Enumeration {
     type DeviceStatus = Value
     val scheduled, successful, cancelled, failed = Value
   }
 
-  object CancelTaskStatus extends Enumeration with SlickEnum {
+  object CancelTaskStatus extends Enumeration {
     type CancelTaskStatus = Value
     val error, pending, inprogress, completed = Value
   }
+
+  implicit val deviceStatusMapper = SlickEnumMapper.enumMapper(DeviceStatus)
+  implicit val groupStatusMapper = SlickEnumMapper.enumMapper(GroupStatus)
+  implicit val cancelTaskStatusMapper = SlickEnumMapper.enumMapper(CancelTaskStatus)
 
   final case class GroupStats(
     campaign: CampaignId,

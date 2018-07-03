@@ -5,6 +5,7 @@ import io.circe.{Decoder, Encoder}
 
 object Codecs {
   import DataType._
+  import DataType.CampaignStatus.CampaignStatus
   import io.circe.generic.semiauto._
 
   implicit val decoderCampaign: Decoder[Campaign] = deriveDecoder
@@ -21,6 +22,9 @@ object Codecs {
 
   implicit val decoderStats: Decoder[Stats] = deriveDecoder
   implicit val encoderStats: Encoder[Stats] = deriveEncoder
+
+  implicit val decoderCampaignStatus: Decoder[CampaignStatus] = Decoder.enumDecoder(CampaignStatus)
+  implicit val encoderCampaignStatus: Encoder[CampaignStatus] = Encoder.enumEncoder(CampaignStatus)
 
   implicit val decoderCampaignStats: Decoder[CampaignStats] = deriveDecoder
   implicit val encoderCampaignStats: Encoder[CampaignStats] = deriveEncoder
