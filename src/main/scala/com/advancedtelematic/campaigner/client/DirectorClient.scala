@@ -4,7 +4,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model._
 import akka.stream.Materializer
 import cats.syntax.show._
-import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import scala.concurrent.{ExecutionContext, Future}
 

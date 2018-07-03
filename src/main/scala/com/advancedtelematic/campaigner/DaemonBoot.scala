@@ -8,7 +8,7 @@ import com.advancedtelematic.campaigner.daemon._
 import com.advancedtelematic.libats.http.BootApp
 import com.advancedtelematic.libats.messaging.{BusListenerMetrics, MessageListenerSupport}
 import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceUpdateReport
-import com.advancedtelematic.libats.monitoring.MetricsSupport
+import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.slick.monitoring.{DatabaseMetrics, DbHealthResource}
 import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport

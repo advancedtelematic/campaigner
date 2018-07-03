@@ -1,7 +1,6 @@
 package com.advancedtelematic.campaigner.data
 
-import com.advancedtelematic.libats.codecs.AkkaCirce._
-import com.advancedtelematic.libats.codecs.Codecs._
+import com.advancedtelematic.libats.codecs.CirceCodecs._
 import io.circe.{Decoder, Encoder}
 
 object Codecs {

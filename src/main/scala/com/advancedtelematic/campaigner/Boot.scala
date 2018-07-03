@@ -7,7 +7,7 @@ import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.http.BootApp
 import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.http.VersionDirectives._
-import com.advancedtelematic.libats.monitoring.MetricsSupport
+import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.slick.db.DatabaseConfig
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport

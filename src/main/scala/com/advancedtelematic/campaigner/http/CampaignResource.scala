@@ -11,7 +11,8 @@ import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.auth.AuthedNamespaceScope
-import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.http.UUIDKeyPath.UUIDKeyPathOp
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import concurrent.{ExecutionContext, Future}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._

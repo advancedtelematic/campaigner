@@ -8,7 +8,7 @@ import akka.stream.scaladsl.{Flow, Sink}
 import com.advancedtelematic.campaigner.db.{Campaigns, CampaignSupport, CancelTaskSupport, DeviceUpdateSupport, GroupStatsSupport}
 import com.advancedtelematic.campaigner.client.DirectorClient
 import com.advancedtelematic.campaigner.data.DataType.{CampaignId, CancelTaskStatus, DeviceStatus}
-import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import scala.concurrent.Future
 import slick.jdbc.MySQLProfile.api.Database

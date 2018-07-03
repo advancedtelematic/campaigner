@@ -5,7 +5,7 @@ import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.http.Errors
-import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.slick.db.SlickExtensions._

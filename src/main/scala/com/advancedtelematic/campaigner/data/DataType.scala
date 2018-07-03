@@ -1,7 +1,7 @@
 package com.advancedtelematic.campaigner.data
 
 import com.advancedtelematic.libats.codecs.CirceEnum
-import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.slick.codecs.SlickEnum
