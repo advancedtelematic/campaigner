@@ -5,7 +5,7 @@ import akka.stream.Materializer
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
-import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.data.DataType.Namespace
 import scala.concurrent.duration._
 import slick.jdbc.MySQLProfile.api._
 

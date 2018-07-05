@@ -3,7 +3,7 @@ package com.advancedtelematic.campaigner.client
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import java.util.concurrent.ConcurrentHashMap
 import org.scalacheck.Arbitrary._

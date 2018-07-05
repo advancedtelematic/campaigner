@@ -2,7 +2,7 @@ package com.advancedtelematic.campaigner.http
 
 import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.libats.http.ErrorCode
+import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.{MissingEntity, RawError}
 
 object ErrorCodes {

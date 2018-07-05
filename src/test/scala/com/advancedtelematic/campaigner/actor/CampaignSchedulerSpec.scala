@@ -7,7 +7,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
-import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import org.scalacheck.Arbitrary
 import scala.collection.JavaConverters._

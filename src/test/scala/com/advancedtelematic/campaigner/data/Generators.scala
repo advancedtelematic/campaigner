@@ -1,7 +1,7 @@
 package com.advancedtelematic.campaigner.data
 
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import java.time.Instant
 import org.scalacheck.Arbitrary._

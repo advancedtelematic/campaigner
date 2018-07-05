@@ -7,8 +7,8 @@ import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
-import com.advancedtelematic.libats.data.Namespace
-import com.advancedtelematic.libats.http.ErrorCode
+import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.RawError
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
