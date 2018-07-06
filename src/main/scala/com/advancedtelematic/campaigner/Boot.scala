@@ -1,7 +1,7 @@
 package com.advancedtelematic.campaigner
 
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.server.Route
+import akka.http.scaladsl.server.{Directives, Route}
 import com.advancedtelematic.campaigner.client.DirectorHttpClient
 import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.http.BootApp
@@ -10,7 +10,8 @@ import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.slick.db.DatabaseConfig
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
-import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport
+import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
+import com.advancedtelematic.metrics.{AkkaHttpRequestMetrics, InfluxdbMetricsReporterSupport}
 
 trait Settings {
   import com.typesafe.config.ConfigFactory
@@ -34,12 +35,15 @@ trait Settings {
 }
 
 object Boot extends BootApp
+  with Directives
   with Settings
   with VersionInfo
   with DatabaseConfig
   with MetricsSupport
   with DatabaseMetrics
-  with InfluxdbMetricsReporterSupport {
+  with InfluxdbMetricsReporterSupport
+  with AkkaHttpRequestMetrics
+  with PrometheusMetricsSupport {
 
   implicit val _db = db
 
@@ -48,7 +52,8 @@ object Boot extends BootApp
   val director = new DirectorHttpClient(directorUri)
 
   val routes: Route =
-    (versionHeaders(version) & logResponseMetrics(projectName)) {
+    (versionHeaders(version) & requestMetrics(metricRegistry) & logResponseMetrics(projectName)) {
+      prometheusMetricsRoutes ~
       new Routes(director).routes
     }
 
