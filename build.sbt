@@ -23,9 +23,10 @@ resolvers += "ATS Releases" at "http://nexus.advancedtelematic.com:8081/content/
 resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content/repositories/snapshots"
 
 libraryDependencies ++= {
-  val akkaHttpV = "10.0.3"
-  val akkaV = "2.4.17"
+  val akkaV = "2.5.13"
+  val akkaHttpV = "10.1.1"
   val libatsV = "0.1.2-18-gdfb0eb3"
+  val libtufV = "0.4.0-50-g8c65459"
   val scalaTestV = "3.0.0"
   val slickV = "3.2.0"
 
@@ -50,6 +51,8 @@ libraryDependencies ++= {
     "com.advancedtelematic" %% "libats-metrics-akka" % libatsV,
     "com.advancedtelematic" %% "libats-metrics-prometheus" % libatsV,
     "com.advancedtelematic" %% "libats-slick" % libatsV,
+    "com.advancedtelematic" %% "libtuf" % libtufV,
+    "com.advancedtelematic" %% "libtuf-server" % libtufV,
 
     "org.scalacheck" %% "scalacheck" % "1.13.5" % Test,
     "org.scalatest" %% "scalatest" % scalaTestV % Test
