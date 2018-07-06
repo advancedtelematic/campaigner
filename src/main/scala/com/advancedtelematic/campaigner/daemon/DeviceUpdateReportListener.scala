@@ -4,7 +4,7 @@ import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.campaigner.http.Errors
-import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceUpdateReport
+import com.advancedtelematic.libtuf_server.data.Messages.DeviceUpdateReport
 
 import org.slf4j.LoggerFactory
 import scala.concurrent.{ExecutionContext, Future}

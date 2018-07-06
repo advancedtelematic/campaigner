@@ -83,11 +83,11 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
       schedulerBatchSize
     ))
     parent.expectMsg(2.seconds, CampaignsScheduled(Set(campaign.id)))
-    parent.expectNoMsg(2.seconds)
+    expectNoMessage(2.seconds)
 
     campaigns.cancelCampaign(campaign.namespace, campaign.id).futureValue
     parent.expectMsg(2.seconds, CampaignsCancelled(Set(campaign.id)))
-    parent.expectNoMsg(2.seconds)
+    expectNoMessage(2.seconds)
   }
 
 }
