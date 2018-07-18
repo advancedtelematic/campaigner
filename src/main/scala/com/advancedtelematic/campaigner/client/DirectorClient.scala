@@ -4,8 +4,10 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model._
 import akka.stream.Materializer
 import cats.syntax.show._
+import com.advancedtelematic.campaigner.data.DataType.CampaignMetadata
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
+
 import scala.concurrent.{ExecutionContext, Future}
 
 trait DirectorClient {
@@ -22,7 +24,6 @@ trait DirectorClient {
   def cancelUpdate(
     ns: Namespace,
     device: DeviceId): Future[Unit]
-
 }
 
 class DirectorHttpClient(uri: Uri)
@@ -31,12 +32,12 @@ class DirectorHttpClient(uri: Uri)
 
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
   import io.circe.syntax._
+  import com.advancedtelematic.campaigner.data.Codecs._
 
   override def setMultiUpdateTarget(
     ns: Namespace,
     update: UpdateId,
     devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
-
     val path   = uri.path / "api" / "v1" / "admin" / "multi_target_updates" / update.show
     val entity = HttpEntity(ContentTypes.`application/json`, devices.asJson.noSpaces)
     val req    = HttpRequest(

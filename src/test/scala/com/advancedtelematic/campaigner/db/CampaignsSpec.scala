@@ -40,7 +40,7 @@ class CampaignsSpec extends AsyncFlatSpec
     val affected  = Gen.chooseNum[Long](0, processed).sample.get
 
     for {
-      _ <- campaignRepo.persist(campaign, Set(group))
+      _ <- campaignRepo.persist(campaign, Set(group), Seq.empty)
       _ <- campaigns.completeBatch(
         campaign.namespace,
         campaign.id,
@@ -74,7 +74,7 @@ class CampaignsSpec extends AsyncFlatSpec
     val affected  = Gen.chooseNum[Long](0, processed).sample.get
 
     for {
-      _ <- campaignRepo.persist(campaign, Set(group))
+      _ <- campaignRepo.persist(campaign, Set(group), Seq.empty)
       _ <- campaigns.completeGroup(
         campaign.namespace,
         campaign.id,
@@ -98,7 +98,7 @@ class CampaignsSpec extends AsyncFlatSpec
     val device = DeviceId.generate()
 
     for {
-      _ <- FastFuture.traverse(newCampaigns)(c => campaignRepo.persist(c.copy(namespace = ns, updateId = update), Set(group)))
+      _ <- FastFuture.traverse(newCampaigns)(c => campaignRepo.persist(c.copy(namespace = ns, updateId = update), Set(group), Seq.empty))
       _ <- FastFuture.traverse(newCampaigns)(c => campaigns.scheduleDevice(c.id, update, device))
       _ <- campaigns.finishDevice(update, device, DeviceStatus.successful)
       c <- campaigns.countFinished(ns, newCampaigns.head.id)
@@ -112,7 +112,7 @@ class CampaignsSpec extends AsyncFlatSpec
     val devices  = arbitrary[Seq[DeviceId]].sample.get
 
     for {
-      _ <- campaignRepo.persist(campaign, Set(group))
+      _ <- campaignRepo.persist(campaign, Set(group), Seq.empty)
       _ <- FastFuture.traverse(devices)(d => campaigns.scheduleDevice(campaign.id, campaign.updateId, d))
       _ <- FastFuture.traverse(devices)(d => campaigns.finishDevice(campaign.updateId, d, DeviceStatus.failed))
       c <- campaigns.countFinished(campaign.namespace, campaign.id)

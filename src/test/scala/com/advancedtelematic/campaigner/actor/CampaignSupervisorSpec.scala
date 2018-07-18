@@ -28,8 +28,8 @@ class CampaignSupervisorSpec1 extends ActorSpec[CampaignSupervisor] with Campaig
     val group     = GroupId.generate
     val parent    = TestProbe()
 
-    campaigns.create(campaign1, Set(group)).futureValue
-    campaigns.create(campaign2, Set(group)).futureValue
+    campaigns.create(campaign1, Set(group), Seq.empty).futureValue
+    campaigns.create(campaign2, Set(group), Seq.empty).futureValue
 
     campaigns.scheduleGroups(campaign1.namespace, campaign1.id, Set(group)).futureValue
 
@@ -72,7 +72,7 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
         FastFuture.successful(devs.drop(offset.toInt).take(limit.toInt))
     }
 
-    campaigns.create(campaign, Set(group)).futureValue
+    campaigns.create(campaign, Set(group), Seq.empty).futureValue
     campaigns.scheduleGroups(campaign.namespace, campaign.id, Set(group))
 
     parent.childActorOf(CampaignSupervisor.props(

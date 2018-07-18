@@ -3,7 +3,6 @@ package com.advancedtelematic.campaigner.data
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
-import com.advancedtelematic.libats.slick.codecs.SlickEnumMapper
 import java.time.Instant
 import java.util.UUID
 
@@ -11,11 +10,18 @@ import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignSta
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
+import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
+
 
 object DataType {
 
   final case class CampaignId(uuid: UUID) extends UUIDKey
   object CampaignId extends UUIDKeyObj[CampaignId]
+
+  object MetadataType extends Enumeration {
+    type MetadataType = Value
+    val install = Value
+  }
 
   final case class GroupId(uuid: UUID) extends UUIDKey
   object GroupId extends UUIDKeyObj[GroupId]
@@ -29,12 +35,19 @@ object DataType {
     updatedAt: Instant
   )
 
+  case class CampaignMetadata(campaignId: CampaignId, `type`: MetadataType, value: String)
+
+  case class CreateCampaignMetadata(`type`: MetadataType, value: String) {
+    def toCampaignMetadata(campaignId: CampaignId) = CampaignMetadata(campaignId, `type`, value)
+  }
+
   final case class CreateCampaign(
     name: String,
     update: UpdateId,
-    groups: Set[GroupId]
-  ) {
-    def mkCampaign(ns: Namespace): Campaign =
+    groups: Set[GroupId],
+    metadata: Option[Seq[CreateCampaignMetadata]] = None) // TODO: Make it mandatory
+  {
+    def mkCampaign(ns: Namespace): Campaign = {
       Campaign(
         ns,
         CampaignId.generate(),
@@ -43,7 +56,15 @@ object DataType {
         Instant.now(),
         Instant.now()
       )
+    }
+
+    def mkCampaignMetadata(campaignId: CampaignId): Seq[CampaignMetadata] =
+      metadata.toList.flatten.map(_.toCampaignMetadata(campaignId))
   }
+
+  case class GetDeviceCampaigns(deviceId: DeviceId, campaigns: Seq[DeviceCampaign])
+
+  case class DeviceCampaign(id: CampaignId, name: String, metadata: Seq[CreateCampaignMetadata])
 
   final case class GetCampaign(
     namespace: Namespace,
@@ -52,11 +73,12 @@ object DataType {
     update: UpdateId,
     createdAt: Instant,
     updatedAt: Instant,
-    groups: Set[GroupId]
+    groups: Set[GroupId],
+    metadata: Seq[CreateCampaignMetadata]
   )
 
   object GetCampaign {
-    def apply(c: Campaign, groups: Set[GroupId]): GetCampaign =
+    def apply(c: Campaign, groups: Set[GroupId], metadata: Seq[CampaignMetadata]): GetCampaign =
       GetCampaign(
         c.namespace,
         c.id,
@@ -64,13 +86,12 @@ object DataType {
         c.updateId,
         c.createdAt,
         c.updatedAt,
-        groups
+        groups,
+        metadata.map(m => CreateCampaignMetadata(m.`type`, m.value))
       )
   }
 
-  final case class UpdateCampaign(
-    name: String
-  )
+  final case class UpdateCampaign(name: String, metadata: Option[Seq[CreateCampaignMetadata]] = None)
 
   final case class Stats(processed: Long, affected: Long)
 
@@ -93,10 +114,6 @@ object DataType {
     type CancelTaskStatus = Value
     val error, pending, inprogress, completed = Value
   }
-
-  implicit val deviceStatusMapper = SlickEnumMapper.enumMapper(DeviceStatus)
-  implicit val groupStatusMapper = SlickEnumMapper.enumMapper(GroupStatus)
-  implicit val cancelTaskStatusMapper = SlickEnumMapper.enumMapper(CancelTaskStatus)
 
   final case class GroupStats(
     campaign: CampaignId,

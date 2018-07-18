@@ -7,7 +7,7 @@ import com.advancedtelematic.campaigner.data.DataType.CampaignStatus._
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus._
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus._
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.campaigner.db.Schema.{GroupStatsTable}
+import com.advancedtelematic.campaigner.db.Schema.{CampaignGroupsTable, GroupStatsTable}
 import com.advancedtelematic.campaigner.http.Errors
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
@@ -15,6 +15,9 @@ import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, Updat
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
+import SlickMapping._
+import akka.http.scaladsl.util.FastFuture
+
 import scala.concurrent.{ExecutionContext, Future}
 import slick.jdbc.MySQLProfile.api._
 
@@ -34,7 +37,29 @@ trait CancelTaskSupport {
   def cancelTaskRepo(implicit db: Database, ec: ExecutionContext) = new CancelTaskRepository()
 }
 
+trait CampaignMetadataSupport {
+  def campaignMetadataRepo(implicit db: Database, ec: ExecutionContext) = new CampaignMetadataRepository()
+}
+
+protected [db] class CampaignMetadataRepository()(implicit db: Database, ec: ExecutionContext) {
+  def findFor(campaign: CampaignId): Future[Seq[CampaignMetadata]] = db.run {
+    Schema.campaignMetadata.filter(_.campaignId === campaign).result
+  }
+}
+
+
 protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: ExecutionContext) {
+
+  def findDeviceCampaigns(deviceId: DeviceId, status: DeviceStatus*): Future[Seq[(Campaign, Option[CampaignMetadata])]] = db.run {
+    assert(status.nonEmpty)
+
+    Schema.deviceUpdates
+      .filter { d => d.deviceId === deviceId && d.status.inSet(status) }
+      .join(Schema.campaigns).on(_.campaignId === _.id)
+      .joinLeft(Schema.campaignMetadata).on { case ((d, c), m) => c.id === m.campaignId }
+      .map { case ((d, c), m) => (c, m) }
+      .result
+  }
 
   protected [db] def findByCampaignAction(campaign: CampaignId, status: DeviceStatus): DBIO[Set[DeviceId]] =
     Schema.deviceUpdates
@@ -180,15 +205,15 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
 
   import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 
-  def persist(campaign: Campaign, groups: Set[GroupId]): Future[CampaignId] =
-    db.run {
-      val f = for {
-        _ <- Schema.campaigns += campaign
-        _ <- Schema.campaignGroups ++= groups.map(g => (campaign.id, g))
-      } yield campaign.id
+  def persist(campaign: Campaign, groups: Set[GroupId], metadata: Seq[CampaignMetadata]): Future[CampaignId] = db.run {
+    val f = for {
+      _ <- (Schema.campaigns += campaign).handleIntegrityErrors(Errors.ConflictingCampaign)
+      _ <- Schema.campaignGroups ++= groups.map(g => (campaign.id, g))
+      _ <- (Schema.campaignMetadata ++= metadata).handleIntegrityErrors(Errors.ConflictingMetadata)
+    } yield campaign.id
 
-      f.transactionally.handleIntegrityErrors(Errors.ConflictingCampaign)
-    }
+    f.transactionally
+  }
 
   protected[db] def findAction(ns: Namespace, campaign: CampaignId): DBIO[Campaign] =
     Schema.campaigns
@@ -225,16 +250,19 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
     }
   }
 
-  def updateName(ns: Namespace, campaign: CampaignId, name: String): Future[Unit] =
+  def update(ns: Namespace, campaign: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
     db.run {
       findAction(ns, campaign).flatMap { _ =>
         Schema.campaigns
           .filter(_.id === campaign)
           .map(_.name)
           .update(name)
-          .map(_ => ())
           .handleIntegrityErrors(Errors.ConflictingCampaign)
-      }
+      }.andThen {
+        Schema.campaignMetadata.filter(_.campaignId === campaign).delete
+      }.andThen {
+        (Schema.campaignMetadata ++= metadata).handleIntegrityErrors(Errors.ConflictingMetadata)
+      }.map(_ => ())
     }
 
   def countDevices(ns: Namespace, campaign: CampaignId)(filterExpr: Rep[DeviceStatus] => Rep[Boolean]): Future[Long] = db.run {

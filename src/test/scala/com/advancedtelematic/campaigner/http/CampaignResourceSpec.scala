@@ -1,48 +1,26 @@
 package com.advancedtelematic.campaigner.http
 
 import akka.http.scaladsl.model.StatusCodes._
-import akka.http.scaladsl.model.headers.RawHeader
 import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.{Campaigns, CampaignSupport}
+import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
-import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.data.PaginationResult
+import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
 import io.circe.syntax._
 import org.scalacheck.Arbitrary._
+import org.scalacheck.Gen
 
 class CampaignResourceSpec extends CampaignerSpec
     with ResourceSpec
     with CampaignSupport {
 
   val campaigns = Campaigns()
-
-  def testNs = Namespace("testNs")
-  def header = RawHeader("x-ats-namespace", testNs.get)
-
-  def createCampaignOk(request: CreateCampaign): CampaignId =
-    Post(apiUri("campaigns"), request).withHeaders(header) ~> routes ~> check {
-      status shouldBe Created
-      responseAs[CampaignId]
-    }
-
-  def getCampaignOk(id: CampaignId): GetCampaign =
-    Get(apiUri("campaigns/" + id.show)).withHeaders(header) ~> routes ~> check {
-      status shouldBe OK
-      responseAs[GetCampaign]
-    }
-
-  def getCampaignsOk(): PaginationResult[CampaignId] =
-    Get(apiUri("campaigns")).withHeaders(header) ~> routes ~> check {
-      status shouldBe OK
-      responseAs[PaginationResult[CampaignId]]
-    }
 
   def checkStats(
     id: CampaignId,
@@ -68,7 +46,8 @@ class CampaignResourceSpec extends CampaignerSpec
       request.update,
       campaign.createdAt,
       campaign.updatedAt,
-      request.groups
+      request.groups,
+      request.metadata.toList.flatten
     )
     campaign.createdAt shouldBe campaign.updatedAt
 
@@ -89,7 +68,11 @@ class CampaignResourceSpec extends CampaignerSpec
       status shouldBe OK
     }
 
-    getCampaignOk(id).updatedAt.isBefore(createdAt) shouldBe false
+    val updated = getCampaignOk(id)
+
+    updated.updatedAt.isBefore(createdAt) shouldBe false
+    updated.name shouldBe update.name
+    updated.metadata shouldBe update.metadata.get
 
     checkStats(id, CampaignStatus.prepared)
   }
@@ -191,4 +174,27 @@ class CampaignResourceSpec extends CampaignerSpec
     }
   }
 
+  it should "accept metadata as part of campaign creation" in {
+    val request = arbitrary[CreateCampaign].retryUntil(_.metadata.nonEmpty).sample.get
+    createCampaignOk(request)
+  }
+
+  it should "return metadata if campaign has it" in {
+    val request = arbitrary[CreateCampaign].retryUntil(_.metadata.nonEmpty).sample.get
+    val id = createCampaignOk(request)
+
+    val result = getCampaignOk(id)
+
+    result.metadata shouldBe request.metadata.get
+  }
+
+  it should "return error when metadata already exists" in {
+    val metadata = Gen.listOfN(2, genCampaignMetadata).sample.get
+    val request = arbitrary[CreateCampaign].sample.get.copy(metadata = Some(metadata))
+
+    Post(apiUri("campaigns"), request).withHeaders(header) ~> routes ~> check {
+      status shouldBe Conflict
+      responseAs[ErrorRepresentation].code shouldBe ErrorCodes.ConflictingMetadata
+    }
+  }
 }

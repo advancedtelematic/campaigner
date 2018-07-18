@@ -5,16 +5,18 @@ import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
+import SlickMapping._
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import java.time.Instant
 
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
+import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
 import slick.jdbc.MySQLProfile.api._
 
-object Schema {
 
+object Schema {
   class CampaignsTable(tag: Tag) extends Table[Campaign](tag, "campaigns") {
     def namespace = column[Namespace] ("namespace")
     def id        = column[CampaignId]("uuid", O.PrimaryKey)
@@ -29,6 +31,17 @@ object Schema {
 
   protected [db] val campaigns = TableQuery[CampaignsTable]
 
+  class CampaignMetadataTable(tag: Tag) extends Table[CampaignMetadata](tag, "campaign_metadata") {
+    def campaignId = column[CampaignId]("campaign_id")
+    def metadataType = column[MetadataType]("type")
+    def value = column[String]("value")
+
+    def pk = primaryKey("campaign_metadata_pk", (campaignId, metadataType))
+
+    override def * = (campaignId, metadataType, value) <> ((CampaignMetadata.apply _).tupled, CampaignMetadata.unapply)
+  }
+
+  protected [db] val campaignMetadata = TableQuery[CampaignMetadataTable]
 
   // There is already an association between campaigns and groups in GroupStatsTable. Why do we need this?
   // If it's just for the campaign resource, we can have a new GroupStatus => created and create that when we create
@@ -59,7 +72,6 @@ object Schema {
   }
 
   protected [db] val groupStats = TableQuery[GroupStatsTable]
-
 
   class DeviceUpdatesTable(tag: Tag) extends Table[DeviceUpdate](tag, "device_updates") {
     def campaignId = column[CampaignId]("campaign_id")
