@@ -7,15 +7,16 @@ import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.{Campaigns, CampaignSupport}
+import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
 import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.data.PaginationResult
+import com.advancedtelematic.libats.data.{ErrorRepresentation, PaginationResult}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
 import io.circe.syntax._
 import org.scalacheck.Arbitrary._
+import org.scalacheck.Gen
 
 // TODO:SM update sbt
 
@@ -70,7 +71,8 @@ class CampaignResourceSpec extends CampaignerSpec
       request.update,
       campaign.createdAt,
       campaign.updatedAt,
-      request.groups
+      request.groups,
+      request.metadata
     )
     campaign.createdAt shouldBe campaign.updatedAt
 
@@ -193,7 +195,27 @@ class CampaignResourceSpec extends CampaignerSpec
     }
   }
 
-  it should "accept metadata as part of campaign creation" in pending
+  it should "accept metadata as part of campaign creation" in {
+    val request = arbitrary[CreateCampaign].retryUntil(_.name.nonEmpty).sample.get
+    createCampaignOk(request)
+  }
 
-  it should "return metadata if campaign has it" in pending
+  it should "return metadata if campaign has it" in {
+    val request = arbitrary[CreateCampaign].retryUntil(_.name.nonEmpty).sample.get
+    val id = createCampaignOk(request)
+
+    val result = getCampaignOk(id)
+
+    result.metadata shouldBe request.metadata
+  }
+
+  it should "return error when metadata already exists" in {
+    val metadata = Gen.listOfN(2, genCampaignMetadata).sample.get
+    val request = arbitrary[CreateCampaign].sample.get.copy(metadata = metadata)
+
+    Post(apiUri("campaigns"), request).withHeaders(header) ~> routes ~> check {
+      status shouldBe Conflict
+      responseAs[ErrorRepresentation].code shouldBe ErrorCodes.ConflictingMetadata
+    }
+  }
 }

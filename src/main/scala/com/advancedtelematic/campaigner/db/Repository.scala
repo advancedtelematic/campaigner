@@ -36,17 +36,16 @@ trait CancelTaskSupport {
   def cancelTaskRepo(implicit db: Database, ec: ExecutionContext) = new CancelTaskRepository()
 }
 
-trait UserCampaignMetadataSupport {
-  def userCampaignMetadataRepo(implicit db: Database, ec: ExecutionContext) = new UserCampaignMetadataRepository()
+trait CampaignMetadataSupport {
+  def campaignMetadataRepo(implicit db: Database, ec: ExecutionContext) = new CampaignMetadataRepository()
 }
 
-protected [db] class UserCampaignMetadataRepository()(implicit db: Database, ec: ExecutionContext) {
-
-  // TODO: Update, bump version
-  def persist(userMetadata: UserCampaignMetadata): Future[Unit] = ???
-
-  def all(namespace: Namespace): Future[Seq[UserCampaignMetadata]] = ???
+protected [db] class CampaignMetadataRepository()(implicit db: Database, ec: ExecutionContext) {
+  def findFor(campaign: CampaignId): Future[Seq[CampaignMetadata]] = db.run {
+    Schema.campaignMetadata.filter(_.campaignId === campaign).result
+  }
 }
+
 
 protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: ExecutionContext) {
 
@@ -194,15 +193,15 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
 
   import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 
-  def persist(campaign: Campaign, groups: Set[GroupId]): Future[CampaignId] =
-    db.run {
-      val f = for {
-        _ <- Schema.campaigns += campaign
-        _ <- Schema.campaignGroups ++= groups.map(g => (campaign.id, g))
-      } yield campaign.id
+  def persist(campaign: Campaign, groups: Set[GroupId], metadata: Seq[CampaignMetadata]): Future[CampaignId] = db.run {
+    val f = for {
+      _ <- (Schema.campaigns += campaign).handleIntegrityErrors(Errors.ConflictingCampaign)
+      _ <- Schema.campaignGroups ++= groups.map(g => (campaign.id, g))
+      _ <- (Schema.campaignMetadata ++= metadata).handleIntegrityErrors(Errors.ConflictingMetadata)
+    } yield campaign.id
 
-      f.transactionally.handleIntegrityErrors(Errors.ConflictingCampaign)
-    }
+    f.transactionally
+  }
 
   protected[db] def findAction(ns: Namespace, campaign: CampaignId): DBIO[Campaign] =
     Schema.campaigns

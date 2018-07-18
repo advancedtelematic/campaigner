@@ -12,20 +12,15 @@ import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
 
+
 object DataType {
 
   final case class CampaignId(uuid: UUID) extends UUIDKey
   object CampaignId extends UUIDKeyObj[CampaignId]
 
-  final case class MetadataId(uuid: UUID) extends UUIDKey
-  object MetadataId extends UUIDKeyObj[MetadataId]
-
-  // TODO: Use refined for value
-  case class UserCampaignMetadata(namespace: Namespace, metadataId: MetadataId, version: Int, `type`: MetadataType, value: String)
-
   object MetadataType extends Enumeration {
     type MetadataType = Value
-    val Install = Value
+    val install = Value
   }
 
   final case class GroupId(uuid: UUID) extends UUIDKey
@@ -40,12 +35,17 @@ object DataType {
     updatedAt: Instant
   )
 
+  case class CampaignMetadata(campaignId: CampaignId, `type`: MetadataType, value: String)
+
+  case class CreateCampaignMetadata(`type`: MetadataType, value: String)
+
   final case class CreateCampaign(
     name: String,
     update: UpdateId,
-    groups: Set[GroupId]
+    groups: Set[GroupId],
+    metadata: Seq[CreateCampaignMetadata] = Seq.empty
   ) {
-    def mkCampaign(ns: Namespace): Campaign =
+    def mkCampaign(ns: Namespace): Campaign = {
       Campaign(
         ns,
         CampaignId.generate(),
@@ -54,6 +54,10 @@ object DataType {
         Instant.now(),
         Instant.now()
       )
+    }
+
+    def mkCampaignMetadata(campaignId: CampaignId): Seq[CampaignMetadata] =
+      metadata.map(m => CampaignMetadata(campaignId, m.`type`, m.value))
   }
 
   final case class GetCampaign(
@@ -63,11 +67,12 @@ object DataType {
     update: UpdateId,
     createdAt: Instant,
     updatedAt: Instant,
-    groups: Set[GroupId]
+    groups: Set[GroupId],
+    metadata: Seq[CreateCampaignMetadata]
   )
 
   object GetCampaign {
-    def apply(c: Campaign, groups: Set[GroupId]): GetCampaign =
+    def apply(c: Campaign, groups: Set[GroupId], metadata: Seq[CampaignMetadata]): GetCampaign =
       GetCampaign(
         c.namespace,
         c.id,
@@ -75,7 +80,8 @@ object DataType {
         c.updateId,
         c.createdAt,
         c.updatedAt,
-        groups
+        groups,
+        metadata.map(m => CreateCampaignMetadata(m.`type`, m.value))
       )
   }
 

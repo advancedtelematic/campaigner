@@ -27,7 +27,8 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
 
   def createCampaign(ns: Namespace, request: CreateCampaign): Future[CampaignId] = {
     val campaign = request.mkCampaign(ns)
-    campaigns.create(campaign, request.groups)
+    val metadata = request.mkCampaignMetadata(campaign.id)
+    campaigns.create(campaign, request.groups, metadata)
   }
 
   def cancelDeviceUpdate(

@@ -31,29 +31,12 @@ object Schema {
 
   protected [db] val campaigns = TableQuery[CampaignsTable]
 
-  class UserCampaignMetadataTable(tag: Tag) extends Table[UserCampaignMetadata](tag, "user_campaign_metadata") {
-    def namespace = column[Namespace]("namespace")
-    def metadataId = column[MetadataId]("metadata_id")
-    def metadataVersion = column[Int]("metadata_version")
-
+  class CampaignMetadataTable(tag: Tag) extends Table[CampaignMetadata](tag, "campaign_metadata") {
+    def campaignId = column[CampaignId]("campaign_id")
     def metadataType = column[MetadataType]("type")
     def value = column[String]("value")
 
-    // TODO: Unique keys
-
-    override def * = ???
-  }
-
-  case class CampaignMetadata(campaignId: CampaignId, metadataId: MetadataId, version: Int)
-
-  class CampaignMetadataTable(tag: Tag) extends Table[CampaignMetadata](tag, "campaign_metadata") {
-    def campaignId = column[CampaignId]("campaign_id")
-    def metadataId = column[MetadataId]("metadata_id")
-    def metadataVersion = column[Int]("metadata_version")
-
-    // TODO: FK keys
-
-    override def * = ???
+    override def * = (campaignId, metadataType, value) <> ((CampaignMetadata.apply _).tupled, CampaignMetadata.unapply)
   }
 
   protected [db] val campaignMetadata = TableQuery[CampaignMetadataTable]
