@@ -1,6 +1,6 @@
 name := "campaigner"
 organization := "com.advancedtelematic"
-scalaVersion := "2.12.2"
+scalaVersion := "2.12.5"
 
 scalacOptions := Seq(
   "-feature",
@@ -26,7 +26,7 @@ libraryDependencies ++= {
   val akkaV = "2.5.13"
   val akkaHttpV = "10.1.1"
   val libatsV = "0.1.2-18-gdfb0eb3"
-  val libtufV = "0.4.0-50-g8c65459"
+  val libtufV = "0.4.0-54-g317d7c8"
   val scalaTestV = "3.0.0"
   val slickV = "3.2.0"
 
@@ -39,9 +39,7 @@ libraryDependencies ++= {
     "com.typesafe.akka" %% "akka-stream" % akkaV,
     "com.typesafe.slick" %% "slick" % slickV,
     "com.typesafe.slick" %% "slick-hikaricp" % slickV,
-    "org.flywaydb" % "flyway-core" % "4.0.3",
-    "org.mariadb.jdbc" % "mariadb-java-client" % "1.4.4",
-    "org.typelevel" %% "cats" % "0.9.0",
+    "org.mariadb.jdbc" % "mariadb-java-client" % "2.2.5",
 
     "com.advancedtelematic" %% "libats" % libatsV,
     "com.advancedtelematic" %% "libats-auth" % libatsV,
@@ -73,7 +71,7 @@ dockerRepository in Docker := Some("advancedtelematic")
 
 packageName in Docker := packageName.value
 
-dockerUpdateLatest in Docker := true
+dockerUpdateLatest := true
 
 defaultLinuxInstallLocation in Docker := s"/opt/${moduleName.value}"
 
@@ -90,8 +88,6 @@ dockerCommands := Seq(
 )
 
 enablePlugins(JavaAppPackaging)
-
-Revolver.settings
 
 Versioning.settings
 
