@@ -1,5 +1,6 @@
 package com.advancedtelematic.campaigner.data
 
+import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
 import com.advancedtelematic.libats.codecs.CirceCodecs._
 import io.circe.{Decoder, Encoder}
 
@@ -7,6 +8,12 @@ object Codecs {
   import DataType._
   import DataType.CampaignStatus.CampaignStatus
   import io.circe.generic.semiauto._
+
+  implicit val metadataTypeEncoder: Encoder[MetadataType] = Encoder.enumEncoder(MetadataType)
+  implicit val metadataTypeDecoder: Decoder[MetadataType] = Decoder.enumDecoder(MetadataType)
+
+  implicit val userCampaignMetadataEncoder: Encoder[UserCampaignMetadata] = deriveEncoder
+  implicit val userCampaignMetadataDecoder: Decoder[UserCampaignMetadata] = deriveDecoder
 
   implicit val decoderCampaign: Decoder[Campaign] = deriveDecoder
   implicit val encoderCampaign: Encoder[Campaign] = deriveEncoder

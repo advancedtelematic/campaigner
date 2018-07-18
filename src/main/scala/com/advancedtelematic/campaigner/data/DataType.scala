@@ -3,7 +3,6 @@ package com.advancedtelematic.campaigner.data
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
-import com.advancedtelematic.libats.slick.codecs.SlickEnumMapper
 import java.time.Instant
 import java.util.UUID
 
@@ -11,11 +10,23 @@ import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignSta
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
+import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
 
 object DataType {
 
   final case class CampaignId(uuid: UUID) extends UUIDKey
   object CampaignId extends UUIDKeyObj[CampaignId]
+
+  final case class MetadataId(uuid: UUID) extends UUIDKey
+  object MetadataId extends UUIDKeyObj[MetadataId]
+
+  // TODO: Use refined for value
+  case class UserCampaignMetadata(namespace: Namespace, metadataId: MetadataId, version: Int, `type`: MetadataType, value: String)
+
+  object MetadataType extends Enumeration {
+    type MetadataType = Value
+    val Install = Value
+  }
 
   final case class GroupId(uuid: UUID) extends UUIDKey
   object GroupId extends UUIDKeyObj[GroupId]
@@ -93,10 +104,6 @@ object DataType {
     type CancelTaskStatus = Value
     val error, pending, inprogress, completed = Value
   }
-
-  implicit val deviceStatusMapper = SlickEnumMapper.enumMapper(DeviceStatus)
-  implicit val groupStatusMapper = SlickEnumMapper.enumMapper(GroupStatus)
-  implicit val cancelTaskStatusMapper = SlickEnumMapper.enumMapper(CancelTaskStatus)
 
   final case class GroupStats(
     campaign: CampaignId,

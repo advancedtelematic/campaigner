@@ -17,6 +17,8 @@ import io.circe.Json
 import io.circe.syntax._
 import org.scalacheck.Arbitrary._
 
+// TODO:SM update sbt
+
 class CampaignResourceSpec extends CampaignerSpec
     with ResourceSpec
     with CampaignSupport {
@@ -191,4 +193,7 @@ class CampaignResourceSpec extends CampaignerSpec
     }
   }
 
+  it should "accept metadata as part of campaign creation" in pending
+
+  it should "return metadata if campaign has it" in pending
 }

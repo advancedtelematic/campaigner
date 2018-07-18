@@ -15,6 +15,8 @@ import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, Updat
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
+import SlickMapping._
+
 import scala.concurrent.{ExecutionContext, Future}
 import slick.jdbc.MySQLProfile.api._
 
@@ -32,6 +34,18 @@ trait DeviceUpdateSupport {
 
 trait CancelTaskSupport {
   def cancelTaskRepo(implicit db: Database, ec: ExecutionContext) = new CancelTaskRepository()
+}
+
+trait UserCampaignMetadataSupport {
+  def userCampaignMetadataRepo(implicit db: Database, ec: ExecutionContext) = new UserCampaignMetadataRepository()
+}
+
+protected [db] class UserCampaignMetadataRepository()(implicit db: Database, ec: ExecutionContext) {
+
+  // TODO: Update, bump version
+  def persist(userMetadata: UserCampaignMetadata): Future[Unit] = ???
+
+  def all(namespace: Namespace): Future[Seq[UserCampaignMetadata]] = ???
 }
 
 protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: ExecutionContext) {

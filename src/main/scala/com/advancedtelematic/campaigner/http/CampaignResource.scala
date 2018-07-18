@@ -38,7 +38,7 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
     director.cancelUpdate(ns, device).flatMap { _ =>
       campaigns.findCampaignsByUpdate(ns, update).flatMap {
         case cs if cs.isEmpty =>
-          log.info(s"No campaign exists for $device.");
+          log.info(s"No campaign exists for $device.")
           FastFuture.successful(())
         case _ =>
           campaigns.finishDevice(update, device, DeviceStatus.cancelled)
@@ -60,6 +60,12 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
           }
         } ~
         pathPrefix(CampaignId.Path) { id =>
+          path("metadata") {
+            get {
+              import cats.syntax.show._
+              complete(s"oi > ${id.show}")
+            }
+          } ~
           pathEnd {
             get {
               complete(campaigns.findCampaign(ns, id))

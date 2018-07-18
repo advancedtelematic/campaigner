@@ -12,6 +12,7 @@ import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import scala.concurrent.{ExecutionContext, Future}
 import slick.jdbc.MySQLProfile.api._
+import SlickMapping._
 
 object Campaigns {
   def apply()(implicit db: Database, ec: ExecutionContext): Campaigns = new Campaigns()
