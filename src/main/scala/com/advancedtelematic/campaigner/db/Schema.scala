@@ -36,6 +36,8 @@ object Schema {
     def metadataType = column[MetadataType]("type")
     def value = column[String]("value")
 
+    def pk = primaryKey("campaign_metadata_pk", (campaignId, metadataType))
+
     override def * = (campaignId, metadataType, value) <> ((CampaignMetadata.apply _).tupled, CampaignMetadata.unapply)
   }
 
