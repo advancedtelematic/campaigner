@@ -7,7 +7,7 @@ import com.advancedtelematic.campaigner.data.DataType.CampaignStatus._
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus._
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus._
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.campaigner.db.Schema.{GroupStatsTable}
+import com.advancedtelematic.campaigner.db.Schema.{CampaignGroupsTable, GroupStatsTable}
 import com.advancedtelematic.campaigner.http.Errors
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
@@ -48,6 +48,15 @@ protected [db] class CampaignMetadataRepository()(implicit db: Database, ec: Exe
 
 
 protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: ExecutionContext) {
+
+  def findDeviceCampaigns(deviceId: DeviceId, status: DeviceStatus): Future[Seq[(Campaign, Option[CampaignMetadata])]] = db.run {
+    Schema.deviceUpdates
+      .filter { d => d.deviceId === deviceId && d.status === status }
+      .join(Schema.campaigns).on(_.campaignId === _.id)
+      .joinLeft(Schema.campaignMetadata).on { case ((d, c), m) => c.id === m.campaignId }
+      .map { case ((d, c), m) => (c, m) }
+      .result
+  }
 
   protected [db] def findByCampaignAction(campaign: CampaignId, status: DeviceStatus): DBIO[Set[DeviceId]] =
     Schema.deviceUpdates
@@ -238,16 +247,19 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
     }
   }
 
-  def updateName(ns: Namespace, campaign: CampaignId, name: String): Future[Unit] =
+  def update(ns: Namespace, campaign: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
     db.run {
       findAction(ns, campaign).flatMap { _ =>
         Schema.campaigns
           .filter(_.id === campaign)
           .map(_.name)
           .update(name)
-          .map(_ => ())
           .handleIntegrityErrors(Errors.ConflictingCampaign)
-      }
+      }.andThen {
+        Schema.campaignMetadata.filter(_.campaignId === campaign).delete
+      }.andThen {
+        (Schema.campaignMetadata ++= metadata).handleIntegrityErrors(Errors.ConflictingMetadata)
+      }.map(_ => ())
     }
 
   def countDevices(ns: Namespace, campaign: CampaignId)(filterExpr: Rep[DeviceStatus] => Rep[Boolean]): Future[Long] = db.run {

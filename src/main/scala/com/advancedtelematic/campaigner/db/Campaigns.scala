@@ -130,8 +130,8 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def create(campaign: Campaign, groups: Set[GroupId], metadata: Seq[CampaignMetadata]): Future[CampaignId] =
     campaignRepo.persist(campaign, groups, metadata)
 
-  def update(ns: Namespace, id: CampaignId, name: String): Future[Unit] =
-    campaignRepo.updateName(ns, id, name)
+  def update(ns: Namespace, id: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
+    campaignRepo.update(ns, id, name, metadata)
 
   def scheduleGroups(ns: Namespace, campaign: CampaignId, groups: Set[GroupId]): Future[Unit] =
     db.run {

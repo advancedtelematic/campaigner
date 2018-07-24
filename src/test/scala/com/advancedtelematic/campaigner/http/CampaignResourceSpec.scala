@@ -1,7 +1,6 @@
 package com.advancedtelematic.campaigner.http
 
 import akka.http.scaladsl.model.StatusCodes._
-import akka.http.scaladsl.model.headers.RawHeader
 import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
@@ -9,8 +8,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
-import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.data.{ErrorRepresentation, PaginationResult}
+import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
@@ -18,34 +16,11 @@ import io.circe.syntax._
 import org.scalacheck.Arbitrary._
 import org.scalacheck.Gen
 
-// TODO:SM update sbt
-
 class CampaignResourceSpec extends CampaignerSpec
     with ResourceSpec
     with CampaignSupport {
 
   val campaigns = Campaigns()
-
-  def testNs = Namespace("testNs")
-  def header = RawHeader("x-ats-namespace", testNs.get)
-
-  def createCampaignOk(request: CreateCampaign): CampaignId =
-    Post(apiUri("campaigns"), request).withHeaders(header) ~> routes ~> check {
-      status shouldBe Created
-      responseAs[CampaignId]
-    }
-
-  def getCampaignOk(id: CampaignId): GetCampaign =
-    Get(apiUri("campaigns/" + id.show)).withHeaders(header) ~> routes ~> check {
-      status shouldBe OK
-      responseAs[GetCampaign]
-    }
-
-  def getCampaignsOk(): PaginationResult[CampaignId] =
-    Get(apiUri("campaigns")).withHeaders(header) ~> routes ~> check {
-      status shouldBe OK
-      responseAs[PaginationResult[CampaignId]]
-    }
 
   def checkStats(
     id: CampaignId,
@@ -93,7 +68,11 @@ class CampaignResourceSpec extends CampaignerSpec
       status shouldBe OK
     }
 
-    getCampaignOk(id).updatedAt.isBefore(createdAt) shouldBe false
+    val updated = getCampaignOk(id)
+
+    updated.updatedAt.isBefore(createdAt) shouldBe false
+    updated.name shouldBe update.name
+    updated.metadata shouldBe update.metadata
 
     checkStats(id, CampaignStatus.prepared)
   }

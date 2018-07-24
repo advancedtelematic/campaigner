@@ -37,7 +37,9 @@ object DataType {
 
   case class CampaignMetadata(campaignId: CampaignId, `type`: MetadataType, value: String)
 
-  case class CreateCampaignMetadata(`type`: MetadataType, value: String)
+  case class CreateCampaignMetadata(`type`: MetadataType, value: String) {
+    def toCampaignMetadata(campaignId: CampaignId) = CampaignMetadata(campaignId, `type`, value)
+  }
 
   final case class CreateCampaign(
     name: String,
@@ -57,8 +59,12 @@ object DataType {
     }
 
     def mkCampaignMetadata(campaignId: CampaignId): Seq[CampaignMetadata] =
-      metadata.map(m => CampaignMetadata(campaignId, m.`type`, m.value))
+      metadata.map(_.toCampaignMetadata(campaignId))
   }
+
+  case class GetDeviceCampaigns(deviceId: DeviceId, campaigns: Seq[DeviceCampaign])
+
+  case class DeviceCampaign(id: CampaignId, name: String, metadata: Seq[CreateCampaignMetadata])
 
   final case class GetCampaign(
     namespace: Namespace,
@@ -85,9 +91,7 @@ object DataType {
       )
   }
 
-  final case class UpdateCampaign(
-    name: String
-  )
+  final case class UpdateCampaign(name: String, metadata: Seq[CreateCampaignMetadata])
 
   final case class Stats(processed: Long, affected: Long)
 

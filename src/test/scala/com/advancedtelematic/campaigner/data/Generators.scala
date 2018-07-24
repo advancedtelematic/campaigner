@@ -39,7 +39,8 @@ object Generators {
 
   val genUpdateCampaign: Gen[UpdateCampaign] = for {
     n   <- arbitrary[String].suchThat(!_.isEmpty)
-  } yield UpdateCampaign(n)
+    meta   <- genCampaignMetadata
+  } yield UpdateCampaign(n, List(meta))
 
   val genStats: Gen[Stats] = for {
     p <- Gen.posNum[Long]

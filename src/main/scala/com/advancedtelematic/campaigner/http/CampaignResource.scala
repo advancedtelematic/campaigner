@@ -61,18 +61,12 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
           }
         } ~
         pathPrefix(CampaignId.Path) { id =>
-          path("metadata") {
-            get {
-              import cats.syntax.show._
-              complete(s"oi > ${id.show}")
-            }
-          } ~
           pathEnd {
             get {
               complete(campaigns.findCampaign(ns, id))
             } ~
             (put & entity(as[UpdateCampaign])) { updated =>
-              complete(campaigns.update(ns, id, updated.name))
+              complete(campaigns.update(ns, id, updated.name, updated.metadata.map(_.toCampaignMetadata(id))))
             }
           } ~
           (post & path("launch")) {

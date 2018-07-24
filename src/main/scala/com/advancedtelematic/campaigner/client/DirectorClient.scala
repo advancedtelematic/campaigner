@@ -15,8 +15,7 @@ trait DirectorClient {
   def setMultiUpdateTarget(
     ns: Namespace,
     update: UpdateId,
-    devices: Seq[DeviceId],
-    metadata: Seq[CampaignMetadata]): Future[Seq[DeviceId]]
+    devices: Seq[DeviceId]): Future[Seq[DeviceId]]
 
   def cancelUpdate(
     ns: Namespace,
@@ -33,15 +32,14 @@ class DirectorHttpClient(uri: Uri)
 
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
   import io.circe.syntax._
+  import com.advancedtelematic.campaigner.data.Codecs._
 
   override def setMultiUpdateTarget(
     ns: Namespace,
     update: UpdateId,
-    devices: Seq[DeviceId],
-    metadata: Seq[CampaignMetadata]): Future[Seq[DeviceId]] = {
+    devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
     val path   = uri.path / "api" / "v1" / "admin" / "multi_target_updates" / update.show
-    val payload = Map("devices" -> devices.asJson, "metadata" -> metadata.asJson)
-    val entity = HttpEntity(ContentTypes.`application/json`, payload.asJson.noSpaces)
+    val entity = HttpEntity(ContentTypes.`application/json`, devices.asJson.noSpaces)
     val req    = HttpRequest(
       method = HttpMethods.PUT,
       uri    = uri.withPath(path),
