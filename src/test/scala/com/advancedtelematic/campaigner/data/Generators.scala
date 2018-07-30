@@ -4,6 +4,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import java.time.Instant
+
 import org.scalacheck.Arbitrary._
 import org.scalacheck.{Arbitrary, Gen}
 
@@ -14,6 +15,11 @@ object Generators {
   val genGroupId: Gen[GroupId] = Gen.uuid.map(GroupId(_))
   val genUpdateId: Gen[UpdateId] = Gen.uuid.map(UpdateId(_))
   val genNamespace: Gen[Namespace] = arbitrary[String].map(Namespace(_))
+
+  val genCampaignMetadata: Gen[CreateCampaignMetadata] = for {
+    t <- Gen.const(MetadataType.install)
+    v <- Gen.alphaStr
+  } yield CreateCampaignMetadata(t, v)
 
   val genCampaign: Gen[Campaign] = for {
     ns     <- arbitrary[Namespace]
@@ -28,11 +34,13 @@ object Generators {
     n   <- arbitrary[String]
     update <- arbitrary[UpdateId]
     gs  <- arbitrary[Set[GroupId]]
-  } yield CreateCampaign(n, update, gs)
+    meta   <- Gen.option(genCampaignMetadata.map(List(_)))
+  } yield CreateCampaign(n, update, gs, meta)
 
   val genUpdateCampaign: Gen[UpdateCampaign] = for {
     n   <- arbitrary[String].suchThat(!_.isEmpty)
-  } yield UpdateCampaign(n)
+    meta   <- genCampaignMetadata
+  } yield UpdateCampaign(n, Option(List(meta)))
 
   val genStats: Gen[Stats] = for {
     p <- Gen.posNum[Long]

@@ -27,7 +27,7 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
     val groups   = arbitrary[Set[GroupId]].sample.get
     val parent   = TestProbe()
 
-    campaigns.create(campaign, groups).futureValue
+    campaigns.create(campaign, groups, Seq.empty).futureValue
     campaigns.scheduleGroups(campaign.namespace, campaign.id, groups).futureValue
 
     parent.childActorOf(CampaignScheduler.props(
@@ -64,7 +64,7 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
         device: DeviceId): Future[Unit] = FastFuture.successful(())
     }
 
-    campaigns.create(campaign, groups).futureValue
+    campaigns.create(campaign, groups, Seq.empty).futureValue
     campaigns.scheduleGroups(campaign.namespace, campaign.id, groups).futureValue
 
     parent.childActorOf(CampaignScheduler.props(

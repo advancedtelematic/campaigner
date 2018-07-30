@@ -27,7 +27,8 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
 
   def createCampaign(ns: Namespace, request: CreateCampaign): Future[CampaignId] = {
     val campaign = request.mkCampaign(ns)
-    campaigns.create(campaign, request.groups)
+    val metadata = request.mkCampaignMetadata(campaign.id)
+    campaigns.create(campaign, request.groups, metadata)
   }
 
   def cancelDeviceUpdate(
@@ -38,7 +39,7 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
     director.cancelUpdate(ns, device).flatMap { _ =>
       campaigns.findCampaignsByUpdate(ns, update).flatMap {
         case cs if cs.isEmpty =>
-          log.info(s"No campaign exists for $device.");
+          log.info(s"No campaign exists for $device.")
           FastFuture.successful(())
         case _ =>
           campaigns.finishDevice(update, device, DeviceStatus.cancelled)
@@ -65,7 +66,7 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
               complete(campaigns.findCampaign(ns, id))
             } ~
             (put & entity(as[UpdateCampaign])) { updated =>
-              complete(campaigns.update(ns, id, updated.name))
+              complete(campaigns.update(ns, id, updated.name, updated.metadata.toList.flatten.map(_.toCampaignMetadata(id))))
             }
           } ~
           (post & path("launch")) {

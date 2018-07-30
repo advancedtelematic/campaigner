@@ -38,7 +38,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
     val props  = GroupScheduler.props(registry, director, 10.minutes, schedulerBatchSize, campaign, group)
 
     clearClientState()
-    campaigns.create(campaign, Set(group)).futureValue
+    campaigns.create(campaign, Set(group), Seq.empty).futureValue
 
     parent.childActorOf(props)
     parent.expectMsgPF(10.seconds) {
@@ -56,7 +56,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
     val n        = Gen.choose(batch, batch * 10).sample.get
     val devs     = Gen.listOfN(n, genDeviceId).sample.get
 
-    campaigns.create(campaign, Set(group)).futureValue
+    campaigns.create(campaign, Set(group), Seq.empty).futureValue
 
     clearClientState()
 
@@ -79,7 +79,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
     val n        = Gen.choose(0, batch-1).sample.get
     val devs     = Gen.listOfN(n, genDeviceId).sample.get
 
-    campaigns.create(campaign, Set(group)).futureValue
+    campaigns.create(campaign, Set(group), Seq.empty).futureValue
 
     clearClientState()
 
