@@ -111,7 +111,7 @@ class CampaignResourceSpec extends CampaignerSpec
       status shouldBe OK
     }
 
-    checkStats(campaignId, CampaignStatus.finished,
+    checkStats(campaignId, CampaignStatus.cancelled,
       campaign.groups.map(_ -> Stats(0, 0)).toMap)
   }
 

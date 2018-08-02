@@ -149,7 +149,7 @@ protected [db] class GroupStatsRepository()(implicit db: Database, ec: Execution
       Schema.deviceUpdates
         .filter(_.campaignId === campaign)
         .map(_.status)
-        .filter(_ =!= DeviceStatus.scheduled)
+        .filter(status => status === DeviceStatus.successful || status === DeviceStatus.failed)
         .length.result
 
     db.run {
@@ -164,8 +164,8 @@ protected [db] class GroupStatsRepository()(implicit db: Database, ec: Execution
         affected <- affectedDevices()
         finished <- finishedDevices()
         status    = (groups, scheduled, launched, cancelled, affected, finished) match {
-          case (g, 0, _, _, a, f) if g > 0 && a == f => CampaignStatus.finished
           case (_, _, _, c, _, _) if c > 0           => CampaignStatus.cancelled
+          case (g, 0, _, _, a, f) if g > 0 && a == f => CampaignStatus.finished
           case (0, 0, 0, _, _, _)                    => CampaignStatus.prepared
           case (_, 0, _, _, _, _)                    => CampaignStatus.launched
           case _                                     => CampaignStatus.scheduled
