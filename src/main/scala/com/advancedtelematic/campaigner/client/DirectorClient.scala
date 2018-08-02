@@ -4,7 +4,6 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model._
 import akka.stream.Materializer
 import cats.syntax.show._
-import com.advancedtelematic.campaigner.data.DataType.CampaignMetadata
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 
@@ -32,7 +31,6 @@ class DirectorHttpClient(uri: Uri)
 
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
   import io.circe.syntax._
-  import com.advancedtelematic.campaigner.data.Codecs._
 
   override def setMultiUpdateTarget(
     ns: Namespace,

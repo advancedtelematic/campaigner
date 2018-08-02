@@ -3,7 +3,7 @@ package com.advancedtelematic.campaigner.http
 import akka.http.scaladsl.server.Directive1
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
-import com.advancedtelematic.libats.http.UUIDKeyPath._
+import com.advancedtelematic.libats.http.UUIDKeyAkka._
 import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.ExecutionContext

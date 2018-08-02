@@ -12,6 +12,7 @@ object ErrorCodes {
   val CampaignAlreadyLaunched = ErrorCode("campaign_already_launched")
   val InvalidCounts = ErrorCode("invalid_stats_count")
   val DeviceNotScheduled = ErrorCode("device_not_scheduled")
+  val ConflictingUpdate = ErrorCode("update_already_exists")
 
 
 }
@@ -43,6 +44,11 @@ object Errors {
     ErrorCodes.DeviceNotScheduled,
     StatusCodes.PreconditionFailed,
     "The device has not been scheduled."
+  )
+  val ConflictingUpdate = RawError(
+    ErrorCodes.ConflictingUpdate,
+    StatusCodes.Conflict,
+    "An update with that name already exists."
   )
 
 }

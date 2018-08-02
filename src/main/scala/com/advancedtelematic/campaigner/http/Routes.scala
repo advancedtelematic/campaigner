@@ -27,7 +27,8 @@ class Routes(director: DirectorClient)
       ErrorHandler.handleErrors {
         pathPrefix("api" / "v2") {
           new CampaignResource(extractAuth, director).route ~
-          new DeviceResource(defaultNamespaceExtractor).route
+          new DeviceResource(defaultNamespaceExtractor).route ~
+          new UpdateResource(defaultNamespaceExtractor).route
         } ~ DbHealthResource(versionMap).route
       }
     }

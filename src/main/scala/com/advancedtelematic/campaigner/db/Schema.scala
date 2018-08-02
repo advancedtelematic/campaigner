@@ -87,6 +87,7 @@ object Schema {
 
   protected [db] val deviceUpdates = TableQuery[DeviceUpdatesTable]
 
+
   class CancelTaskTable(tag: Tag) extends Table[CancelTask](tag, "campaign_cancels") {
     def campaignId = column[CampaignId]("campaign_id", O.PrimaryKey)
     def taskStatus = column[CancelTaskStatus]("status")
@@ -95,4 +96,19 @@ object Schema {
       ((CancelTask.apply _).tupled, CancelTask.unapply)
   }
   protected [db] val cancelTasks = TableQuery[CancelTaskTable]
+
+
+  class UpdatesTable(tag: Tag) extends Table[Update](tag, "updates"){
+    def id = column[UpdateId]("uuid", O.PrimaryKey)
+    def namespace = column[Namespace]("namespace")
+    def name = column[String]("name")
+    def description = column[String]("description")
+    def createdAt = column[Instant]("created_at")
+    def updatedAt = column[Instant]("updated_at")
+
+    override def * = (id, namespace, name, description, createdAt, updatedAt) <> ((Update.apply _).tupled, Update.unapply)
+  }
+
+  protected [db] val updates = TableQuery[UpdatesTable]
+
 }

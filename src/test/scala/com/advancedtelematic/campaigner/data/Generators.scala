@@ -14,7 +14,7 @@ object Generators {
   val genDeviceId: Gen[DeviceId] = Gen.uuid.map(DeviceId(_))
   val genGroupId: Gen[GroupId] = Gen.uuid.map(GroupId(_))
   val genUpdateId: Gen[UpdateId] = Gen.uuid.map(UpdateId(_))
-  val genNamespace: Gen[Namespace] = arbitrary[String].map(Namespace(_))
+  val genNamespace: Gen[Namespace] = arbitrary[String].map(Namespace)
 
   val genCampaignMetadata: Gen[CreateCampaignMetadata] = for {
     t <- Gen.const(MetadataType.install)
@@ -42,6 +42,11 @@ object Generators {
     meta   <- genCampaignMetadata
   } yield UpdateCampaign(n, Option(List(meta)))
 
+  val genCreateUpdate: Gen[CreateUpdate] = for {
+    n <- arbitrary[String].suchThat(!_.isEmpty)
+    d <- arbitrary[String]
+  } yield CreateUpdate(n, d)
+
   val genStats: Gen[Stats] = for {
     p <- Gen.posNum[Long]
     a <- Gen.posNum[Long]
@@ -55,6 +60,7 @@ object Generators {
   implicit lazy val arbCampaign: Arbitrary[Campaign] = Arbitrary(genCampaign)
   implicit lazy val arbCreateCampaign: Arbitrary[CreateCampaign] = Arbitrary(genCreateCampaign)
   implicit lazy val arbUpdateCampaign: Arbitrary[UpdateCampaign] = Arbitrary(genUpdateCampaign)
+  implicit lazy val arbCreateUpdate: Arbitrary[CreateUpdate] = Arbitrary(genCreateUpdate)
   implicit lazy val arbStats: Arbitrary[Stats] = Arbitrary(genStats)
 
 }
