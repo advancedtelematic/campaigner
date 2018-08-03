@@ -36,17 +36,17 @@ object DataType {
 
   final case class Update(
                            id: UpdateId,
-                           externalId: String,
+                           externalId: Option[String],
                            namespace: Namespace,
                            name: String,
-                           description: String,
+                           description: Option[String],
                            createdAt: Instant,
                            updatedAt: Instant
                          )
 
   final case class CreateUpdate(externalId: Option[String], name: String, description: Option[String]) {
     def mkUpdate(ns: Namespace): Update =
-      Update(UpdateId.generate(), externalId.getOrElse(""), ns, name, description.getOrElse(""), Instant.now, Instant.now)
+      Update(UpdateId.generate(), externalId, ns, name, description, Instant.now, Instant.now)
   }
 
   case class CampaignMetadata(campaignId: CampaignId, `type`: MetadataType, value: String)

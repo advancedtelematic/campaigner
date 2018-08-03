@@ -1,7 +1,7 @@
 package com.advancedtelematic.campaigner.http
 
 import akka.http.scaladsl.model.StatusCodes
-import com.advancedtelematic.campaigner.data.DataType.{CreateCampaign, DeviceCampaign, GetDeviceCampaigns}
+import com.advancedtelematic.campaigner.data.DataType.{CreateCampaign, GetDeviceCampaigns}
 import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId

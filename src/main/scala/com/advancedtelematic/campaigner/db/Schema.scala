@@ -100,10 +100,10 @@ object Schema {
 
   class UpdatesTable(tag: Tag) extends Table[Update](tag, "updates"){
     def id = column[UpdateId]("uuid", O.PrimaryKey)
-    def externalId = column[String]("external_id")
+    def externalId = column[Option[String]]("external_id")
     def namespace = column[Namespace]("namespace")
     def name = column[String]("name")
-    def description = column[String]("description")
+    def description = column[Option[String]]("description")
     def createdAt = column[Instant]("created_at")
     def updatedAt = column[Instant]("updated_at")
 

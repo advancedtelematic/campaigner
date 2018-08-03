@@ -19,5 +19,4 @@ protected[db] class Updates(implicit db: Database, ec: ExecutionContext) extends
 
   def create(update: Update) : Future[UpdateId] = db.run(updateRepo.persist(update))
 
-  def clear(): Future[Unit] = db.run(updateRepo.clear())
 }
