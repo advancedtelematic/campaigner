@@ -2,6 +2,7 @@ package com.advancedtelematic.campaigner.data
 
 import java.time.Instant
 
+import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.data.DataType.Namespace
@@ -16,11 +17,12 @@ object Generators {
   val genGroupId: Gen[GroupId] = Gen.uuid.map(GroupId(_))
   val genUpdateId: Gen[UpdateId] = Gen.uuid.map(UpdateId(_))
   val genNamespace: Gen[Namespace] = arbitrary[String].map(Namespace)
-  val genupdateType: Gen[UpdateType] = Gen.oneOf(UpdateType.values.toSeq)
+  val genUpdateType: Gen[UpdateType] = Gen.oneOf(UpdateType.values.toSeq)
+  val genMetadataType: Gen[MetadataType] = Gen.oneOf(MetadataType.values.toSeq)
 
 
   val genCampaignMetadata: Gen[CreateCampaignMetadata] = for {
-    t <- Gen.const(MetadataType.install)
+    t <- arbitrary[MetadataType]
     v <- Gen.alphaStr
   } yield CreateCampaignMetadata(t, v)
 
@@ -69,7 +71,8 @@ object Generators {
   implicit lazy val arbCampaign: Arbitrary[Campaign] = Arbitrary(genCampaign)
   implicit lazy val arbCreateCampaign: Arbitrary[CreateCampaign] = Arbitrary(genCreateCampaign)
   implicit lazy val arbUpdateCampaign: Arbitrary[UpdateCampaign] = Arbitrary(genUpdateCampaign)
-  implicit lazy val arbupdateType: Arbitrary[UpdateType] = Arbitrary(genupdateType)
+  implicit lazy val arbUpdateType: Arbitrary[UpdateType] = Arbitrary(genUpdateType)
+  implicit lazy val arbMetadataType: Arbitrary[MetadataType] = Arbitrary(genMetadataType)
   implicit lazy val arbCreateUpdate: Arbitrary[CreateUpdate] = Arbitrary(genCreateUpdate)
   implicit lazy val arbStats: Arbitrary[Stats] = Arbitrary(genStats)
 

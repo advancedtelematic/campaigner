@@ -18,11 +18,6 @@ object DataType {
   final case class CampaignId(uuid: UUID) extends UUIDKey
   object CampaignId extends UUIDKeyObj[CampaignId]
 
-  object MetadataType extends Enumeration {
-    type MetadataType = Value
-    val install = Value
-  }
-
   final case class GroupId(uuid: UUID) extends UUIDKey
   object GroupId extends UUIDKeyObj[GroupId]
 
@@ -112,31 +107,6 @@ object DataType {
 
   final case class Stats(processed: Long, affected: Long)
 
-  object GroupStatus extends Enumeration {
-    type GroupStatus = Value
-    val scheduled, launched, cancelled = Value
-  }
-
-  object CampaignStatus extends Enumeration {
-    type CampaignStatus = Value
-    val prepared, scheduled, launched, finished, cancelled = Value
-  }
-
-  object DeviceStatus extends Enumeration {
-    type DeviceStatus = Value
-    val scheduled, successful, cancelled, failed = Value
-  }
-
-  object CancelTaskStatus extends Enumeration {
-    type CancelTaskStatus = Value
-    val error, pending, inprogress, completed = Value
-  }
-
-  object UpdateType extends Enumeration {
-    type UpdateType = Value
-    val external, multi_target = Value
-  }
-
   final case class GroupStats(
     campaign: CampaignId,
     group: GroupId,
@@ -165,4 +135,35 @@ object DataType {
     campaign: CampaignId,
     status: CancelTaskStatus
   )
+
+  object GroupStatus extends Enumeration {
+    type GroupStatus = Value
+    val scheduled, launched, cancelled = Value
+  }
+
+  object CampaignStatus extends Enumeration {
+    type CampaignStatus = Value
+    val prepared, scheduled, launched, finished, cancelled = Value
+  }
+
+  object DeviceStatus extends Enumeration {
+    type DeviceStatus = Value
+    val scheduled, successful, cancelled, failed = Value
+  }
+
+  object CancelTaskStatus extends Enumeration {
+    type CancelTaskStatus = Value
+    val error, pending, inprogress, completed = Value
+  }
+
+  object UpdateType extends Enumeration {
+    type UpdateType = Value
+    val external, multi_target = Value
+  }
+
+  object MetadataType extends Enumeration {
+    type MetadataType = Value
+    val DESCRIPTION, ESTIMATED_INSTALLATION_DURATION, ESTIMATED_PREPARATION_DURATION = Value
+  }
+
 }
