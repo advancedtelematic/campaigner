@@ -94,3 +94,12 @@ Versioning.settings
 Release.settings
 
 enablePlugins(Versioning.Plugin)
+
+val mkVersionArtifacts = taskKey[Seq[File]]("Makes artifacts file")
+
+mkVersionArtifacts := {
+  val propFile = new File(baseDirectory.value, "artifacts.txt")
+  IO.write(propFile, (dockerRepository in Docker).value.get + "/" + packageName.value + ":" + version.value)
+  Seq(propFile)
+}
+

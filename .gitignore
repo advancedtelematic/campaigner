@@ -16,3 +16,4 @@ project/target
 .idea/
 
 campaigner_entrypoint.d
+artifacts.txt
