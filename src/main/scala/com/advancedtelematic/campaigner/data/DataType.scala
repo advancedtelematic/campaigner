@@ -8,7 +8,6 @@ import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTas
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
-
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
@@ -37,6 +36,7 @@ object DataType {
 
   final case class Update(
                            id: UpdateId,
+                           externalId: String,
                            namespace: Namespace,
                            name: String,
                            description: String,
@@ -44,12 +44,9 @@ object DataType {
                            updatedAt: Instant
                          )
 
-  final case class CreateUpdate(
-                           name: String,
-                           description: String,
-                         ) {
+  final case class CreateUpdate(externalId: Option[String], name: String, description: Option[String]) {
     def mkUpdate(ns: Namespace): Update =
-      Update(UpdateId.generate(), ns, name, description, Instant.now, Instant.now)
+      Update(UpdateId.generate(), externalId.getOrElse(""), ns, name, description.getOrElse(""), Instant.now, Instant.now)
   }
 
   case class CampaignMetadata(campaignId: CampaignId, `type`: MetadataType, value: String)

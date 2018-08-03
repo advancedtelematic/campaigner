@@ -48,7 +48,7 @@ object Errors {
   val ConflictingUpdate = RawError(
     ErrorCodes.ConflictingUpdate,
     StatusCodes.Conflict,
-    "An update with that name already exists."
+    "An update with that externalId already exists."
   )
 
 }

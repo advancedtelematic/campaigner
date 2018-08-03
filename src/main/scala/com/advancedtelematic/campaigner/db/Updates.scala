@@ -14,10 +14,10 @@ object Updates {
 
 protected[db] class Updates(implicit db: Database, ec: ExecutionContext) extends UpdateSupport  {
 
-  def allUpdates(ns: Namespace, offset: Option[Long], limit: Option[Long]): Future[PaginationResult[UpdateId]] = {
-    updateRepo.all(ns, offset.getOrElse(0L), limit.getOrElse(50L))
-  }
+  def allUpdates(ns: Namespace, offset: Option[Long], limit: Option[Long]): Future[PaginationResult[UpdateId]] =
+    db.run(updateRepo.all(ns, offset.getOrElse(0L), limit.getOrElse(50L)))
 
   def create(update: Update) : Future[UpdateId] = db.run(updateRepo.persist(update))
 
+  def clear(): Future[Unit] = db.run(updateRepo.clear())
 }

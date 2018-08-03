@@ -43,9 +43,10 @@ object Generators {
   } yield UpdateCampaign(n, Option(List(meta)))
 
   val genCreateUpdate: Gen[CreateUpdate] = for {
-    n <- arbitrary[String].suchThat(!_.isEmpty)
-    d <- arbitrary[String]
-  } yield CreateUpdate(n, d)
+    eid <- Gen.option(arbitrary[String])
+    n <- arbitrary[String]
+    d <- Gen.option(arbitrary[String])
+  } yield CreateUpdate(eid, n, d)
 
   val genStats: Gen[Stats] = for {
     p <- Gen.posNum[Long]

@@ -1,18 +1,18 @@
 package com.advancedtelematic.campaigner.db
 
-import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.slick.db.SlickAnyVal._
-import com.advancedtelematic.libats.slick.db.SlickExtensions._
-import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
-import SlickMapping._
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import java.time.Instant
 
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
+import com.advancedtelematic.campaigner.data.DataType._
+import com.advancedtelematic.campaigner.db.SlickMapping._
+import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
+import com.advancedtelematic.libats.slick.db.SlickAnyVal._
+import com.advancedtelematic.libats.slick.db.SlickExtensions._
+import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import slick.jdbc.MySQLProfile.api._
 
 
@@ -100,15 +100,17 @@ object Schema {
 
   class UpdatesTable(tag: Tag) extends Table[Update](tag, "updates"){
     def id = column[UpdateId]("uuid", O.PrimaryKey)
+    def externalId = column[String]("external_id")
     def namespace = column[Namespace]("namespace")
     def name = column[String]("name")
     def description = column[String]("description")
     def createdAt = column[Instant]("created_at")
     def updatedAt = column[Instant]("updated_at")
 
-    override def * = (id, namespace, name, description, createdAt, updatedAt) <> ((Update.apply _).tupled, Update.unapply)
-  }
+    def uniqueExternalId = index("unique_external_id", (namespace, externalId), unique = true)
 
+    override def * = (id, externalId, namespace, name, description, createdAt, updatedAt) <> ((Update.apply _).tupled, Update.unapply)
+  }
   protected [db] val updates = TableQuery[UpdatesTable]
 
 }

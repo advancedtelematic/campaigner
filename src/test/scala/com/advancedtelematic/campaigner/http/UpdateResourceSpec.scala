@@ -10,25 +10,43 @@ import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import org.scalatest.BeforeAndAfterEach
 
-class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSupport {
+class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSupport with BeforeAndAfterEach {
 
   val updates = Updates()
 
-  def createUpdateOk(request: CreateUpdate): UpdateId =
+  override protected def afterEach(): Unit = {
+    super.afterEach()
+    // To avoid aleatory integrity violations on the unique key (namespace, externalId).
+    updates.clear()
+  }
+
+  private def createUpdate(request: CreateUpdate): HttpRequest =
+    Post(apiUri("updates"), request).withHeaders(header)
+
+  private def createUpdateOk(request: CreateUpdate): UpdateId =
     createUpdate(request) ~> routes ~> check {
       status shouldBe OK
       responseAs[UpdateId]
     }
 
-  def createUpdate(request: CreateUpdate): HttpRequest =
-    Post(apiUri("updates"), request).withHeaders(header)
+  private def getUpdates: HttpRequest = Get(apiUri("updates")).withHeaders(header)
 
-  def getUpdates: HttpRequest = Get(apiUri("updates")).withHeaders(header)
+  "POST to /updates" should "create a new update" in {
+    val request: CreateUpdate = genCreateUpdate.sample.get
+    createUpdate(request) ~> routes ~> check {
+      status shouldBe OK
+    }
+  }
 
   "GET to /updates" should "get all existing updates" in {
-    val request1 = genCreateUpdate.sample.get
-    val request2 = genCreateUpdate.sample.get
+    // Make sure the external IDs are different to avoid aleatory integrity violations on the unique key (namespace, externalId).
+    val request1: CreateUpdate = genCreateUpdate.sample.get
+    val request2: CreateUpdate = genCreateUpdate.suchThat(_.externalId match {
+      case None => request1.externalId.isDefined
+      case Some (e) => request1.externalId.isEmpty || request1.externalId.get != e
+    }).sample.get
     val updateId1 = createUpdateOk(request1)
     val updateId2 = createUpdateOk(request2)
     getUpdates ~> routes ~> check {
@@ -40,10 +58,12 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     }
   }
 
-  "POST to /updates" should "create a new update" in {
-    val request = genCreateUpdate.sample.get
-    createUpdate(request) ~> routes ~> check {
-      status shouldBe OK
+  "Creating two updates with the same externalId" should "fail with Conflict error" in {
+    val request1: CreateUpdate = genCreateUpdate.sample.get
+    val request2: CreateUpdate = genCreateUpdate.sample.get.copy(externalId = request1.externalId)
+    createUpdateOk(request1)
+    createUpdate(request2) ~> routes ~> check {
+      status shouldBe Conflict
     }
   }
 
