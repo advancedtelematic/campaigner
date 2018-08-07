@@ -74,7 +74,6 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       groupStats.processed === 0L && groupStats.affected === 0L
     }
 
-  // TODO: Check usages for this
   def scheduleDevice(campaign: CampaignId, update: UpdateId, device: DeviceId): Future[Unit] =
     deviceUpdateRepo.persist(DeviceUpdate(campaign, update, device, DeviceStatus.scheduled))
 
