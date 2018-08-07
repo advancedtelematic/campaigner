@@ -132,7 +132,7 @@ class CampaignResourceSpec extends CampaignerSpec
     val entity = Json.obj("update" -> update.asJson, "device" -> device.asJson)
     Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
-      director.cancelled.containsKey(device) shouldBe true
+      director.cancelled.contains(device) shouldBe true
     }
 
     checkStats(campaignId, CampaignStatus.scheduled,
@@ -155,7 +155,7 @@ class CampaignResourceSpec extends CampaignerSpec
     val entity = Json.obj("update" -> update.asJson, "device" -> device.asJson)
     Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe PreconditionFailed
-      director.cancelled.containsKey(device) shouldBe true
+      director.cancelled.contains(device) shouldBe true
     }
 
     checkStats(campaignId, CampaignStatus.scheduled,
@@ -169,7 +169,7 @@ class CampaignResourceSpec extends CampaignerSpec
     val entity = Json.obj("update" -> update.asJson, "device" -> device.asJson)
     Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
-      director.cancelled.containsKey(device) shouldBe true
+      director.cancelled.contains(device) shouldBe true
     }
   }
 

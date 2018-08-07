@@ -8,6 +8,7 @@ import com.advancedtelematic.campaigner.daemon._
 import com.advancedtelematic.libats.http.BootApp
 import com.advancedtelematic.libats.messaging.{BusListenerMetrics, MessageListenerSupport}
 import com.advancedtelematic.libats.http.monitoring.MetricsSupport
+import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceEventMessage
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.slick.monitoring.{DatabaseMetrics, DbHealthResource}
 import com.advancedtelematic.libtuf_server.data.Messages.DeviceUpdateReport
@@ -41,6 +42,7 @@ object DaemonBoot extends BootApp
   ))
 
   startListener[DeviceUpdateReport](DeviceUpdateReportListener.apply)
+  startListener[DeviceEventMessage](new DeviceEventListener(director))
 
   val routes: Route = (versionHeaders(version) & logResponseMetrics(projectName)) {
     DbHealthResource(versionMap, healthMetrics = Seq(new BusListenerMetrics(metricRegistry))).route
