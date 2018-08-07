@@ -74,11 +74,11 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       groupStats.processed === 0L && groupStats.affected === 0L
     }
 
-  def scheduleDevice(campaign: CampaignId, update: UpdateId, device: DeviceId): Future[Unit] =
-    deviceUpdateRepo.persist(DeviceUpdate(campaign, update, device, DeviceStatus.scheduled))
+  def scheduleDevices(campaign: CampaignId, update: UpdateId, devices: DeviceId*): Future[Unit] =
+    deviceUpdateRepo.persistMany(devices.map { d => DeviceUpdate(campaign, update, d, DeviceStatus.scheduled) })
 
-  def markDeviceAccepted(campaign: CampaignId, update: UpdateId, device: DeviceId): Future[Unit] =
-    deviceUpdateRepo.persist(DeviceUpdate(campaign, update, device, DeviceStatus.accepted))
+  def markDevicesAccepted(campaign: CampaignId, update: UpdateId, devices: DeviceId*): Future[Unit] =
+    deviceUpdateRepo.persistMany(devices.map { d => DeviceUpdate(campaign, update, d, DeviceStatus.accepted) })
 
   def finishDevice(update: UpdateId, device: DeviceId, status: DeviceStatus): Future[Unit] =
     deviceUpdateRepo.setUpdateStatus(update, device, status)

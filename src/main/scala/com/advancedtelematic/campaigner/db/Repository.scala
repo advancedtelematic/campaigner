@@ -110,8 +110,8 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
       }.map(_ => ())
   }
 
-  def persist(update: DeviceUpdate): Future[Unit] = db.run {
-    (Schema.deviceUpdates += update).map(_ => ())
+  def persistMany(updates: Seq[DeviceUpdate]): Future[Unit] = db.run {
+    (Schema.deviceUpdates ++= updates).map(_ => ())
   }
 }
 

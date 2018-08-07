@@ -127,7 +127,7 @@ class CampaignResourceSpec extends CampaignerSpec
     checkStats(campaignId, CampaignStatus.scheduled,
       campaign.groups.map(_ -> Stats(0, 0)).toMap)
 
-    campaigns.scheduleDevice(campaignId, update, device).futureValue
+    campaigns.scheduleDevices(campaignId, update, device).futureValue
 
     val entity = Json.obj("update" -> update.asJson, "device" -> device.asJson)
     Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {

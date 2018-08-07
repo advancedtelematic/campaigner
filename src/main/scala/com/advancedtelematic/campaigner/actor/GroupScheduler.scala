@@ -4,7 +4,7 @@ import akka.actor.{Actor, ActorLogging, Props, Status}
 import com.advancedtelematic.campaigner.client.DirectorClient
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.campaigner.db.Campaigns
+import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateProcess}
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 
 import scala.concurrent.duration._
@@ -44,6 +44,8 @@ class GroupScheduler(registry: DeviceRegistryClient,
 
   val campaigns = Campaigns()
 
+  val deviceUpdateProcess = new DeviceUpdateProcess(director)
+
   override def preStart() =
     self ! NextBatch
 
@@ -56,33 +58,15 @@ class GroupScheduler(registry: DeviceRegistryClient,
 
   private def resumeBatch(campaign: Campaign, group: GroupId): Future[GroupSchedulerMsg] = for {
     (offset, nextBatchDevices) <- findNextBatchDevices(campaign, group)
-    result <- scheduleAffectedOnly(campaign, offset, nextBatchDevices)
+    result <- startAffectedDevices(campaign, offset, nextBatchDevices)
   } yield result
 
-  private def scheduleDevices(devs: Seq[DeviceId]) =
-    Future.traverse(devs)(campaigns.scheduleDevice(campaign.id, campaign.updateId, _))
+  private def startAffectedDevices(campaign: Campaign, offset: Long, groupDevices: Seq[DeviceId]): Future[GroupSchedulerMsg] =
+    deviceUpdateProcess.startUpdateFor(groupDevices, campaign).flatMap { affected =>
+      completeBatch(offset, groupDevices.length.toLong, affected)
+    }
 
-  private def markAccepted(devs: Seq[DeviceId])=
-    Future.traverse(devs)(campaigns.markDeviceAccepted(campaign.id, campaign.updateId, _))
-
-  def scheduleAffectedOnly(campaign: Campaign, offset: Long, groupDevices: Seq[DeviceId]): Future[GroupSchedulerMsg] = {
-    val updateStatusF =
-      if(campaign.autoAccept)
-        for {
-          affected <- director.setMultiUpdateTarget(campaign.namespace, campaign.updateId, groupDevices)
-          _ <- markAccepted(affected)
-        } yield affected
-      else {
-        for {
-          affected <- director.findAffected(campaign.namespace, campaign.updateId, groupDevices)
-          _ <- scheduleDevices(affected)
-        } yield affected
-      }
-
-    updateStatusF.flatMap { affected => scheduleBatch(offset, groupDevices.length.toLong, affected) }
-  }
-
-  private def scheduleBatch(offset: Long, processed: Long, affected: Seq[DeviceId]): Future[GroupSchedulerMsg] = {
+  private def completeBatch(offset: Long, processed: Long, affected: Seq[DeviceId]): Future[GroupSchedulerMsg] = {
     if(processed < batchSize) {
       log.debug(s"$group complete")
       val stats = Stats(processed, affected.length.toLong)
@@ -110,6 +94,7 @@ class GroupScheduler(registry: DeviceRegistryClient,
       context.stop(self)
 
     case msg: Status.Failure =>
+      msg.cause.printStackTrace()
       parent ! msg
   }
 }

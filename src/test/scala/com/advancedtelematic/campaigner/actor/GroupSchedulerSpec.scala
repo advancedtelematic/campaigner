@@ -1,5 +1,6 @@
 package com.advancedtelematic.campaigner.actor
 
+import scala.collection.JavaConverters._
 import akka.http.scaladsl.util.FastFuture
 import akka.testkit.TestProbe
 import com.advancedtelematic.campaigner.client._
@@ -79,9 +80,10 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     val n        = Gen.choose(1, batch-1).sample.get
     val devs     = Gen.listOfN(n, genDeviceId).sample.get
 
-    campaigns.create(campaign, Set(group), Seq.empty).futureValue
-
     clearClientState()
+
+    campaigns.create(campaign, Set(group), Seq.empty).futureValue
+    director.affected.put(campaign.updateId, devs.toSet)
 
     val parent = TestProbe()
     val props  = GroupScheduler.props(fakeRegistry(devs), director, schedulerDelay, schedulerBatchSize, campaign, group)
@@ -93,6 +95,8 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
 
     deviceStatus shouldNot be(empty)
     deviceStatus shouldBe devs.toSet
+
+    director.updates.asScala.get(campaign.updateId) shouldBe empty
   }
 
   "PRO-3745: group scheduler" should "properly set devices to `accepted` when affected devices < batch size" in {
@@ -113,6 +117,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
 
     val deviceStatus = deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.accepted).futureValue
 
+    deviceStatus shouldNot be(empty)
     deviceStatus shouldBe director.updates.get(campaign.updateId)
   }
 }

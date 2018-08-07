@@ -32,6 +32,7 @@ class FakeDeviceRegistryClient extends DeviceRegistryClient {
 class FakeDirectorClient extends DirectorClient {
 
   val updates = new ConcurrentHashMap[UpdateId, Set[DeviceId]]()
+  val affected = new ConcurrentHashMap[UpdateId, Set[DeviceId]]()
   val cancelled = ConcurrentHashMap.newKeySet[DeviceId]()
 
   override def setMultiUpdateTarget(namespace: Namespace,
@@ -65,6 +66,6 @@ class FakeDirectorClient extends DirectorClient {
   }
 
   override def findAffected(ns: Namespace, updateId: UpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
-    FastFuture.successful(updates.get(updateId).toSeq)
+    FastFuture.successful(affected.asScala.get(updateId).toSeq.flatten)
   }
 }
