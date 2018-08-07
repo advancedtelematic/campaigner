@@ -7,7 +7,7 @@ import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class DeviceCampaigns()(implicit val ec: ExecutionContext, val db: Database) extends
+class DeviceCampaigns()(implicit val db: Database, val ec: ExecutionContext) extends
   DeviceUpdateSupport with
   CampaignSupport with CampaignMetadataSupport  {
 

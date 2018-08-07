@@ -9,7 +9,7 @@ import slick.jdbc.MySQLProfile.api._
 import scala.concurrent.{ExecutionContext, Future}
 
 object Updates {
-  def apply()(implicit db: Database, ec: ExecutionContext): Updates = new Updates()
+  def apply()(implicit db: Database, ec: ExecutionContext) : Updates = new Updates()
 }
 
 protected[db] class Updates(implicit db: Database, ec: ExecutionContext) extends UpdateSupport  {

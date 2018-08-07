@@ -1,10 +1,11 @@
 package com.advancedtelematic.campaigner.data
 
+import java.time.Instant
+
+import com.advancedtelematic.campaigner.data.DataType.UpdateKind.UpdateKind
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
-import java.time.Instant
-
 import org.scalacheck.Arbitrary._
 import org.scalacheck.{Arbitrary, Gen}
 
@@ -15,6 +16,8 @@ object Generators {
   val genGroupId: Gen[GroupId] = Gen.uuid.map(GroupId(_))
   val genUpdateId: Gen[UpdateId] = Gen.uuid.map(UpdateId(_))
   val genNamespace: Gen[Namespace] = arbitrary[String].map(Namespace)
+  val genUpdateKind: Gen[UpdateKind] = Gen.oneOf(UpdateKind.values.toSeq)
+
 
   val genCampaignMetadata: Gen[CreateCampaignMetadata] = for {
     t <- Gen.const(MetadataType.install)
@@ -44,9 +47,10 @@ object Generators {
 
   val genCreateUpdate: Gen[CreateUpdate] = for {
     eid <- Gen.option(arbitrary[String])
+    uk <- arbitrary[UpdateKind]
     n <- arbitrary[String]
     d <- Gen.option(arbitrary[String])
-  } yield CreateUpdate(eid, n, d)
+  } yield CreateUpdate(eid, uk, n, d)
 
   val genStats: Gen[Stats] = for {
     p <- Gen.posNum[Long]
@@ -61,6 +65,7 @@ object Generators {
   implicit lazy val arbCampaign: Arbitrary[Campaign] = Arbitrary(genCampaign)
   implicit lazy val arbCreateCampaign: Arbitrary[CreateCampaign] = Arbitrary(genCreateCampaign)
   implicit lazy val arbUpdateCampaign: Arbitrary[UpdateCampaign] = Arbitrary(genUpdateCampaign)
+  implicit lazy val arbUpdateKind: Arbitrary[UpdateKind] = Arbitrary(genUpdateKind)
   implicit lazy val arbCreateUpdate: Arbitrary[CreateUpdate] = Arbitrary(genCreateUpdate)
   implicit lazy val arbStats: Arbitrary[Stats] = Arbitrary(genStats)
 

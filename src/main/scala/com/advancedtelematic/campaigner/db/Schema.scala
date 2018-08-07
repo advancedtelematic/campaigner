@@ -6,6 +6,7 @@ import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTas
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
+import com.advancedtelematic.campaigner.data.DataType.UpdateKind.UpdateKind
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.SlickMapping._
 import com.advancedtelematic.libats.data.DataType.Namespace
@@ -99,17 +100,18 @@ object Schema {
 
 
   class UpdatesTable(tag: Tag) extends Table[Update](tag, "updates"){
-    def id = column[UpdateId]("uuid", O.PrimaryKey)
-    def externalId = column[Option[String]]("external_id")
+    def uuid = column[UpdateId]("uuid", O.PrimaryKey)
+    def updateId = column[Option[String]]("update_id")
+    def updateKind = column[UpdateKind]("update_kind")
     def namespace = column[Namespace]("namespace")
     def name = column[String]("name")
     def description = column[Option[String]]("description")
     def createdAt = column[Instant]("created_at")
     def updatedAt = column[Instant]("updated_at")
 
-    def uniqueExternalId = index("unique_external_id", (namespace, externalId), unique = true)
+    def uniqueUpdateId = index("unique_update_id", (namespace, updateId), unique = true)
 
-    override def * = (id, externalId, namespace, name, description, createdAt, updatedAt) <> ((Update.apply _).tupled, Update.unapply)
+    override def * = (uuid, updateId, updateKind, namespace, name, description, createdAt, updatedAt) <> ((Update.apply _).tupled, Update.unapply)
   }
   protected [db] val updates = TableQuery[UpdatesTable]
 

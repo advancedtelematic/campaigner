@@ -44,7 +44,7 @@ trait CampaignMetadataSupport {
   def campaignMetadataRepo(implicit db: Database, ec: ExecutionContext) = new CampaignMetadataRepository()
 }
 
-protected [db] class CampaignMetadataRepository()(implicit db: Database, ec: ExecutionContext) {
+protected [db] class CampaignMetadataRepository()(implicit db: Database) {
   def findFor(campaign: CampaignId): Future[Seq[CampaignMetadata]] = db.run {
     Schema.campaignMetadata.filter(_.campaignId === campaign).result
   }
@@ -317,15 +317,15 @@ protected class CancelTaskRepository()(implicit db: Database, ec: ExecutionConte
   }
 }
 
-protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) {
+protected class UpdateRepository()(implicit ec: ExecutionContext) {
 
   def persist(update: Update): DBIO[UpdateId] =
-    (Schema.updates += update).map(_ => update.id).handleIntegrityErrors(Errors.ConflictingUpdate)
+    (Schema.updates += update).map(_ => update.uuid).handleIntegrityErrors(Errors.ConflictingUpdate)
 
   def all(ns: Namespace, offset: Long, limit: Long): DBIO[PaginationResult[UpdateId]] =
       Schema.updates
         .filter(_.namespace === ns)
-        .map(_.id)
+        .map(_.uuid)
         .paginateResult(offset, limit)
 
 }
