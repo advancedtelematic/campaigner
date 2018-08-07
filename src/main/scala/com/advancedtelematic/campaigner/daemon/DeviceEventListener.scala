@@ -3,10 +3,9 @@ package com.advancedtelematic.campaigner.daemon
 import akka.Done
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.client.DirectorClient
-import com.advancedtelematic.campaigner.data.DataType.{CampaignId, DeviceStatus}
-import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns}
-import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, EventType}
+import com.advancedtelematic.campaigner.data.DataType.CampaignId
+import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns, DeviceUpdateProcess}
+import com.advancedtelematic.libats.messaging_datatype.DataType.EventType
 import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceEventMessage
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
@@ -34,29 +33,14 @@ class DeviceEventListener(directorClient: DirectorClient)(implicit db: Database,
 
   val campaigns = Campaigns()
 
-  private def startDeviceUpdate(ns: Namespace, campaignId: CampaignId, deviceId: DeviceId): Future[Unit] = {
-    for {
-      campaign <- campaigns.findCampaign(ns, campaignId)
-      affected <- directorClient.setMultiUpdateTarget(ns, campaign.update, Seq(deviceId))
-      _ <- affected.find(_ == deviceId) match {
-        case Some(_) =>
-          campaigns.markDeviceAccepted(campaignId, campaign.update, deviceId)
-        case None =>
-          _logger.warn(s"Could not start mtu update for device $deviceId after device accepted, device is no longer affected")
-
-          campaigns.scheduleDevice(campaignId, campaign.update, deviceId).flatMap { _ =>
-            campaigns.finishDevice(campaign.update, deviceId, DeviceStatus.failed)
-          }
-      }
-    } yield ()
-  }
+  val deviceUpdateProcess = new DeviceUpdateProcess(directorClient)
 
   def apply(msg: DeviceEventMessage): Future[Done] =
     msg.event.eventType match {
       case CampaignAcceptedEventType =>
         for {
           acceptedCampaign <- Future.fromTry(msg.event.payload.as[AcceptedCampaign].toTry)
-          _ <- startDeviceUpdate(msg.namespace, acceptedCampaign.campaignId, msg.event.deviceUuid)
+          _ <- deviceUpdateProcess.processDeviceAcceptedUpdate(msg.namespace, acceptedCampaign.campaignId, msg.event.deviceUuid)
         } yield Done
 
       case e @ EventType(CampaignAcceptedEventType.id, version) =>

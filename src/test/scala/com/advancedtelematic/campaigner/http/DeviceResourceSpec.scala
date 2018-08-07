@@ -22,7 +22,7 @@ class DeviceResourceSpec
     val campaignId = createCampaignOk(request)
     val device = DeviceId.generate()
 
-    campaigns.scheduleDevice(campaignId, request.update, device).futureValue
+    campaigns.scheduleDevices(campaignId, request.update, device).futureValue
 
     Get(apiUri(s"device/${device.uuid}/campaigns")).withHeaders(header) ~> routes ~> check {
       status shouldBe StatusCodes.OK
