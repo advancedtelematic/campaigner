@@ -1,6 +1,6 @@
 package com.advancedtelematic.campaigner.actor
 
-import akka.actor.{Actor, ActorLogging, Props}
+import akka.actor.{Actor, ActorLogging, Props, Status}
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
@@ -13,7 +13,6 @@ object CampaignScheduler {
   private object NextGroup
   private final case class ScheduleGroup(group: GroupId)
   final case class CampaignComplete(campaign: CampaignId)
-  private case class Error(msg: String, error: Throwable)
 
   def props(registry: DeviceRegistryClient,
             director: DirectorClient,
@@ -58,8 +57,8 @@ class CampaignScheduler(registry: DeviceRegistryClient,
       log.debug(s"next group")
       campaigns.remainingGroups(campaign.id)
         .map(_.headOption)
-        .recover { case err => Error("could not retrieve remaining groups", err) }
         .pipeTo(self)
+
     case Some(group: GroupId) =>
       log.debug(s"scheduling $group")
       schedule(group)
@@ -69,7 +68,8 @@ class CampaignScheduler(registry: DeviceRegistryClient,
     case GroupComplete(group) =>
       log.debug(s"$group complete")
       self ! NextGroup
-    case Error(msg, err) => log.error(s"$msg: ${err.getMessage}")
-  }
 
+    case Status.Failure(ex) =>
+      log.error("Error occurred", ex)
+  }
 }

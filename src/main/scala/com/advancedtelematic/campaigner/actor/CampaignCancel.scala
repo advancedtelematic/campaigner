@@ -52,7 +52,7 @@ class CampaignCanceler(director: DirectorClient,
 
   def run(): Future[Done] = for {
     _ <- campaignRepo.find(ns, campaign)
-    _ <- deviceUpdateRepo.findByCampaignStream(campaign, DeviceStatus.scheduled)
+    _ <- deviceUpdateRepo.findByCampaignStream(campaign, DeviceStatus.scheduled, DeviceStatus.accepted)
       .grouped(batchSize)
       .via(Flow[Seq[DeviceId]].mapAsync(1)(cancel))
       .runWith(Sink.ignore)

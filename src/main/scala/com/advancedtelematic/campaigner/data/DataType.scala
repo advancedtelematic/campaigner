@@ -27,7 +27,8 @@ object DataType {
     name: String,
     updateId: UpdateId,
     createdAt: Instant,
-    updatedAt: Instant
+    updatedAt: Instant,
+    autoAccept: Boolean = true
   )
 
   final case class UpdateSource(id: String, sourceType: UpdateType)
@@ -148,7 +149,8 @@ object DataType {
 
   object DeviceStatus extends Enumeration {
     type DeviceStatus = Value
-    val scheduled, successful, cancelled, failed = Value
+    // TODO: Check all usages of scheduled, when to use accepted?
+    val scheduled, accepted, successful, cancelled, failed = Value
   }
 
   object CancelTaskStatus extends Enumeration {

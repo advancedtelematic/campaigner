@@ -64,6 +64,9 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
       .result
   }
 
+  def findByCampaign(campaign: CampaignId, status: DeviceStatus): Future[Set[DeviceId]] =
+    db.run(findByCampaignAction(campaign, status))
+
   protected [db] def findByCampaignAction(campaign: CampaignId, status: DeviceStatus): DBIO[Set[DeviceId]] =
     Schema.deviceUpdates
       .filter(_.campaignId === campaign)
@@ -72,12 +75,12 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
       .result
       .map(_.toSet)
 
-  def findByCampaignStream(campaign: CampaignId, status: DeviceStatus): Source[DeviceId, NotUsed] =
+  def findByCampaignStream(campaign: CampaignId, status: DeviceStatus*): Source[DeviceId, NotUsed] =
     Source.fromPublisher {
       db.stream {
         Schema.deviceUpdates
           .filter(_.campaignId === campaign)
-          .filter(_.status === status)
+          .filter(_.status.inSet(status))
           .map(_.deviceId)
           .result
       }

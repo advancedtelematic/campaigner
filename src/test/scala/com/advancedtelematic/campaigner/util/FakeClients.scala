@@ -57,4 +57,8 @@ class FakeDirectorClient extends DirectorClient {
     cancelled.put(device, ())
     FastFuture.successful(())
   }
+
+  override def findAffected(ns: Namespace, updateId: UpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
+    FastFuture.successful(devices)
+  }
 }
