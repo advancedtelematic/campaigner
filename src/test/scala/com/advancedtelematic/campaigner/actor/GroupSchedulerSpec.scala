@@ -10,12 +10,14 @@ import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.scalacheck.{Arbitrary, Gen}
+
 import scala.concurrent.Future
 
 class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
 
   import Arbitrary._
   import GroupScheduler._
+
   import scala.concurrent.duration._
 
   def clearClientState() = {
@@ -45,9 +47,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
       case BatchComplete(grp, _) => grp
       case GroupComplete(grp)    => grp
     }
-    registry.state.get(group).take(batch).toSet should contain allElementsOf (
-      director.updates.get(campaign.updateId).toSet
-    )
+    registry.state.get(group).take(batch).toSet should contain allElementsOf director.updates.get(campaign.updateId)
   }
 
   "group scheduler" should "respect groups with processed devices > batch size" in {

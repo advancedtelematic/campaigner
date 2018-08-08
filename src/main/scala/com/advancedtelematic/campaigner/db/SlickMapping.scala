@@ -1,6 +1,6 @@
 package com.advancedtelematic.campaigner.db
 
-import com.advancedtelematic.campaigner.data.DataType.{CancelTaskStatus, DeviceStatus, GroupStatus, MetadataType}
+import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.slick.codecs.SlickEnumMapper
 
 object SlickMapping {
@@ -8,4 +8,5 @@ object SlickMapping {
   implicit val deviceStatusMapper = SlickEnumMapper.enumMapper(DeviceStatus)
   implicit val groupStatusMapper = SlickEnumMapper.enumMapper(GroupStatus)
   implicit val cancelTaskStatusMapper = SlickEnumMapper.enumMapper(CancelTaskStatus)
+  implicit val updateTypeMapper = SlickEnumMapper.enumMapper(UpdateType)
 }

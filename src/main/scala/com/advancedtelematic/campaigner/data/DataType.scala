@@ -1,8 +1,5 @@
 package com.advancedtelematic.campaigner.data
 
-import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import java.time.Instant
 import java.util.UUID
 
@@ -11,7 +8,10 @@ import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTas
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
-
+import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
+import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 
 object DataType {
 
@@ -34,6 +34,23 @@ object DataType {
     createdAt: Instant,
     updatedAt: Instant
   )
+
+  final case class UpdateSource(id: String, sourceType: UpdateType)
+
+  final case class Update(
+                           uuid: UpdateId,
+                           source: UpdateSource,
+                           namespace: Namespace,
+                           name: String,
+                           description: Option[String],
+                           createdAt: Instant,
+                           updatedAt: Instant
+                         )
+
+  final case class CreateUpdate(updateSource: UpdateSource, name: String, description: Option[String]) {
+    def mkUpdate(ns: Namespace): Update =
+      Update(UpdateId.generate(), updateSource, ns, name, description, Instant.now, Instant.now)
+  }
 
   case class CampaignMetadata(campaignId: CampaignId, `type`: MetadataType, value: String)
 
@@ -113,6 +130,11 @@ object DataType {
   object CancelTaskStatus extends Enumeration {
     type CancelTaskStatus = Value
     val error, pending, inprogress, completed = Value
+  }
+
+  object UpdateType extends Enumeration {
+    type UpdateType = Value
+    val EXTERNAL, MULTI_TARGET = Value
   }
 
   final case class GroupStats(

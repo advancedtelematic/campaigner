@@ -1,10 +1,11 @@
 package com.advancedtelematic.campaigner.data
 
+import java.time.Instant
+
+import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
-import java.time.Instant
-
 import org.scalacheck.Arbitrary._
 import org.scalacheck.{Arbitrary, Gen}
 
@@ -14,7 +15,9 @@ object Generators {
   val genDeviceId: Gen[DeviceId] = Gen.uuid.map(DeviceId(_))
   val genGroupId: Gen[GroupId] = Gen.uuid.map(GroupId(_))
   val genUpdateId: Gen[UpdateId] = Gen.uuid.map(UpdateId(_))
-  val genNamespace: Gen[Namespace] = arbitrary[String].map(Namespace(_))
+  val genNamespace: Gen[Namespace] = arbitrary[String].map(Namespace)
+  val genupdateType: Gen[UpdateType] = Gen.oneOf(UpdateType.values.toSeq)
+
 
   val genCampaignMetadata: Gen[CreateCampaignMetadata] = for {
     t <- Gen.const(MetadataType.install)
@@ -42,6 +45,17 @@ object Generators {
     meta   <- genCampaignMetadata
   } yield UpdateCampaign(n, Option(List(meta)))
 
+  val genUpdateSource: Gen[UpdateSource] = for {
+    id <- arbitrary[String].suchThat(_.length < 200)
+    t <- arbitrary[UpdateType]
+  } yield UpdateSource(id, t)
+
+  val genCreateUpdate: Gen[CreateUpdate] = for {
+    us <- genUpdateSource
+    n <- arbitrary[String]
+    d <- Gen.option(arbitrary[String])
+  } yield CreateUpdate(us, n, d)
+
   val genStats: Gen[Stats] = for {
     p <- Gen.posNum[Long]
     a <- Gen.posNum[Long]
@@ -55,6 +69,8 @@ object Generators {
   implicit lazy val arbCampaign: Arbitrary[Campaign] = Arbitrary(genCampaign)
   implicit lazy val arbCreateCampaign: Arbitrary[CreateCampaign] = Arbitrary(genCreateCampaign)
   implicit lazy val arbUpdateCampaign: Arbitrary[UpdateCampaign] = Arbitrary(genUpdateCampaign)
+  implicit lazy val arbupdateType: Arbitrary[UpdateType] = Arbitrary(genupdateType)
+  implicit lazy val arbCreateUpdate: Arbitrary[CreateUpdate] = Arbitrary(genCreateUpdate)
   implicit lazy val arbStats: Arbitrary[Stats] = Arbitrary(genStats)
 
 }

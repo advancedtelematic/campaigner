@@ -1,19 +1,21 @@
 package com.advancedtelematic.campaigner.db
 
-import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.slick.db.SlickAnyVal._
-import com.advancedtelematic.libats.slick.db.SlickExtensions._
-import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
-import SlickMapping._
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import java.time.Instant
 
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
+import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
+import com.advancedtelematic.campaigner.data.DataType._
+import com.advancedtelematic.campaigner.db.SlickMapping._
+import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
+import com.advancedtelematic.libats.slick.db.SlickAnyVal._
+import com.advancedtelematic.libats.slick.db.SlickExtensions._
+import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import slick.jdbc.MySQLProfile.api._
+import slick.lifted.ProvenShape
 
 
 object Schema {
@@ -87,6 +89,7 @@ object Schema {
 
   protected [db] val deviceUpdates = TableQuery[DeviceUpdatesTable]
 
+
   class CancelTaskTable(tag: Tag) extends Table[CancelTask](tag, "campaign_cancels") {
     def campaignId = column[CampaignId]("campaign_id", O.PrimaryKey)
     def taskStatus = column[CancelTaskStatus]("status")
@@ -95,4 +98,30 @@ object Schema {
       ((CancelTask.apply _).tupled, CancelTask.unapply)
   }
   protected [db] val cancelTasks = TableQuery[CancelTaskTable]
+
+
+  type UpdatesTableRow = (UpdateId, String, UpdateType, Namespace, String, Option[String], Instant, Instant)
+
+  class UpdatesTable(tag: Tag) extends Table[Update](tag, "updates"){
+    def uuid = column[UpdateId]("uuid", O.PrimaryKey)
+    def updateId = column[String]("update_id")
+    def updateSourceType = column[UpdateType]("update_source_type")
+    def namespace = column[Namespace]("namespace")
+    def name = column[String]("name")
+    def description = column[Option[String]]("description")
+    def createdAt = column[Instant]("created_at")
+    def updatedAt = column[Instant]("updated_at")
+
+    def uniqueUpdateId = index("unique_update_id", (namespace, updateId), unique = true)
+
+    private def fromRow(row: UpdatesTableRow): Update = Update(row._1, UpdateSource(row._2, row._3), row._4, row._5, row._6, row._7, row._8)
+
+    private def toRow(update: Update): Option[UpdatesTableRow] =
+      Some((update.uuid, update.source.id, update.source.sourceType, update.namespace, update.name, update.description, update.createdAt, update.updatedAt))
+
+
+    override def * : ProvenShape[Update] = (uuid, updateId, updateSourceType, namespace, name, description, createdAt, updatedAt) <> (fromRow, toRow)
+  }
+  protected [db] val updates = TableQuery[UpdatesTable]
+
 }
