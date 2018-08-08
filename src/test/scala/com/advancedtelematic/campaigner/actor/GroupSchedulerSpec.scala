@@ -1,6 +1,7 @@
 package com.advancedtelematic.campaigner.actor
 
 import akka.testkit.TestProbe
+import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, UpdateSupport}
@@ -42,7 +43,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
 
     clearClientState()
     deviceRegistry.setGroup(group, arbitrary[Seq[DeviceId]].sample.get)
-    campaigns.create(campaign, Set(group), Seq.empty).futureValue
+    campaigns.create(campaign, NonEmptyList.one(group), Seq.empty).futureValue
 
     parent.childActorOf(props)
 
@@ -61,7 +62,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     val n        = Gen.choose(batch, batch * 10).sample.get
     val devs     = Gen.listOfN(n, genDeviceId).sample.get
 
-    campaigns.create(campaign, Set(group), Seq.empty).futureValue
+    campaigns.create(campaign, NonEmptyList.one(group), Seq.empty).futureValue
 
     clearClientState()
     deviceRegistry.setGroup(group, devs)
@@ -89,7 +90,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     clearClientState()
 
     deviceRegistry.setGroup(group, devs)
-    campaigns.create(campaign, Set(group), Seq.empty).futureValue
+    campaigns.create(campaign, NonEmptyList.one(group), Seq.empty).futureValue
     director.affected.put(update.source.id, devs.toSet)
 
     val parent = TestProbe()
@@ -113,7 +114,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     val n        = Gen.choose(1, batch-1).sample.get
     val devs     = Gen.listOfN(n, genDeviceId).sample.get
 
-    campaigns.create(campaign, Set(group), Seq.empty).futureValue
+    campaigns.create(campaign, NonEmptyList.one(group), Seq.empty).futureValue
 
     clearClientState()
     deviceRegistry.setGroup(group, devs)

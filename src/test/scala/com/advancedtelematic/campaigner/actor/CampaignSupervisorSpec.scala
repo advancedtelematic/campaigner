@@ -2,6 +2,7 @@ package com.advancedtelematic.campaigner.actor
 
 import akka.http.scaladsl.util.FastFuture
 import akka.testkit.TestProbe
+import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
@@ -32,13 +33,13 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
   "campaign supervisor" should "pick up unfinished and fresh campaigns" in {
     val campaign1 = buildCampaignWithUpdate
     val campaign2 = buildCampaignWithUpdate
-    val group     = GroupId.generate
+    val group     = NonEmptyList.one(GroupId.generate)
     val parent    = TestProbe()
 
-    campaigns.create(campaign1, Set(group), Seq.empty).futureValue
-    campaigns.create(campaign2, Set(group), Seq.empty).futureValue
+    campaigns.create(campaign1, group, Seq.empty).futureValue
+    campaigns.create(campaign2, group, Seq.empty).futureValue
 
-    campaigns.scheduleGroups(campaign1.id, Set(group)).futureValue
+    campaigns.scheduleGroups(campaign1.id, group).futureValue
 
     parent.childActorOf(CampaignSupervisor.props(
       deviceRegistry,
@@ -51,7 +52,7 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
     parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign1.id)))
     parent.expectMsg(3.seconds, CampaignComplete(campaign1.id))
 
-    campaigns.scheduleGroups(campaign2.id, Set(group)).futureValue
+    campaigns.scheduleGroups(campaign2.id, group).futureValue
 
     parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign2.id)))
   }
@@ -74,7 +75,7 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
 
   "campaign supervisor" should "clean out campaigns that are marked to be cancelled" in {
     val campaign = buildCampaignWithUpdate
-    val group    = GroupId.generate
+    val group    = NonEmptyList.one(GroupId.generate)
     val parent   = TestProbe()
     val n        = Gen.choose(batch, batch * 2).sample.get
     val devs     = Gen.listOfN(n, genDeviceId).sample.get
@@ -86,8 +87,8 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
         FastFuture.successful(devs.drop(offset.toInt).take(limit.toInt))
     }
 
-    campaigns.create(campaign, Set(group), Seq.empty).futureValue
-    campaigns.scheduleGroups(campaign.id, Set(group))
+    campaigns.create(campaign, group, Seq.empty).futureValue
+    campaigns.scheduleGroups(campaign.id, group)
 
     parent.childActorOf(CampaignSupervisor.props(
       registry,
@@ -96,12 +97,12 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
       10.seconds,
       schedulerBatchSize
     ))
-    parent.expectMsg(2.seconds, CampaignsScheduled(Set(campaign.id)))
-    expectNoMessage(2.seconds)
+    parent.expectMsg(5.seconds, CampaignsScheduled(Set(campaign.id)))
+    expectNoMessage(5.seconds)
 
     campaigns.cancel(campaign.id).futureValue
-    parent.expectMsg(2.seconds, CampaignsCancelled(Set(campaign.id)))
-    expectNoMessage(2.seconds)
+    parent.expectMsg(5.seconds, CampaignsCancelled(Set(campaign.id)))
+    expectNoMessage(5.seconds)
   }
 
 }

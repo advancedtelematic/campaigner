@@ -13,6 +13,7 @@ import org.scalacheck.Gen
 import org.scalatest.Matchers
 import org.scalatest.concurrent.ScalaFutures
 import CampaignerSpecUtil._
+import cats.data.NonEmptyList
 import com.advancedtelematic.libats.data.DataType.Namespace
 
 import scala.concurrent.Future
@@ -48,14 +49,14 @@ trait DatabaseUpdateSpecUtil {
     updateRepo.persist(update)
   }
 
-  def createDbCampaign(namespace: Namespace, updateId: UpdateId, groups: Set[GroupId] = Set.empty): Future[Campaign] = {
+  def createDbCampaign(namespace: Namespace, updateId: UpdateId, groups: NonEmptyList[GroupId]): Future[Campaign] = {
     val campaign = arbitrary[Campaign].gen.copy(updateId = updateId, namespace = namespace)
     campaigns.create(campaign, groups, Seq.empty).map(_ => campaign)
   }
 
-  def createDbCampaignWithUpdate(maybeCampaign: Option[Campaign] = None, groups: Set[GroupId] = Set.empty): Future[Campaign] = {
+  def createDbCampaignWithUpdate(maybeCampaign: Option[Campaign] = None, maybeGroups: Option[NonEmptyList[GroupId]] = None): Future[Campaign] = {
     val campaign = maybeCampaign.getOrElse(arbitrary[Campaign].gen)
-
+    val groups = maybeGroups.getOrElse(NonEmptyList.one(GroupId.generate()))
     for {
       _ <- createDbUpdate(campaign.updateId)
       _ <- campaigns.create(campaign, groups, Seq.empty)

@@ -2,6 +2,7 @@ package com.advancedtelematic.campaigner.actor
 
 import akka.http.scaladsl.util.FastFuture
 import akka.testkit.TestProbe
+import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
@@ -27,13 +28,13 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
   }
 
   "campaign scheduler" should "trigger updates for each group" in {
-    val groups   = arbitrary[Set[GroupId]].sample.get
-    val campaign = createDbCampaignWithUpdate(groups = groups).futureValue
+    val groups   = arbitrary[NonEmptyList[GroupId]].sample.get
+    val campaign = createDbCampaignWithUpdate(maybeGroups = Some(groups)).futureValue
 
     val parent   = TestProbe()
 
     campaigns.scheduleGroups(campaign.id, groups).futureValue
-    groups.foreach { g => deviceRegistry.setGroup(g, arbitrary[Seq[DeviceId]].sample.get) }
+    groups.map{ g => deviceRegistry.setGroup(g, arbitrary[Seq[DeviceId]].sample.get) }
 
     parent.childActorOf(CampaignScheduler.props(
       deviceRegistry,
@@ -44,12 +45,12 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
     ))
     parent.expectMsg(1.minute, CampaignComplete(campaign.id))
 
-    deviceRegistry.allGroups() shouldBe groups
+    deviceRegistry.allGroups() shouldBe groups.toList.toSet
   }
 
   "PRO-3672: campaign with 0 affected devices" should "yield a `finished` status" in {
-    val groups   = Set(arbitrary[GroupId].sample.get)
-    val campaign = createDbCampaignWithUpdate(groups = groups).futureValue
+    val groups   = arbitrary[NonEmptyList[GroupId]].sample.get
+    val campaign = createDbCampaignWithUpdate(maybeGroups = Some(groups)).futureValue
     val parent   = TestProbe()
 
     val director = new DirectorClient {
@@ -81,7 +82,7 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
       schedulerDelay,
       schedulerBatchSize
     ))
-    parent.expectMsg(3.seconds, CampaignComplete(campaign.id))
+    parent.expectMsg(20.seconds, CampaignComplete(campaign.id))
 
     campaigns.campaignStats(campaign.id).futureValue.status shouldBe CampaignStatus.finished
   }

@@ -1,8 +1,7 @@
 package com.advancedtelematic.campaigner.util
 
-import org.scalactic.source
 import akka.http.scaladsl.model.StatusCodes._
-import akka.http.scaladsl.model.Uri
+import akka.http.scaladsl.model.{HttpRequest, Uri}
 import akka.http.scaladsl.model.Uri.Query
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
@@ -15,6 +14,8 @@ import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.test.DatabaseSpec
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import io.circe.Json
+import org.scalactic.source
 import org.scalatest.Suite
 import org.scalatest.time.{Seconds, Span}
 
@@ -22,7 +23,7 @@ trait ResourceSpec extends ScalatestRouteTest
   with DatabaseSpec {
   self: Suite with CampaignerSpec =>
 
-  implicit val defaultTimeout = RouteTestTimeout(Span(5, Seconds))
+  implicit val defaultTimeout: RouteTestTimeout = RouteTestTimeout(Span(5, Seconds))
 
   def apiUri(path: String): Uri = "/api/v2/" + path
 
@@ -39,8 +40,14 @@ trait ResourceSpec extends ScalatestRouteTest
 
   lazy val routes = new Routes(fakeDirector, fakeRegistry, fakeResolver, fakeUserProfile).routes
 
+  def createCampaign(request: Json): HttpRequest =
+    Post(apiUri("campaigns"), request).withHeaders(header)
+
+  def createCampaign(request: CreateCampaign): HttpRequest =
+    Post(apiUri("campaigns"), request).withHeaders(header)
+
   def createCampaignOk(request: CreateCampaign): CampaignId =
-    Post(apiUri("campaigns"), request).withHeaders(header) ~> routes ~> check {
+    createCampaign(request) ~> routes ~> check {
       status shouldBe Created
       responseAs[CampaignId]
     }
