@@ -6,9 +6,8 @@ import akka.Done
 import com.advancedtelematic.campaigner.daemon.DeviceEventListener.AcceptedCampaign
 import com.advancedtelematic.campaigner.data.DataType.{Campaign, DeviceStatus, DeviceUpdate}
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.util.FakeDirectorClient
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, UpdateSupport}
-import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil}
+import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil, FakeDirectorClient}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, Event}
 import com.advancedtelematic.libats.messaging_datatype.Messages
 import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceEventMessage

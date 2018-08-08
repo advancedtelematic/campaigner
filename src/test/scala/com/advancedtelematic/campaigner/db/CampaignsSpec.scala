@@ -1,6 +1,7 @@
 package com.advancedtelematic.campaigner.db
 
 import akka.http.scaladsl.util.FastFuture
+import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.http.Errors._
@@ -88,12 +89,12 @@ class CampaignsSpec extends AsyncFlatSpec
 
   "finishing one device" should "work with several campaigns" in {
     val ns = arbitrary[Namespace].sample.get
-    val group = GroupId.generate()
+    val group = NonEmptyList.one(GroupId.generate())
     val device = DeviceId.generate()
 
     for {
       update <- createDbUpdate(UpdateId.generate())
-      newCampaigns <- FastFuture.traverse(arbitrary[Seq[Int]].sample.get)(_ => createDbCampaign(ns, update, Set(group)))
+      newCampaigns <- FastFuture.traverse(arbitrary[Seq[Int]].sample.get)(_ => createDbCampaign(ns, update, group))
       _ <- FastFuture.traverse(newCampaigns)(c => campaigns.scheduleDevices(c.id, update, device))
       _ <- campaigns.finishDevice(update, device, DeviceStatus.successful)
       c <- campaigns.countFinished(newCampaigns.head.id)

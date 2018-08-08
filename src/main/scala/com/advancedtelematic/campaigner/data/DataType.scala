@@ -3,6 +3,7 @@ package com.advancedtelematic.campaigner.data
 import java.time.Instant
 import java.util.UUID
 
+import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
@@ -59,7 +60,7 @@ object DataType {
 
   final case class CreateCampaign(name: String,
                                   update: UpdateId,
-                                  groups: Set[GroupId],
+                                  groups: NonEmptyList[GroupId],
                                   metadata: Option[Seq[CreateCampaignMetadata]] = None,
                                   approvalNeeded: Option[Boolean] = Some(false))
   {
