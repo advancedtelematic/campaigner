@@ -8,5 +8,5 @@ object SlickMapping {
   implicit val deviceStatusMapper = SlickEnumMapper.enumMapper(DeviceStatus)
   implicit val groupStatusMapper = SlickEnumMapper.enumMapper(GroupStatus)
   implicit val cancelTaskStatusMapper = SlickEnumMapper.enumMapper(CancelTaskStatus)
-  implicit val updateKindMapper = SlickEnumMapper.enumMapper(UpdateKind)
+  implicit val updateTypeMapper = SlickEnumMapper.enumMapper(UpdateType)
 }

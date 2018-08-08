@@ -48,18 +48,9 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     }
   }
 
-  "Creating two updates without updateId" should "be allowed" in {
-    val request1: CreateUpdate = genCreateUpdate.sample.get.copy(updateId = None)
-    val request2: CreateUpdate = genCreateUpdate.sample.get.copy(updateId = None)
-    createUpdateOk(request1)
-    createUpdate(request2) ~> routes ~> check {
-      status shouldBe OK
-    }
-  }
-
   "Creating two updates with the same updateId" should "fail with Conflict error" in {
-    val request1: CreateUpdate = genCreateUpdate.retryUntil(_.updateId.isDefined).sample.get
-    val request2: CreateUpdate = genCreateUpdate.sample.get.copy(updateId = request1.updateId)
+    val request1: CreateUpdate = genCreateUpdate.sample.get
+    val request2: CreateUpdate = genCreateUpdate.sample.get.copy(updateSource= request1.updateSource)
     createUpdateOk(request1)
     createUpdate(request2) ~> routes ~> check {
       status shouldBe Conflict

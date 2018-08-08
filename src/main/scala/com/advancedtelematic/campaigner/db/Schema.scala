@@ -6,7 +6,7 @@ import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTas
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
-import com.advancedtelematic.campaigner.data.DataType.UpdateKind.UpdateKind
+import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.SlickMapping._
 import com.advancedtelematic.libats.data.DataType.Namespace
@@ -15,6 +15,7 @@ import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import slick.jdbc.MySQLProfile.api._
+import slick.lifted.ProvenShape
 
 
 object Schema {
@@ -99,10 +100,12 @@ object Schema {
   protected [db] val cancelTasks = TableQuery[CancelTaskTable]
 
 
+  type UpdatesTableRow = (UpdateId, String, UpdateType, Namespace, String, Option[String], Instant, Instant)
+
   class UpdatesTable(tag: Tag) extends Table[Update](tag, "updates"){
     def uuid = column[UpdateId]("uuid", O.PrimaryKey)
-    def updateId = column[Option[String]]("update_id")
-    def updateKind = column[UpdateKind]("update_kind")
+    def updateId = column[String]("update_id")
+    def updateSourceType = column[UpdateType]("update_source_type")
     def namespace = column[Namespace]("namespace")
     def name = column[String]("name")
     def description = column[Option[String]]("description")
@@ -111,7 +114,13 @@ object Schema {
 
     def uniqueUpdateId = index("unique_update_id", (namespace, updateId), unique = true)
 
-    override def * = (uuid, updateId, updateKind, namespace, name, description, createdAt, updatedAt) <> ((Update.apply _).tupled, Update.unapply)
+    private def fromRow(row: UpdatesTableRow): Update = Update(row._1, UpdateSource(row._2, row._3), row._4, row._5, row._6, row._7, row._8)
+
+    private def toRow(update: Update): Option[UpdatesTableRow] =
+      Some((update.uuid, update.source.id, update.source.sourceType, update.namespace, update.name, update.description, update.createdAt, update.updatedAt))
+
+
+    override def * : ProvenShape[Update] = (uuid, updateId, updateSourceType, namespace, name, description, createdAt, updatedAt) <> (fromRow, toRow)
   }
   protected [db] val updates = TableQuery[UpdatesTable]
 
