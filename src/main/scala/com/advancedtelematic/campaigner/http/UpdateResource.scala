@@ -1,7 +1,9 @@
 package com.advancedtelematic.campaigner.http
 
-import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.headers.Location
 import akka.http.scaladsl.server.{Directive1, Route}
+import akka.http.scaladsl.server.Directives._
 import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.CreateUpdate
@@ -24,9 +26,14 @@ class UpdateResource(extractNamespace: Directive1[Namespace])
           (get & parameters('limit.as[Long].?) & parameters('offset.as[Long].?)) { (limit, offset) =>
             complete(updates.allUpdates(ns, offset, limit))
           } ~
-            (post & entity(as[CreateUpdate])) { request =>
-              complete(updates.create(request.mkUpdate(ns)))
+          (post & entity(as[CreateUpdate])) { request =>
+            onSuccess(updates.create(request.mkUpdate(ns))) { uuid =>
+              extractRequest { req =>
+                val resourceUri = req.uri.withPath(req.uri.path / uuid.uuid.toString)
+                complete((StatusCodes.Created, List(Location(resourceUri)), uuid))
+              }
             }
+          }
         }
 
       }
