@@ -4,7 +4,7 @@ import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.headers.Location
 import com.advancedtelematic.campaigner.data.Codecs._
-import com.advancedtelematic.campaigner.data.DataType.CreateUpdate
+import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, Update}
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Updates, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
@@ -37,10 +37,10 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     val updateId2 = createUpdateOk(request2)
     getUpdates ~> routes ~> check {
       status shouldBe OK
-      val updates = responseAs[PaginationResult[UpdateId]]
+      val updates = responseAs[PaginationResult[Update]]
       updates.total shouldBe 2
-      updates.values should contain(updateId1)
-      updates.values should contain(updateId2)
+      updates.values.find(_.uuid == updateId1) shouldBe defined
+      updates.values.find(_.uuid == updateId2) shouldBe defined
     }
   }
 

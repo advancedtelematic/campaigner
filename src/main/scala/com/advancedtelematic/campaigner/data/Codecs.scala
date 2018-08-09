@@ -31,6 +31,9 @@ object Codecs {
   implicit val decoderUpdateSource: Decoder[UpdateSource] = deriveDecoder
   implicit val encoderUpdateSource: Encoder[UpdateSource] = deriveEncoder
 
+  implicit val decoderUpdate: Decoder[Update] = deriveDecoder
+  implicit val encoderUpdate: Encoder[Update] = deriveEncoder
+
   implicit val decoderCreateCampaign: Decoder[CreateCampaign] = deriveDecoder
   implicit val encoderCreateCampaign: Encoder[CreateCampaign] = deriveEncoder
 

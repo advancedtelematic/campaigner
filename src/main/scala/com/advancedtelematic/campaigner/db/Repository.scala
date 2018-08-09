@@ -322,10 +322,9 @@ protected class UpdateRepository()(implicit ec: ExecutionContext) {
   def persist(update: Update): DBIO[UpdateId] =
     (Schema.updates += update).map(_ => update.uuid).handleIntegrityErrors(Errors.ConflictingUpdate)
 
-  def all(ns: Namespace, offset: Long, limit: Long): DBIO[PaginationResult[UpdateId]] =
+  def all(ns: Namespace, offset: Long, limit: Long): DBIO[PaginationResult[Update]] =
       Schema.updates
         .filter(_.namespace === ns)
-        .map(_.uuid)
         .paginateResult(offset, limit)
 
 }
