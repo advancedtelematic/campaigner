@@ -13,7 +13,7 @@ scalacOptions := Seq(
   "-Ywarn-dead-code",
   "-Ywarn-numeric-widen",
   "-Ywarn-unused-import"
-  )
+)
 
 // allow imports in the console on a single line
 scalacOptions in (Compile, console) ~= (_ filterNot (_ == "-Ywarn-unused-import"))
@@ -40,7 +40,6 @@ libraryDependencies ++= {
     "com.typesafe.slick" %% "slick" % slickV,
     "com.typesafe.slick" %% "slick-hikaricp" % slickV,
     "org.mariadb.jdbc" % "mariadb-java-client" % "2.2.5",
-
     "com.advancedtelematic" %% "libats" % libatsV,
     "com.advancedtelematic" %% "libats-auth" % libatsV,
     "com.advancedtelematic" %% "libats-messaging" % libatsV,
@@ -51,7 +50,6 @@ libraryDependencies ++= {
     "com.advancedtelematic" %% "libats-slick" % libatsV,
     "com.advancedtelematic" %% "libtuf" % libtufV,
     "com.advancedtelematic" %% "libtuf-server" % libtufV,
-
     "org.scalacheck" %% "scalacheck" % "1.13.5" % Test,
     "org.scalatest" %% "scalatest" % scalaTestV % Test
   )
@@ -93,4 +91,19 @@ Versioning.settings
 
 Release.settings
 
-enablePlugins(Versioning.Plugin)
+enablePlugins(Versioning.Plugin, FlywayPlugin)
+
+flywayTable := "schema_version"
+flywayLocations += "db/migration"
+flywayUrl := sys.env
+  .get("DB_URL")
+  .orElse(sys.props.get("campaigner.db.url"))
+  .getOrElse("jdbc:mysql://localhost:3306/campaigner")
+flywayUser := sys.env
+  .get("DB_USER")
+  .orElse(sys.props.get("campaigner.db.user"))
+  .getOrElse("campaigner")
+flywayPassword := sys.env
+  .get("SACHER_DB_PASSWORD")
+  .orElse(sys.props.get("campaigner.db.password"))
+  .getOrElse("campaigner")

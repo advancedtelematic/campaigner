@@ -14,7 +14,7 @@ object Updates {
 
 protected[db] class Updates(implicit db: Database, ec: ExecutionContext) extends UpdateSupport  {
 
-  def allUpdates(ns: Namespace, offset: Option[Long], limit: Option[Long]): Future[PaginationResult[UpdateId]] =
+  def allUpdates(ns: Namespace, offset: Option[Long], limit: Option[Long]): Future[PaginationResult[Update]] =
     db.run(updateRepo.all(ns, offset.getOrElse(0L), limit.getOrElse(50L)))
 
   def create(update: Update) : Future[UpdateId] = db.run(updateRepo.persist(update))

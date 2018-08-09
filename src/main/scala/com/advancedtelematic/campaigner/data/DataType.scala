@@ -134,7 +134,7 @@ object DataType {
 
   object UpdateType extends Enumeration {
     type UpdateType = Value
-    val EXTERNAL, MULTI_TARGET = Value
+    val external, multi_target = Value
   }
 
   final case class GroupStats(

@@ -2,10 +2,11 @@ package com.advancedtelematic.campaigner.http
 
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.StatusCodes._
+import akka.http.scaladsl.model.headers.Location
 import com.advancedtelematic.campaigner.data.Codecs._
-import com.advancedtelematic.campaigner.data.DataType.CreateUpdate
+import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, Update}
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.{UpdateSupport, Updates}
+import com.advancedtelematic.campaigner.db.{Updates, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
@@ -20,7 +21,9 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
 
   private def createUpdateOk(request: CreateUpdate): UpdateId =
     createUpdate(request) ~> routes ~> check {
-      status shouldBe OK
+      status shouldBe Created
+      import org.scalatest.OptionValues._
+      header[Location].value.uri.isAbsolute shouldBe true
       responseAs[UpdateId]
     }
 
@@ -34,18 +37,16 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     val updateId2 = createUpdateOk(request2)
     getUpdates ~> routes ~> check {
       status shouldBe OK
-      val updates = responseAs[PaginationResult[UpdateId]]
+      val updates = responseAs[PaginationResult[Update]]
       updates.total shouldBe 2
-      updates.values should contain(updateId1)
-      updates.values should contain(updateId2)
+      updates.values.find(_.uuid == updateId1) shouldBe defined
+      updates.values.find(_.uuid == updateId2) shouldBe defined
     }
   }
 
   "POST to /updates" should "create a new update" in {
     val request: CreateUpdate = genCreateUpdate.sample.get
-    createUpdate(request) ~> routes ~> check {
-      status shouldBe OK
-    }
+    createUpdateOk(request)
   }
 
   "Creating two updates with the same updateId" should "fail with Conflict error" in {
