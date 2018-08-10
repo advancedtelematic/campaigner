@@ -14,7 +14,6 @@ import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
 import io.circe.syntax._
 import org.scalacheck.Arbitrary._
-import org.scalacheck.Gen
 
 class CampaignResourceSpec extends CampaignerSpec
     with ResourceSpec
@@ -189,8 +188,9 @@ class CampaignResourceSpec extends CampaignerSpec
   }
 
   it should "return error when metadata already exists" in {
-    val metadata = Gen.listOfN(2, genCampaignMetadata).sample.get
-    val request = arbitrary[CreateCampaign].sample.get.copy(metadata = Some(metadata))
+    val metadata = genCampaignMetadata.sample.get
+    val metadatas = Seq(metadata, genCampaignMetadata.sample.get.copy(`type` = metadata.`type`))
+    val request = arbitrary[CreateCampaign].sample.get.copy(metadata = Some(metadatas))
 
     Post(apiUri("campaigns"), request).withHeaders(header) ~> routes ~> check {
       status shouldBe Conflict
