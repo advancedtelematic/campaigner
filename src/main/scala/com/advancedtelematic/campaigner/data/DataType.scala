@@ -54,11 +54,11 @@ object DataType {
     def toCampaignMetadata(campaignId: CampaignId) = CampaignMetadata(campaignId, `type`, value)
   }
 
-  final case class CreateCampaign(
-    name: String,
-    update: UpdateId,
-    groups: Set[GroupId],
-    metadata: Option[Seq[CreateCampaignMetadata]] = None) // TODO: Make it mandatory
+  final case class CreateCampaign(name: String,
+                                  update: UpdateId,
+                                  groups: Set[GroupId],
+                                  metadata: Option[Seq[CreateCampaignMetadata]] = None,
+                                  approvalNeeded: Option[Boolean] = Some(false))
   {
     def mkCampaign(ns: Namespace): Campaign = {
       Campaign(
@@ -67,7 +67,8 @@ object DataType {
         name,
         update,
         Instant.now(),
-        Instant.now()
+        Instant.now(),
+        !approvalNeeded.getOrElse(false)
       )
     }
 
@@ -87,7 +88,8 @@ object DataType {
     createdAt: Instant,
     updatedAt: Instant,
     groups: Set[GroupId],
-    metadata: Seq[CreateCampaignMetadata]
+    metadata: Seq[CreateCampaignMetadata],
+    autoAccept: Boolean
   )
 
   object GetCampaign {
@@ -100,7 +102,8 @@ object DataType {
         c.createdAt,
         c.updatedAt,
         groups,
-        metadata.map(m => CreateCampaignMetadata(m.`type`, m.value))
+        metadata.map(m => CreateCampaignMetadata(m.`type`, m.value)),
+        c.autoAccept
       )
   }
 
@@ -149,7 +152,6 @@ object DataType {
 
   object DeviceStatus extends Enumeration {
     type DeviceStatus = Value
-    // TODO: Check all usages of scheduled, when to use accepted?
     val scheduled, accepted, successful, cancelled, failed = Value
   }
 

@@ -46,7 +46,8 @@ class CampaignResourceSpec extends CampaignerSpec
       campaign.createdAt,
       campaign.updatedAt,
       request.groups,
-      request.metadata.toList.flatten
+      request.metadata.toList.flatten,
+      autoAccept = true
     )
     campaign.createdAt shouldBe campaign.updatedAt
 
@@ -54,6 +55,25 @@ class CampaignResourceSpec extends CampaignerSpec
     campaigns.values should contain (id)
 
     checkStats(id, CampaignStatus.prepared)
+  }
+
+  "POST/GET autoAccept campaign" should "create and return the created campaign" in {
+    val request = arbitrary[CreateCampaign].sample.get.copy(approvalNeeded = Some(false))
+    val id = createCampaignOk(request)
+
+    val campaign = getCampaignOk(id)
+
+    campaign shouldBe GetCampaign(
+      testNs,
+      id,
+      request.name,
+      request.update,
+      campaign.createdAt,
+      campaign.updatedAt,
+      request.groups,
+      request.metadata.toList.flatten,
+      autoAccept = true
+    )
   }
 
   "PUT /campaigns/:campaign_id" should "update a campaign" in {
