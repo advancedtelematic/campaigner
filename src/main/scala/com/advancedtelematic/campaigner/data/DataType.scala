@@ -21,6 +21,8 @@ object DataType {
   final case class GroupId(uuid: UUID) extends UUIDKey
   object GroupId extends UUIDKeyObj[GroupId]
 
+  final case class Vin(value: String) extends AnyVal
+
   final case class Campaign(
     namespace: Namespace,
     id: CampaignId,

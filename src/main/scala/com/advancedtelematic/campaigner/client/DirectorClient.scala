@@ -4,13 +4,36 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model._
 import akka.stream.Materializer
 import cats.syntax.show._
+import com.advancedtelematic.campaigner.data.DataType.Vin
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
-
 import scala.concurrent.{ExecutionContext, Future}
 
-trait DirectorClient {
+import shapeless._
 
+trait Resolver {
+  type SeqDevices = Seq[(DeviceId, Vin)]
+
+  def findAffected(ns: Namespace, updateId: UpdateId, devices: SeqDevices): Future[SeqDevices]
+
+  def setMultiUpdateTarget(ns: Namespace, update: UpdateId, devices: SeqDevices): Future[SeqDevices]
+}
+
+class DirectorResolver(directorClient: DirectorClient) extends Resolver  {
+
+  override def findAffected(ns: Namespace, updateId: UpdateId, devices: SeqDevices): Future[SeqDevices] = {
+    val ss  = devices match {
+      case Inl(o) => o
+      case _ => throw new IllegalArgumentException("")
+    }
+
+    ???
+  }
+
+  override def setMultiUpdateTarget(ns: Namespace, update: UpdateId, devices: SeqDevices): Future[SeqDevices] = ???
+}
+
+trait DirectorClient {
   def setMultiUpdateTarget(
     ns: Namespace,
     update: UpdateId,
