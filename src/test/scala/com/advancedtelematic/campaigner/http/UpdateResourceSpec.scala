@@ -6,15 +6,13 @@ import akka.http.scaladsl.model.headers.Location
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, Update}
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.{Updates, UpdateSupport}
+import com.advancedtelematic.campaigner.db.UpdateSupport
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
 class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSupport {
-
-  val updates = Updates()
 
   private def createUpdate(request: CreateUpdate): HttpRequest =
     Post(apiUri("updates"), request).withHeaders(header)
