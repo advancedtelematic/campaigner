@@ -317,14 +317,15 @@ protected class CancelTaskRepository()(implicit db: Database, ec: ExecutionConte
   }
 }
 
-protected class UpdateRepository()(implicit ec: ExecutionContext) {
+protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) {
 
-  def persist(update: Update): DBIO[UpdateId] =
+  def persist(update: Update): Future[UpdateId] = db.run {
     (Schema.updates += update).map(_ => update.uuid).handleIntegrityErrors(Errors.ConflictingUpdate)
+  }
 
-  def all(ns: Namespace, offset: Long, limit: Long): DBIO[PaginationResult[Update]] =
-      Schema.updates
-        .filter(_.namespace === ns)
-        .paginateResult(offset, limit)
-
+  def all(ns: Namespace, offset: Option[Long], limit: Option[Long]): Future[PaginationResult[Update]] = db.run {
+    Schema.updates
+      .filter(_.namespace === ns)
+      .paginateResult(offset.getOrElse(0L), limit.getOrElse(50L))
+  }
 }

@@ -8,7 +8,7 @@ import akka.http.scaladsl.server.Directives._
 import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, Update}
-import com.advancedtelematic.campaigner.db.Updates
+import com.advancedtelematic.campaigner.db.UpdateSupport
 import com.advancedtelematic.libats.data.DataType.Namespace
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.{Encoder, Json}
@@ -37,9 +37,7 @@ object HypermediaResource {
 final case class HypermediaResource[T](links: Seq[HypermediaResource.Link], value: T)
 
 class UpdateResource(extractNamespace: Directive1[Namespace])
-                    (implicit db: Database, ec: ExecutionContext) extends Settings {
-
-  val updates = Updates()
+                    (implicit db: Database, ec: ExecutionContext) extends Settings with UpdateSupport {
 
   private[this] val pathToUpdates = Path.Empty / "api" / "v2" / "updates"
 
@@ -55,10 +53,10 @@ class UpdateResource(extractNamespace: Directive1[Namespace])
       pathPrefix("updates") {
         pathEnd {
           (get & parameters('limit.as[Long].?) & parameters('offset.as[Long].?)) { (limit, offset) =>
-            complete(updates.allUpdates(ns, offset, limit).map(_.map(linkToSelf)))
+            complete(updateRepo.all(ns, offset, limit).map(_.map(linkToSelf)))
           } ~
           (post & entity(as[CreateUpdate])) { request =>
-            onSuccess(updates.create(request.mkUpdate(ns))) { uuid =>
+            onSuccess(updateRepo.persist(request.mkUpdate(ns))) { uuid =>
               extractRequest { req =>
                 val resourceUri = req.uri.withPath(req.uri.path / uuid.uuid.toString)
                 complete((StatusCodes.Created, List(Location(resourceUri)), uuid))
