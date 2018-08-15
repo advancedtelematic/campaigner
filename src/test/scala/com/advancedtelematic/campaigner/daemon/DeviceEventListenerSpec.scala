@@ -3,12 +3,11 @@ package com.advancedtelematic.campaigner.daemon
 import java.time.Instant
 
 import akka.Done
-import com.advancedtelematic.campaigner.client.FakeDirectorClient
 import com.advancedtelematic.campaigner.daemon.DeviceEventListener.AcceptedCampaign
 import com.advancedtelematic.campaigner.data.DataType.{Campaign, DeviceStatus}
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport}
-import com.advancedtelematic.campaigner.util.CampaignerSpec
+import com.advancedtelematic.campaigner.util.{CampaignerSpec, FakeDirectorClient}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, Event}
 import com.advancedtelematic.libats.messaging_datatype.Messages
 import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceEventMessage

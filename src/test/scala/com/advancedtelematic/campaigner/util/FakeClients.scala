@@ -1,33 +1,16 @@
-package com.advancedtelematic.campaigner.client
+package com.advancedtelematic.campaigner.util
 
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import java.util.concurrent.ConcurrentHashMap
-import org.scalacheck.Arbitrary._
+
+import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, DirectorClient, Resolver}
 import org.scalacheck.Gen
+
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
-
-class FakeDeviceRegistryClient extends DeviceRegistryClient {
-
-  val state: ConcurrentHashMap[GroupId, Seq[DeviceId]] = new ConcurrentHashMap()
-
-  override def devicesInGroup(namespace: Namespace,
-                              groupId: GroupId,
-                              offset: Long,
-                              limit: Long): Future[Seq[DeviceId]] =
-    if (state.containsKey(groupId)) {
-      FastFuture.successful(state.get(groupId).drop(offset.toInt).take(limit.toInt))
-    } else {
-      val devices = arbitrary[Seq[DeviceId]].sample.get
-      state.put(groupId, devices)
-      FastFuture.successful(devices.drop(offset.toInt).take(limit.toInt))
-    }
-
-}
 
 class FakeDirectorClient extends DirectorClient {
 
@@ -67,5 +50,47 @@ class FakeDirectorClient extends DirectorClient {
 
   override def findAffected(ns: Namespace, updateId: UpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
     FastFuture.successful(affected.asScala.get(updateId).toSeq.flatten)
+  }
+}
+
+class FakeDeviceRegistry extends DeviceRegistryClient {
+
+  private val groups = new ConcurrentHashMap[GroupId, Set[DeviceId]]()
+
+  def clear(): Unit = groups.clear()
+
+  def setGroup(groupId: GroupId, devices: Seq[DeviceId]): Unit =
+    groups.put(groupId, devices.toSet)
+
+  def allGroups(): Set[GroupId] = {
+    groups.keys().asScala.toSet
+  }
+
+  def allGroupDevices(groupId: GroupId): Vector[DeviceId] =
+    groups.getOrDefault(groupId, Set.empty).toVector.sortBy(_.uuid)
+
+  override def devicesInGroup(namespace: Namespace, groupId: GroupId, offset: Long, limit: Long): Future[Seq[DeviceId]] = Future.successful {
+    allGroupDevices(groupId).slice(offset.toInt, (offset + limit).toInt)
+  }
+}
+
+class FakeResolver extends Resolver {
+  val updates = new ConcurrentHashMap[DeviceId, Seq[ExternalUpdateId]]()
+
+  def setUpdates(devices: Seq[DeviceId], externalUpdates: Seq[ExternalUpdateId]): Unit = {
+    updates.putAll(devices.map(_ -> externalUpdates).toMap.asJava)
+  }
+
+  override def availableUpdatesFor(devices: Seq[DeviceId]): Future[Seq[ExternalUpdateId]] = FastFuture.successful {
+    val deviceSet = devices.toSet
+
+    val set = updates.asScala.foldLeft(Set.empty[ExternalUpdateId]) { case (acc, (deviceId, u)) =>
+      if(deviceSet.contains(deviceId))
+        acc ++ u.toSet
+      else
+        acc
+    }
+
+    set.toSeq
   }
 }

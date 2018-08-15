@@ -30,8 +30,10 @@ object DataType {
     updatedAt: Instant,
     autoAccept: Boolean = true
   )
+  
+  final case class ExternalUpdateId(value: String) extends AnyVal
 
-  final case class UpdateSource(id: String, sourceType: UpdateType)
+  final case class UpdateSource(id: ExternalUpdateId, sourceType: UpdateType)
 
   final case class Update(
                            uuid: UpdateId,

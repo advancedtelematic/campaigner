@@ -9,8 +9,7 @@ import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
-import org.scalacheck.Arbitrary
-import scala.collection.JavaConverters._
+import org.scalacheck.{Arbitrary, Gen}
 import scala.concurrent.Future
 
 class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with CampaignerSpec {
@@ -21,24 +20,30 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
 
   val campaigns = Campaigns()
 
-  "campaign scheduler" should "trigger updates for each group" in {
+  override def beforeAll(): Unit = {
+    super.beforeAll()
+    deviceRegistry.clear()
+  }
 
+  "campaign scheduler" should "trigger updates for each group" in {
     val campaign = arbitrary[Campaign].sample.get
-    val groups   = arbitrary[Set[GroupId]].sample.get
+    val groups   = Gen.listOfN(3, arbitrary[GroupId]).sample.get.toSet
     val parent   = TestProbe()
 
     campaigns.create(campaign, groups, Seq.empty).futureValue
     campaigns.scheduleGroups(campaign.namespace, campaign.id, groups).futureValue
+    groups.foreach { g => deviceRegistry.setGroup(g, arbitrary[Seq[DeviceId]].sample.get) }
 
     parent.childActorOf(CampaignScheduler.props(
-      registry,
+      deviceRegistry,
       director,
       campaign,
       schedulerDelay,
       schedulerBatchSize
     ))
     parent.expectMsg(1.minute, CampaignComplete(campaign.id))
-    registry.state.keys.asScala.toSet shouldBe groups
+
+    deviceRegistry.allGroups() shouldBe groups
   }
 
   "PRO-3672: campaign with 0 affected devices" should "yield a `finished` status" in {
@@ -71,7 +76,7 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
     campaigns.scheduleGroups(campaign.namespace, campaign.id, groups).futureValue
 
     parent.childActorOf(CampaignScheduler.props(
-      registry,
+      deviceRegistry,
       director,
       campaign,
       schedulerDelay,
@@ -82,5 +87,6 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
     campaigns.campaignStats(campaign.namespace, campaign.id)
       .futureValue.status shouldBe CampaignStatus.finished
   }
+
 
 }

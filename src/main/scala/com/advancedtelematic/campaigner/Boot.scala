@@ -2,7 +2,7 @@ package com.advancedtelematic.campaigner
 
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.{Directives, Route}
-import com.advancedtelematic.campaigner.client.DirectorHttpClient
+import com.advancedtelematic.campaigner.client.{DeviceRegistryHttpClient, DirectorHttpClient, NoOpResolver}
 import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.http.BootApp
 import com.advancedtelematic.libats.http.LogDirectives._
@@ -51,10 +51,12 @@ object Boot extends BootApp
 
   val director = new DirectorHttpClient(directorUri)
 
+  val deviceRegistry = new DeviceRegistryHttpClient(deviceRegistryUri)
+
   val routes: Route =
     (versionHeaders(version) & requestMetrics(metricRegistry) & logResponseMetrics(projectName)) {
       prometheusMetricsRoutes ~
-      new Routes(director).routes
+      new Routes(director, deviceRegistry, new NoOpResolver).routes
     }
 
   Http().bindAndHandle(routes, host, port)

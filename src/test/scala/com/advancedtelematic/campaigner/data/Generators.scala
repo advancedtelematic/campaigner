@@ -50,7 +50,7 @@ object Generators {
   val genUpdateSource: Gen[UpdateSource] = for {
     id <- arbitrary[String].suchThat(_.length < 200)
     t <- arbitrary[UpdateType]
-  } yield UpdateSource(id, t)
+  } yield UpdateSource(ExternalUpdateId(id), t)
 
   val genCreateUpdate: Gen[CreateUpdate] = for {
     us <- genUpdateSource
