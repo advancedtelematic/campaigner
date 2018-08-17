@@ -24,10 +24,11 @@ object Schema {
     def id        = column[CampaignId]("uuid", O.PrimaryKey)
     def name      = column[String]    ("name")
     def update    = column[UpdateId]  ("update_id")
+    def autoAccept = column[Boolean]   ("auto_accept")
     def createdAt = column[Instant]   ("created_at")
     def updatedAt = column[Instant]   ("updated_at")
 
-    override def * = (namespace, id, name, update, createdAt, updatedAt) <>
+    override def * = (namespace, id, name, update, createdAt, updatedAt, autoAccept) <>
                      ((Campaign.apply _).tupled, Campaign.unapply)
   }
 

@@ -66,12 +66,6 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     }
   }
 
-  def scheduledDevices(ns: Namespace, campaign: CampaignId): Future[Set[DeviceId]] = db.run {
-    campaignRepo.findAction(ns, campaign).flatMap { _ =>
-      deviceUpdateRepo.findByCampaignAction(campaign, DeviceStatus.scheduled)
-    }
-  }
-
   def freshCancelled(): Future[Seq[(Namespace, CampaignId)]] =
     cancelTaskRepo.findPending()
 
@@ -80,8 +74,11 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       groupStats.processed === 0L && groupStats.affected === 0L
     }
 
-  def scheduleDevice(campaign: CampaignId, update: UpdateId, device: DeviceId): Future[Unit] =
-    deviceUpdateRepo.persist(DeviceUpdate(campaign, update, device, DeviceStatus.scheduled))
+  def scheduleDevices(campaign: CampaignId, update: UpdateId, devices: DeviceId*): Future[Unit] =
+    deviceUpdateRepo.persistMany(devices.map { d => DeviceUpdate(campaign, update, d, DeviceStatus.scheduled) })
+
+  def markDevicesAccepted(campaign: CampaignId, update: UpdateId, devices: DeviceId*): Future[Unit] =
+    deviceUpdateRepo.persistMany(devices.map { d => DeviceUpdate(campaign, update, d, DeviceStatus.accepted) })
 
   def finishDevice(update: UpdateId, device: DeviceId, status: DeviceStatus): Future[Unit] =
     deviceUpdateRepo.setUpdateStatus(update, device, status)

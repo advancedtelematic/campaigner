@@ -1,11 +1,12 @@
 package com.advancedtelematic.campaigner.actor
 
+import scala.collection.JavaConverters._
 import akka.http.scaladsl.util.FastFuture
 import akka.testkit.TestProbe
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.Campaigns
+import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport}
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
@@ -13,7 +14,7 @@ import org.scalacheck.{Arbitrary, Gen}
 
 import scala.concurrent.Future
 
-class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
+class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec with DeviceUpdateSupport {
 
   import Arbitrary._
   import GroupScheduler._
@@ -73,10 +74,35 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
     ) shouldBe true
   }
 
-  "PRO-3745: group scheduler" should "properly set devices to `scheduled` when affected devices < batch size" in {
+  "group scheduler" should "set devices to `scheduled` when campaign is not set to auto-accept" in {
+    val campaign = arbitrary[Campaign].sample.get.copy(autoAccept = false)
+    val group    = GroupId.generate()
+    val n        = Gen.choose(1, batch-1).sample.get
+    val devs     = Gen.listOfN(n, genDeviceId).sample.get
+
+    clearClientState()
+
+    campaigns.create(campaign, Set(group), Seq.empty).futureValue
+    director.affected.put(campaign.updateId, devs.toSet)
+
+    val parent = TestProbe()
+    val props  = GroupScheduler.props(fakeRegistry(devs), director, schedulerDelay, schedulerBatchSize, campaign, group)
+    parent.childActorOf(props)
+
+    parent.expectMsg(GroupComplete(group))
+
+    val deviceStatus = deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.scheduled).futureValue
+
+    deviceStatus shouldNot be(empty)
+    deviceStatus shouldBe devs.toSet
+
+    director.updates.asScala.get(campaign.updateId) shouldBe empty
+  }
+
+  "PRO-3745: group scheduler" should "properly set devices to `accepted` when affected devices < batch size" in {
     val campaign = arbitrary[Campaign].sample.get
     val group    = GroupId.generate()
-    val n        = Gen.choose(0, batch-1).sample.get
+    val n        = Gen.choose(1, batch-1).sample.get
     val devs     = Gen.listOfN(n, genDeviceId).sample.get
 
     campaigns.create(campaign, Set(group), Seq.empty).futureValue
@@ -89,7 +115,9 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec {
 
     parent.expectMsg(GroupComplete(group))
 
-    director.updates.get(campaign.updateId) should be
-      campaigns.scheduledDevices(campaign.namespace, campaign.id).futureValue
+    val deviceStatus = deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.accepted).futureValue
+
+    deviceStatus shouldNot be(empty)
+    deviceStatus shouldBe director.updates.get(campaign.updateId)
   }
 }

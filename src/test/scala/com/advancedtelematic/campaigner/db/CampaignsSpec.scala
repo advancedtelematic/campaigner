@@ -99,7 +99,7 @@ class CampaignsSpec extends AsyncFlatSpec
 
     for {
       _ <- FastFuture.traverse(newCampaigns)(c => campaignRepo.persist(c.copy(namespace = ns, updateId = update), Set(group), Seq.empty))
-      _ <- FastFuture.traverse(newCampaigns)(c => campaigns.scheduleDevice(c.id, update, device))
+      _ <- FastFuture.traverse(newCampaigns)(c => campaigns.scheduleDevices(c.id, update, device))
       _ <- campaigns.finishDevice(update, device, DeviceStatus.successful)
       c <- campaigns.countFinished(ns, newCampaigns.head.id)
     } yield c shouldBe 1
@@ -113,7 +113,7 @@ class CampaignsSpec extends AsyncFlatSpec
 
     for {
       _ <- campaignRepo.persist(campaign, Set(group), Seq.empty)
-      _ <- FastFuture.traverse(devices)(d => campaigns.scheduleDevice(campaign.id, campaign.updateId, d))
+      _ <- FastFuture.traverse(devices)(d => campaigns.scheduleDevices(campaign.id, campaign.updateId, d))
       _ <- FastFuture.traverse(devices)(d => campaigns.finishDevice(campaign.updateId, d, DeviceStatus.failed))
       c <- campaigns.countFinished(campaign.namespace, campaign.id)
     } yield c shouldBe devices.length

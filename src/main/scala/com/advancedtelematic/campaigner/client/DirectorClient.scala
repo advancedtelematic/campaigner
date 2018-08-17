@@ -16,6 +16,8 @@ trait DirectorClient {
     update: UpdateId,
     devices: Seq[DeviceId]): Future[Seq[DeviceId]]
 
+  def findAffected(ns: Namespace, updateId: UpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]]
+
   def cancelUpdate(
     ns: Namespace,
     devices: Seq[DeviceId]): Future[Seq[DeviceId]]
@@ -72,4 +74,14 @@ class DirectorHttpClient(uri: Uri)
     execHttp[Unit](ns, req)
   }
 
+  override def findAffected(ns: Namespace, updateId: UpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
+    val path   = uri.path / "api" / "v1" / "admin" / "multi_target_updates" / updateId.show / "affected"
+    val entity = HttpEntity(ContentTypes.`application/json`, devices.asJson.noSpaces)
+    val req    = HttpRequest(
+      method = HttpMethods.GET,
+      uri    = uri.withPath(path),
+      entity = entity
+    )
+    execHttp[Seq[DeviceId]](ns, req)
+  }
 }

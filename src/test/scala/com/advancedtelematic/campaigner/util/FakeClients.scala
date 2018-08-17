@@ -31,30 +31,41 @@ class FakeDeviceRegistryClient extends DeviceRegistryClient {
 
 class FakeDirectorClient extends DirectorClient {
 
-  val updates:   ConcurrentHashMap[UpdateId, Set[DeviceId]] = new ConcurrentHashMap()
-  val cancelled: ConcurrentHashMap[DeviceId, Unit]          = new ConcurrentHashMap()
+  val updates = new ConcurrentHashMap[UpdateId, Set[DeviceId]]()
+  val affected = new ConcurrentHashMap[UpdateId, Set[DeviceId]]()
+  val cancelled = ConcurrentHashMap.newKeySet[DeviceId]()
 
   override def setMultiUpdateTarget(namespace: Namespace,
                                     update: UpdateId,
                                     devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
-    val devs = Gen.someOf(devices).sample.get
-    val current = updates.asScala.getOrElse(update, Set.empty)
-    updates.put(update, current ++ devs)
-    FastFuture.successful(devs)
+    val affected = devices.filterNot(cancelled.asScala.contains)
+
+    updates.compute(update, (_, existing) => {
+      if(existing != null)
+        existing ++ affected
+      else
+        devices.toSet
+    })
+
+    FastFuture.successful(affected)
   }
 
   override def cancelUpdate(
     ns: Namespace,
     devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
     val devs = Gen.someOf(devices).sample.get
-    cancelled.putAll(devs.map((_, ())).toMap.asJava)
+    cancelled.addAll(devs.asJava)
     FastFuture.successful(devs)
   }
 
   override def cancelUpdate(
     ns: Namespace,
     device: DeviceId): Future[Unit] = {
-    cancelled.put(device, ())
+    cancelled.add(device)
     FastFuture.successful(())
+  }
+
+  override def findAffected(ns: Namespace, updateId: UpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
+    FastFuture.successful(affected.asScala.get(updateId).toSeq.flatten)
   }
 }

@@ -46,7 +46,8 @@ class CampaignResourceSpec extends CampaignerSpec
       campaign.createdAt,
       campaign.updatedAt,
       request.groups,
-      request.metadata.toList.flatten
+      request.metadata.toList.flatten,
+      autoAccept = true
     )
     campaign.createdAt shouldBe campaign.updatedAt
 
@@ -54,6 +55,25 @@ class CampaignResourceSpec extends CampaignerSpec
     campaigns.values should contain (id)
 
     checkStats(id, CampaignStatus.prepared)
+  }
+
+  "POST/GET autoAccept campaign" should "create and return the created campaign" in {
+    val request = arbitrary[CreateCampaign].sample.get.copy(approvalNeeded = Some(false))
+    val id = createCampaignOk(request)
+
+    val campaign = getCampaignOk(id)
+
+    campaign shouldBe GetCampaign(
+      testNs,
+      id,
+      request.name,
+      request.update,
+      campaign.createdAt,
+      campaign.updatedAt,
+      request.groups,
+      request.metadata.toList.flatten,
+      autoAccept = true
+    )
   }
 
   "PUT /campaigns/:campaign_id" should "update a campaign" in {
@@ -127,12 +147,12 @@ class CampaignResourceSpec extends CampaignerSpec
     checkStats(campaignId, CampaignStatus.scheduled,
       campaign.groups.map(_ -> Stats(0, 0)).toMap)
 
-    campaigns.scheduleDevice(campaignId, update, device).futureValue
+    campaigns.scheduleDevices(campaignId, update, device).futureValue
 
     val entity = Json.obj("update" -> update.asJson, "device" -> device.asJson)
     Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
-      director.cancelled.containsKey(device) shouldBe true
+      director.cancelled.contains(device) shouldBe true
     }
 
     checkStats(campaignId, CampaignStatus.scheduled,
@@ -155,7 +175,7 @@ class CampaignResourceSpec extends CampaignerSpec
     val entity = Json.obj("update" -> update.asJson, "device" -> device.asJson)
     Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe PreconditionFailed
-      director.cancelled.containsKey(device) shouldBe true
+      director.cancelled.contains(device) shouldBe true
     }
 
     checkStats(campaignId, CampaignStatus.scheduled,
@@ -169,7 +189,7 @@ class CampaignResourceSpec extends CampaignerSpec
     val entity = Json.obj("update" -> update.asJson, "device" -> device.asJson)
     Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
-      director.cancelled.containsKey(device) shouldBe true
+      director.cancelled.contains(device) shouldBe true
     }
   }
 
