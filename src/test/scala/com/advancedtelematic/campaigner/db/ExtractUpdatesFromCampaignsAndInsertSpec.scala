@@ -8,8 +8,8 @@ import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.Gen
 import org.scalatest.Inspectors.forAll
-import org.scalatest.concurrent.ScalaFutures
 import org.scalatest._
+import org.scalatest.concurrent.ScalaFutures
 import slick.jdbc.MySQLProfile.api._
 
 
@@ -41,8 +41,8 @@ class ExtractUpdatesFromCampaignsAndInsertSpec extends FlatSpec
       cs.create(campaign, Set.empty[GroupId], Seq.empty[CampaignMetadata]).futureValue
     }
 
-    val updatedCount = extractor.createOneUpdateRecordForEachCampaign().futureValue
-    updatedCount.value shouldBe TEST_CAMPAIGNS
+    extractor.run().futureValue
+    db.run(Schema.updates.length.result).futureValue shouldBe TEST_CAMPAIGNS
   }
 
   "Migrating duplicated UpdateSource's" should "create only one update record in the DB." in {
@@ -51,8 +51,8 @@ class ExtractUpdatesFromCampaignsAndInsertSpec extends FlatSpec
     cs.create(campaign1, Set.empty[GroupId], Seq.empty[CampaignMetadata]).futureValue
     cs.create(campaign2, Set.empty[GroupId], Seq.empty[CampaignMetadata]).futureValue
 
-    val updatedCount = extractor.createOneUpdateRecordForEachCampaign().futureValue
-    updatedCount.value shouldBe 1
+    extractor.run().futureValue
+    db.run(Schema.updates.length.result).futureValue shouldBe 1
   }
 
   "Migrating duplicated (namespace, updateId)" should "create only one update record in the DB." in {
@@ -61,8 +61,8 @@ class ExtractUpdatesFromCampaignsAndInsertSpec extends FlatSpec
     cs.create(campaign1, Set.empty[GroupId], Seq.empty[CampaignMetadata]).futureValue
     cs.create(campaign2, Set.empty[GroupId], Seq.empty[CampaignMetadata]).futureValue
 
-    val updatedCount = extractor.createOneUpdateRecordForEachCampaign().futureValue
-    updatedCount.value shouldBe 1
+    extractor.run().futureValue
+    db.run(Schema.updates.length.result).futureValue shouldBe 1
   }
 
   "UpdateId of campaign" should "be the updateId of the newly created update." in {

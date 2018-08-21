@@ -2,12 +2,12 @@ package com.advancedtelematic.campaigner.db
 
 import java.time.Instant
 
+import akka.Done
 import akka.actor.ActorSystem
 import akka.stream.Materializer
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Schema.{campaigns, updates}
 import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
-import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
@@ -30,20 +30,19 @@ class ExtractUpdatesFromCampaignsAndInsert(implicit
     u
   }
 
-  private[db] def createOneUpdateRecordForEachCampaign(): Future[Option[Int]] =
-    db.run(campaigns.result)
-      .map { cs => cs.map(updateFromCampaign) }
-      .map { us => us.groupBy(_.source).map(_._2.head) } // filter UpdateSource duplicates
-      .map { us => us.groupBy(u => (u.namespace, u.source.id)).map(_._2.head) } // filter unique key (namespace, updateId) duplicates (shouldn't be necessary after the previous filter?)
-      .flatMap { us => db.run(updates ++= us) }
-
-  def run() = {
-    val campaignIdUpdateIdPairs = for {
-      (c, u) <- campaigns join updates on (_.update.mappedTo[String] === _.updateId)
-    } yield (c.id, u.uuid)
-
-    createOneUpdateRecordForEachCampaign()
-      .flatMap { _ => db.run(campaignIdUpdateIdPairs.result) }
-      .flatMap { pairs => Future.traverse(pairs)(pair => db.run(campaigns.filter(_.id === pair._1).map(_.update).update(pair._2))) }
+  def run(): Future[Done.type] = db.run {
+    // This first line is a workaround for `campaigns.distinctOn(_.update).result` because there is a bug on `distinctOn`, see https://github.com/slick/slick/issues/1340.
+    campaigns.result.map { cs => cs.groupBy(_.updateId).map(_._2.head) }
+      .map { cs => cs.map(c => c.id -> updateFromCampaign(c)).toMap }
+      .flatMap { us => (updates ++= us.values).map(_ => us) }
+      .flatMap { us =>
+        DBIO.sequence(
+          us.foldLeft(List.empty[DBIO[Int]]) { case (acc, (campaignId, update)) =>
+            campaigns.filter(_.id === campaignId).map(_.update).update(update.uuid) :: acc
+          }
+        )
+      }
+      .transactionally
+      .map(_ => Done)
   }
 }
