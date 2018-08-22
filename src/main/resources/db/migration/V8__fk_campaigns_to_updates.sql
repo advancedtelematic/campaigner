@@ -6,5 +6,5 @@ insert into updates (uuid, update_id, update_source_type, namespace, name)
 ALTER TABLE `campaigns` ADD CONSTRAINT `update_fk` FOREIGN KEY (`update_id`) REFERENCES `updates`(`uuid`)
 ;
 
-ALTER TABLE `campaigns` CHANGE COLUMN `update_id` `update_uuid` char(36) NOT NULL
+ALTER TABLE `campaigns` MODIFY COLUMN `update_id` char(36) NOT NULL
 ;

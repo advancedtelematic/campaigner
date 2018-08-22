@@ -5,26 +5,33 @@ import akka.testkit.TestProbe
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.Campaigns
+import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
-import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
 
-import scala.concurrent.duration._
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
-class CampaignSupervisorSpec1 extends ActorSpec[CampaignSupervisor] with CampaignerSpec {
+class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with CampaignerSpec with UpdateSupport {
 
-  import Arbitrary._
   import CampaignScheduler._
   import CampaignSupervisor._
 
   val campaigns = Campaigns()
 
+  def buildCampaignWithUpdate: Campaign = {
+    val updateSource = genUpdateSource.retryUntil(_.sourceType == UpdateType.multi_target).sample.get
+    val update = genUpdate.sample.get.copy(source = updateSource)
+    val updateId = updateRepo.persist(update).futureValue
+    arbitrary[Campaign].sample.get.copy(updateId = updateId)
+  }
+
   "campaign supervisor" should "pick up unfinished and fresh campaigns" in {
-    val campaign1 = arbitrary[Campaign].sample.get
-    val campaign2 = arbitrary[Campaign].sample.get
+    val campaign1 = buildCampaignWithUpdate
+    val campaign2 = buildCampaignWithUpdate
     val group     = GroupId.generate
     val parent    = TestProbe()
 
@@ -51,15 +58,22 @@ class CampaignSupervisorSpec1 extends ActorSpec[CampaignSupervisor] with Campaig
 
 }
 
-class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with CampaignerSpec {
+class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with CampaignerSpec with UpdateSupport {
 
-  import Arbitrary._
   import CampaignSupervisor._
+  import org.scalacheck.Arbitrary._
 
   val campaigns = Campaigns()
 
+  def buildCampaignWithUpdate: Campaign = {
+    val updateSource = genUpdateSource.retryUntil(_.sourceType == UpdateType.multi_target).sample.get
+    val update = genUpdate.sample.get.copy(source = updateSource)
+    val updateId = updateRepo.persist(update).futureValue
+    arbitrary[Campaign].sample.get.copy(updateId = updateId)
+  }
+
   "campaign supervisor" should "clean out campaigns that are marked to be cancelled" in {
-    val campaign = arbitrary[Campaign].sample.get
+    val campaign = buildCampaignWithUpdate
     val group    = GroupId.generate
     val parent   = TestProbe()
     val n        = Gen.choose(batch, batch * 2).sample.get

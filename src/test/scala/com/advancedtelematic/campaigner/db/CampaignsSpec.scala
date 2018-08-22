@@ -4,6 +4,7 @@ import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.http.Errors._
+import com.advancedtelematic.campaigner.util.DatabaseUpdateSpecUtil
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.test.DatabaseSpec
@@ -16,7 +17,9 @@ class CampaignsSpec extends AsyncFlatSpec
   with Matchers
   with ScalaFutures
   with CampaignSupport
-  with GroupStatsSupport {
+  with GroupStatsSupport
+  with UpdateSupport
+  with DatabaseUpdateSpecUtil {
 
   import Arbitrary._
 
@@ -33,13 +36,12 @@ class CampaignsSpec extends AsyncFlatSpec
   }
 
   "complete batch" should "update campaign stats for a group" in {
-    val campaign  = arbitrary[Campaign].sample.get
     val group     = GroupId.generate()
     val processed = Gen.posNum[Long].sample.get
     val affected  = Gen.chooseNum[Long](0, processed).sample.get
 
     for {
-      _ <- campaignRepo.persist(campaign, Set(group), Seq.empty)
+      campaign <- createDbCampaignWithUpdate()
       _ <- campaigns.completeBatch(
         campaign.id,
         group,
@@ -65,13 +67,12 @@ class CampaignsSpec extends AsyncFlatSpec
 
   "complete group" should "complete campaign stats for a group" in {
 
-    val campaign  = arbitrary[Campaign].sample.get
     val group     = GroupId.generate()
     val processed = Gen.posNum[Long].sample.get
     val affected  = Gen.chooseNum[Long](0, processed).sample.get
 
     for {
-      _ <- campaignRepo.persist(campaign, Set(group), Seq.empty)
+      campaign <- createDbCampaignWithUpdate()
       _ <- campaigns.completeGroup(
         campaign.id,
         group,
@@ -86,15 +87,13 @@ class CampaignsSpec extends AsyncFlatSpec
   }
 
   "finishing one device" should "work with several campaigns" in {
-
     val ns = arbitrary[Namespace].sample.get
-    val newCampaigns = arbitrary[Seq[Campaign]].sample.get
-    val update = UpdateId.generate()
     val group = GroupId.generate()
     val device = DeviceId.generate()
 
     for {
-      _ <- FastFuture.traverse(newCampaigns)(c => campaignRepo.persist(c.copy(namespace = ns, updateId = update), Set(group), Seq.empty))
+      update <- createDbUpdate(UpdateId.generate())
+      newCampaigns <- FastFuture.traverse(arbitrary[Seq[Int]].sample.get)(_ => createDbCampaign(ns, update, Set(group)))
       _ <- FastFuture.traverse(newCampaigns)(c => campaigns.scheduleDevices(c.id, update, device))
       _ <- campaigns.finishDevice(update, device, DeviceStatus.successful)
       c <- campaigns.countFinished(newCampaigns.head.id)
@@ -102,17 +101,14 @@ class CampaignsSpec extends AsyncFlatSpec
   }
 
   "finishing devices" should "work with one campaign" in {
-
-    val campaign = arbitrary[Campaign].sample.get
     val group    = GroupId.generate()
     val devices  = arbitrary[Seq[DeviceId]].sample.get
 
     for {
-      _ <- campaignRepo.persist(campaign, Set(group), Seq.empty)
+      campaign <- createDbCampaignWithUpdate()
       _ <- FastFuture.traverse(devices)(d => campaigns.scheduleDevices(campaign.id, campaign.updateId, d))
       _ <- FastFuture.traverse(devices)(d => campaigns.finishDevice(campaign.updateId, d, DeviceStatus.failed))
       c <- campaigns.countFinished(campaign.id)
     } yield c shouldBe devices.length
   }
-
 }

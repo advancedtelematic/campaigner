@@ -162,12 +162,12 @@ protected [db] class GroupStatsRepository()(implicit db: Database, ec: Execution
 }
 
 protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext) {
-
+  import com.advancedtelematic.campaigner.db.SlickHandleFkErrorOps._
   import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 
   def persist(campaign: Campaign, groups: Set[GroupId], metadata: Seq[CampaignMetadata]): Future[CampaignId] = db.run {
     val f = for {
-      _ <- (Schema.campaigns += campaign).handleIntegrityErrors(Errors.ConflictingCampaign)
+      _ <- (Schema.campaigns += campaign).handleForeignKeyError(Errors.MissingUpdateSource).handleIntegrityErrors(Errors.ConflictingCampaign)
       _ <- Schema.campaignGroups ++= groups.map(g => (campaign.id, g))
       _ <- (Schema.campaignMetadata ++= metadata).handleIntegrityErrors(Errors.ConflictingMetadata)
     } yield campaign.id
