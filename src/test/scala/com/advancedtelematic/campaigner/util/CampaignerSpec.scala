@@ -8,6 +8,8 @@ import org.scalatest.{FlatSpecLike, Matchers}
 trait CampaignerSpecUtil {
   implicit class GenerateOps[T](value: Gen[T]) {
     def generate: T = value.sample.get
+
+    def gen= generate
   }
 }
 
