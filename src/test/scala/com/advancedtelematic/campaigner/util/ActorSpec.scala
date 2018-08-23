@@ -4,7 +4,6 @@ import akka.actor.ActorSystem
 import akka.stream.{ActorMaterializer, Materializer}
 import akka.testkit.TestKit
 import com.advancedtelematic.campaigner.Settings
-import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import scala.concurrent.ExecutionContext
@@ -18,7 +17,7 @@ abstract class ActorSpec[T](implicit m: reflect.Manifest[T])
 
   implicit lazy val ec: ExecutionContext = system.dispatcher
   implicit val mat: Materializer = ActorMaterializer()
-  lazy val registry = new FakeDeviceRegistryClient()
+  lazy val deviceRegistry = new FakeDeviceRegistry()
   lazy val director = new FakeDirectorClient()
   val batch = schedulerBatchSize.toInt
 

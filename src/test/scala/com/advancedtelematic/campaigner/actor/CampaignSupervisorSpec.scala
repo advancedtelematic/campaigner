@@ -34,7 +34,7 @@ class CampaignSupervisorSpec1 extends ActorSpec[CampaignSupervisor] with Campaig
     campaigns.scheduleGroups(campaign1.namespace, campaign1.id, Set(group)).futureValue
 
     parent.childActorOf(CampaignSupervisor.props(
-      registry,
+      deviceRegistry,
       director,
       schedulerPollingTimeout,
       schedulerDelay,

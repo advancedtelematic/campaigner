@@ -326,6 +326,11 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
     (Schema.updates += update).map(_ => update.uuid).handleIntegrityErrors(Errors.ConflictingUpdate)
   }
 
+
+  def findByExternalIds(ns: Namespace, ids: Seq[ExternalUpdateId]): Future[Seq[Update]] = db.run {
+    Schema.updates.filter(_.namespace === ns).filter(_.updateId.inSet(ids)).result
+  }
+
   def all(ns: Namespace, offset: Option[Long], limit: Option[Long]): Future[PaginationResult[Update]] = db.run {
     Schema.updates
       .filter(_.namespace === ns)

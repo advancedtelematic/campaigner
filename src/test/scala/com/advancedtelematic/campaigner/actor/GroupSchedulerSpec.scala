@@ -2,34 +2,26 @@ package com.advancedtelematic.campaigner.actor
 
 import scala.collection.JavaConverters._
 import akka.http.scaladsl.util.FastFuture
+import cats.syntax.group
 import akka.testkit.TestProbe
-import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport}
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
-import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.scalacheck.{Arbitrary, Gen}
-
 import scala.concurrent.Future
 
 class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec with DeviceUpdateSupport {
-
   import Arbitrary._
   import GroupScheduler._
 
   import scala.concurrent.duration._
 
   def clearClientState() = {
-    registry.state.clear()
+    deviceRegistry.clear()
     director.updates.clear()
     director.cancelled.clear()
-  }
-
-  def fakeRegistry(devs: Seq[DeviceId]) = new DeviceRegistryClient {
-    override def devicesInGroup(ns: Namespace, grp: GroupId, offset: Long, limit: Long): Future[Seq[DeviceId]] =
-      FastFuture.successful(devs.drop(offset.toInt).take(limit.toInt))
   }
 
   val campaigns = Campaigns()
@@ -38,17 +30,21 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     val campaign = arbitrary[Campaign].sample.get
     val group    = GroupId.generate()
     val parent = TestProbe()
-    val props  = GroupScheduler.props(registry, director, 10.minutes, schedulerBatchSize, campaign, group)
+
+    val props  = GroupScheduler.props(deviceRegistry, director, 10.minutes, schedulerBatchSize, campaign, group)
 
     clearClientState()
+    deviceRegistry.setGroup(group, arbitrary[Seq[DeviceId]].sample.get)
     campaigns.create(campaign, Set(group), Seq.empty).futureValue
 
     parent.childActorOf(props)
+
     parent.expectMsgPF(10.seconds) {
       case BatchComplete(grp, _) => grp
-      case GroupComplete(grp)    => grp
+      case GroupComplete(grp) => grp
     }
-    registry.state.get(group).take(batch).toSet should contain allElementsOf director.updates.get(campaign.updateId)
+
+    deviceRegistry.allGroupDevices(group).take(batch) should contain allElementsOf director.updates.get(campaign.updateId)
   }
 
   "group scheduler" should "respect groups with processed devices > batch size" in {
@@ -60,9 +56,10 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     campaigns.create(campaign, Set(group), Seq.empty).futureValue
 
     clearClientState()
+    deviceRegistry.setGroup(group, devs)
 
     val parent = TestProbe()
-    val props  = GroupScheduler.props(fakeRegistry(devs), director, schedulerDelay, schedulerBatchSize, campaign, group)
+    val props  = GroupScheduler.props(deviceRegistry, director, schedulerDelay, schedulerBatchSize, campaign, group)
     parent.childActorOf(props)
 
     Range(0, n/batch).foreach { i =>
@@ -82,11 +79,12 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
 
     clearClientState()
 
+    deviceRegistry.setGroup(group, devs)
     campaigns.create(campaign, Set(group), Seq.empty).futureValue
     director.affected.put(campaign.updateId, devs.toSet)
 
     val parent = TestProbe()
-    val props  = GroupScheduler.props(fakeRegistry(devs), director, schedulerDelay, schedulerBatchSize, campaign, group)
+    val props  = GroupScheduler.props(deviceRegistry, director, schedulerDelay, schedulerBatchSize, campaign, group)
     parent.childActorOf(props)
 
     parent.expectMsg(GroupComplete(group))
@@ -108,9 +106,10 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     campaigns.create(campaign, Set(group), Seq.empty).futureValue
 
     clearClientState()
+    deviceRegistry.setGroup(group, devs)
 
     val parent = TestProbe()
-    val props  = GroupScheduler.props(fakeRegistry(devs), director, schedulerDelay, schedulerBatchSize, campaign, group)
+    val props  = GroupScheduler.props(deviceRegistry, director, schedulerDelay, schedulerBatchSize, campaign, group)
     parent.childActorOf(props)
 
     parent.expectMsg(GroupComplete(group))

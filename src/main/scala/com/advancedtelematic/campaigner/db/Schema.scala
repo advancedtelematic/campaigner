@@ -101,11 +101,11 @@ object Schema {
   protected [db] val cancelTasks = TableQuery[CancelTaskTable]
 
 
-  type UpdatesTableRow = (UpdateId, String, UpdateType, Namespace, String, Option[String], Instant, Instant)
+  type UpdatesTableRow = (UpdateId, ExternalUpdateId, UpdateType, Namespace, String, Option[String], Instant, Instant)
 
   class UpdatesTable(tag: Tag) extends Table[Update](tag, "updates"){
     def uuid = column[UpdateId]("uuid", O.PrimaryKey)
-    def updateId = column[String]("update_id")
+    def updateId = column[ExternalUpdateId]("update_id")
     def updateSourceType = column[UpdateType]("update_source_type")
     def namespace = column[Namespace]("namespace")
     def name = column[String]("name")

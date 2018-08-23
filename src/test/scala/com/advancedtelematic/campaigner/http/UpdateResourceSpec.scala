@@ -2,15 +2,19 @@ package com.advancedtelematic.campaigner.http
 
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.StatusCodes._
+import akka.http.scaladsl.model.Uri.Query
 import akka.http.scaladsl.model.headers.Location
+import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.Codecs._
-import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, Update}
+import com.advancedtelematic.campaigner.data.DataType.GroupId._
+import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, GroupId, Update}
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.UpdateSupport
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
-import com.advancedtelematic.libats.data.PaginationResult
+import com.advancedtelematic.libats.data.{ErrorRepresentation, PaginationResult}
 import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import org.scalacheck.Gen
 
 class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSupport {
 
@@ -27,20 +31,105 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
 
   private def getUpdates: HttpRequest = Get(apiUri("updates")).withHeaders(header)
 
+  private def getGroupUpdates(groupId: GroupId) =
+    Get(apiUri("updates").withQuery(Query("groupId" -> groupId.show))).withHeaders(header)
+
+  "GET to /updates with group id" should "forwards to external resolver" in {
+    val request = genCreateUpdate.sample.get
+    val updateId = createUpdateOk(request)
+
+    val groupId = GroupId.generate()
+
+    val devices = Gen.listOfN(1024, genDeviceId).sample.get
+
+    fakeRegistry.setGroup(groupId, devices)
+
+    fakeResolver.setUpdates(devices, List(request.updateSource.id))
+
+    getGroupUpdates(groupId) ~> routes ~> check {
+      status shouldBe OK
+      val updates = responseAs[PaginationResult[Update]]
+
+      updates.values should have size(1)
+      updates.values.map(_.uuid) should contain(updateId)
+    }
+  }
+
+  "GET to /updates with group id for many devices" should "returns updates for all devices" in {
+    val requests = Gen.listOfN(10, genCreateUpdate).sample.get
+    val updateIds = requests.map(createUpdateOk)
+
+    val groupId = GroupId.generate()
+
+    val devices = Gen.listOfN(10, genDeviceId).sample.get
+
+    fakeRegistry.setGroup(groupId, devices)
+
+    requests.zip(devices).foreach { case (r, d) =>
+      fakeResolver.setUpdates(Seq(d), Seq(r.updateSource.id))
+    }
+
+    getGroupUpdates(groupId) ~> routes ~> check {
+      status shouldBe OK
+      val updates = responseAs[PaginationResult[Update]]
+
+      updates.values should have size(10)
+      updates.values.map(_.uuid) contains allElementsOf(updateIds)
+    }
+  }
+
+  "GET to /updates with group id" should "returns all updates for a device" in {
+    val requests = Gen.listOfN(10, genCreateUpdate).sample.get
+    val updateIds = requests.map(createUpdateOk)
+
+    val groupId = GroupId.generate()
+
+    val device = genDeviceId.sample.get
+
+    fakeRegistry.setGroup(groupId, Seq(device))
+
+    fakeResolver.setUpdates(Seq(device), requests.map(_.updateSource.id))
+
+    getGroupUpdates(groupId) ~> routes ~> check {
+      status shouldBe OK
+      val updates = responseAs[PaginationResult[Update]]
+
+      updates.values should have size(10)
+      updates.values.map(_.uuid) contains allElementsOf(updateIds)
+    }
+  }
+
+  "GET to /updates with group id for TOO many devices" should "return an error" in {
+    val request = genCreateUpdate.sample.get
+    createUpdateOk(request)
+
+    val groupId = GroupId.generate()
+
+    val devices = Gen.listOfN(5001, genDeviceId).sample.get.sortBy(_.uuid)
+
+    fakeRegistry.setGroup(groupId, devices)
+
+    fakeResolver.setUpdates(Seq(devices.last), Seq(request.updateSource.id))
+
+    getGroupUpdates(groupId) ~> routes ~> check {
+      status shouldBe InternalServerError
+      val error = responseAs[ErrorRepresentation]
+      error.code shouldBe ErrorCodes.TooManyRequestsToRemote
+    }
+  }
+
   "GET to /updates" should "get all existing updates" in {
-    // Make sure the external IDs are different to avoid aleatory integrity violations on the unique key (namespace, externalId).
-    val request1: CreateUpdate = genCreateUpdate.sample.get
-    val request2: CreateUpdate = genCreateUpdate.sample.get
-    val updateId1 = createUpdateOk(request1)
-    val updateId2 = createUpdateOk(request2)
+    // Make sure the external IDs are different to avoid random integrity violations on the unique key (namespace, externalId).
+    val requests = Gen.listOfN(2, genCreateUpdate).sample.get
+    val updateIds = requests.map(createUpdateOk)
+
     getUpdates ~> routes ~> check {
       status shouldBe OK
       val updates = responseAs[PaginationResult[Update]]
-      updates.total shouldBe 2
-      updates.values.find(_.uuid == updateId1) shouldBe defined
-      updates.values.find(_.uuid == updateId2) shouldBe defined
+      updates.values.map(_.uuid) should contain allElementsOf(updateIds)
     }
   }
+
 
   "POST to /updates" should "create a new update" in {
     val request: CreateUpdate = genCreateUpdate.sample.get

@@ -13,8 +13,7 @@ object ErrorCodes {
   val InvalidCounts = ErrorCode("invalid_stats_count")
   val DeviceNotScheduled = ErrorCode("device_not_scheduled")
   val ConflictingUpdate = ErrorCode("update_already_exists")
-
-
+  val TooManyRequestsToRemote = ErrorCode("too_many_requests_to_remote")
 }
 
 object Errors {
@@ -50,5 +49,6 @@ object Errors {
     StatusCodes.Conflict,
     "An update with that externalId already exists."
   )
-
+  val TooManyRequestsToRemote = RawError(ErrorCodes.TooManyRequestsToRemote, StatusCodes.InternalServerError,
+    "Too many requests to remote service")
 }
