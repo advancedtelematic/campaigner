@@ -7,11 +7,12 @@ import com.advancedtelematic.campaigner.data.Generators.genCampaign
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.Gen
-import org.scalatest.Inspectors.forAll
 import org.scalatest._
 import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.time.{Millis, Seconds, Span}
 import slick.jdbc.MySQLProfile.api._
 
+import scala.concurrent.Future
 
 class ExtractUpdatesFromCampaignsAndInsertSpec extends FlatSpec
   with BeforeAndAfterEach
@@ -27,7 +28,9 @@ class ExtractUpdatesFromCampaignsAndInsertSpec extends FlatSpec
   import system.dispatcher
 
   private val cs = Campaigns()
-  private val extractor = new ExtractUpdatesFromCampaignsAndInsert()
+  private val migration = new ExtractUpdatesFromCampaignsAndInsert()
+
+  override implicit def patienceConfig = PatienceConfig(timeout = Span(30, Seconds), interval = Span(500, Millis))
 
   override protected def beforeEach(): Unit = {
     super.beforeEach()
@@ -37,11 +40,12 @@ class ExtractUpdatesFromCampaignsAndInsertSpec extends FlatSpec
 
   "Running the migration" should "create one update record in the DB for each campaign." in {
     val campaigns = Gen.listOfN(TEST_CAMPAIGNS, genCampaign).sample.get
-    forAll(campaigns) { campaign =>
-      cs.create(campaign, Set.empty[GroupId], Seq.empty[CampaignMetadata]).futureValue
-    }
 
-    extractor.run().futureValue
+    Future.traverse(campaigns) { c =>
+      cs.create(c, Set.empty[GroupId], Seq.empty[CampaignMetadata])
+    }.futureValue
+
+    migration.run().futureValue
     db.run(Schema.updates.length.result).futureValue shouldBe TEST_CAMPAIGNS
   }
 
@@ -51,7 +55,7 @@ class ExtractUpdatesFromCampaignsAndInsertSpec extends FlatSpec
     cs.create(campaign1, Set.empty[GroupId], Seq.empty[CampaignMetadata]).futureValue
     cs.create(campaign2, Set.empty[GroupId], Seq.empty[CampaignMetadata]).futureValue
 
-    extractor.run().futureValue
+    migration.run().futureValue
     db.run(Schema.updates.length.result).futureValue shouldBe 1
   }
 
@@ -61,7 +65,7 @@ class ExtractUpdatesFromCampaignsAndInsertSpec extends FlatSpec
     cs.create(campaign1, Set.empty[GroupId], Seq.empty[CampaignMetadata]).futureValue
     cs.create(campaign2, Set.empty[GroupId], Seq.empty[CampaignMetadata]).futureValue
 
-    extractor.run().futureValue
+    migration.run().futureValue
     db.run(Schema.updates.length.result).futureValue shouldBe 1
   }
 
@@ -74,8 +78,7 @@ class ExtractUpdatesFromCampaignsAndInsertSpec extends FlatSpec
 
     val campaignFromDB = db.run(Schema.campaigns.filter(_.id === campaign.id).result).futureValue.head
     val updateFromDB = db.run(Schema.updates.take(1).result).futureValue.head
-    oldUpdateId.uuid.toString shouldBe updateFromDB.source.id
+    oldUpdateId.uuid.toString shouldBe updateFromDB.source.id.value
     campaignFromDB.updateId shouldBe updateFromDB.uuid
   }
-
 }
