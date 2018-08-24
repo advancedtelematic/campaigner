@@ -4,21 +4,20 @@ import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.model.headers.Location
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.{Directive1, Route}
-import akka.http.scaladsl.util.FastFuture
+import akka.http.scaladsl.server.{Directive1, ExceptionHandler, Route}
 import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, Resolver}
 import com.advancedtelematic.campaigner.data.AkkaSupport._
 import com.advancedtelematic.campaigner.data.Codecs._
-import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, GroupId, Update}
+import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, ExternalUpdateId, GroupId, Update}
 import com.advancedtelematic.campaigner.db.UpdateSupport
 import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.data.PaginationResult
+import com.advancedtelematic.libats.data.{ErrorRepresentation, PaginationResult}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.{Encoder, Json}
 import slick.jdbc.MySQLProfile.api._
 
-import scala.concurrent.{ExecutionContext}
+import scala.concurrent.ExecutionContext
 
 object HypermediaResource {
   final case class Link(rel: String, uri: Uri)
@@ -54,6 +53,24 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
 
   val groupUpdateResolver = new GroupUpdateResolver(deviceRegistry, resolver)
 
+  import Errors.ConflictingUpdate
+
+  private[this] def duplicateUpdatesHandler(namespace: Namespace, externalUpdateId: ExternalUpdateId) = {
+    import io.circe.syntax._
+    ExceptionHandler {
+      case `ConflictingUpdate` =>
+        onSuccess(updateRepo.findByExternalIds(namespace, Seq(externalUpdateId))) {
+          case x +: _ =>
+            complete(StatusCodes.Conflict -> ErrorRepresentation(ConflictingUpdate.code, ConflictingUpdate.desc, Some(x.asJson), Some(ConflictingUpdate.errorId)))
+          case _ =>
+            extractLog { log =>
+              log.error("Unable to find conflicting update {}:{}", namespace.get, externalUpdateId.value)
+              complete(StatusCodes.InternalServerError)
+            }
+          }
+    }
+  }
+
   val route: Route =
     extractNamespace { ns =>
       pathPrefix("updates") {
@@ -70,10 +87,12 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
             }
           } ~
           (post & entity(as[CreateUpdate])) { request =>
-            onSuccess(updateRepo.persist(request.mkUpdate(ns))) { uuid =>
-              extractRequest { req =>
-                val resourceUri = req.uri.withPath(req.uri.path / uuid.uuid.toString)
-                complete((StatusCodes.Created, List(Location(resourceUri)), uuid))
+            handleExceptions(duplicateUpdatesHandler(ns, request.updateSource.id)) {
+              onSuccess(updateRepo.persist(request.mkUpdate(ns))) { uuid =>
+                extractRequest { req =>
+                  val resourceUri = req.uri.withPath(req.uri.path / uuid.uuid.toString)
+                  complete((StatusCodes.Created, List(Location(resourceUri)), uuid))
+                }
               }
             }
           }
