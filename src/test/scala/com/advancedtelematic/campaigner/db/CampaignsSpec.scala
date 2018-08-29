@@ -25,7 +25,6 @@ class CampaignsSpec extends AsyncFlatSpec
   "complete batch" should "fail if the campaign does not exist" in {
     recoverToSucceededIf[CampaignMissing.type] {
       campaigns.completeBatch(
-        arbitrary[Namespace].sample.get,
         CampaignId.generate(),
         GroupId.generate(),
         Stats(0, 0)
@@ -42,13 +41,12 @@ class CampaignsSpec extends AsyncFlatSpec
     for {
       _ <- campaignRepo.persist(campaign, Set(group), Seq.empty)
       _ <- campaigns.completeBatch(
-        campaign.namespace,
         campaign.id,
         group,
         Stats(processed, affected)
       )
       status <- groupStatsRepo.groupStatusFor(campaign.id, group)
-      stats <- campaigns.campaignStatsFor(campaign.namespace, campaign.id)
+      stats <- campaigns.campaignStatsFor(campaign.id)
     } yield {
       status shouldBe Some(GroupStatus.scheduled)
       stats  shouldBe Map(group -> Stats(processed, affected))
@@ -58,7 +56,6 @@ class CampaignsSpec extends AsyncFlatSpec
   "complete group" should "fail if the campaign does not exist" in {
     recoverToSucceededIf[CampaignMissing.type] {
       campaigns.completeGroup(
-        arbitrary[Namespace].sample.get,
         CampaignId.generate(),
         GroupId.generate(),
         Stats(processed = 0, affected = 0)
@@ -76,13 +73,12 @@ class CampaignsSpec extends AsyncFlatSpec
     for {
       _ <- campaignRepo.persist(campaign, Set(group), Seq.empty)
       _ <- campaigns.completeGroup(
-        campaign.namespace,
         campaign.id,
         group,
         Stats(processed, affected)
       )
       status <- groupStatsRepo.groupStatusFor(campaign.id, group)
-      stats  <- campaigns.campaignStatsFor(campaign.namespace, campaign.id)
+      stats  <- campaigns.campaignStatsFor(campaign.id)
     } yield {
       status shouldBe Some(GroupStatus.launched)
       stats  shouldBe Map(group -> Stats(processed, affected))
@@ -101,7 +97,7 @@ class CampaignsSpec extends AsyncFlatSpec
       _ <- FastFuture.traverse(newCampaigns)(c => campaignRepo.persist(c.copy(namespace = ns, updateId = update), Set(group), Seq.empty))
       _ <- FastFuture.traverse(newCampaigns)(c => campaigns.scheduleDevices(c.id, update, device))
       _ <- campaigns.finishDevice(update, device, DeviceStatus.successful)
-      c <- campaigns.countFinished(ns, newCampaigns.head.id)
+      c <- campaigns.countFinished(newCampaigns.head.id)
     } yield c shouldBe 1
   }
 
@@ -115,7 +111,7 @@ class CampaignsSpec extends AsyncFlatSpec
       _ <- campaignRepo.persist(campaign, Set(group), Seq.empty)
       _ <- FastFuture.traverse(devices)(d => campaigns.scheduleDevices(campaign.id, campaign.updateId, d))
       _ <- FastFuture.traverse(devices)(d => campaigns.finishDevice(campaign.updateId, d, DeviceStatus.failed))
-      c <- campaigns.countFinished(campaign.namespace, campaign.id)
+      c <- campaigns.countFinished(campaign.id)
     } yield c shouldBe devices.length
   }
 

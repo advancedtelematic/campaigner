@@ -4,10 +4,12 @@ import akka.event.LoggingAdapter
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.unmarshalling.Unmarshaller
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.client.DirectorClient
 import com.advancedtelematic.campaigner.data.Codecs._
+import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.auth.AuthedNamespaceScope
@@ -32,13 +34,10 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
     campaigns.create(campaign, request.groups, metadata)
   }
 
-  def cancelDeviceUpdate(
-    ns: Namespace,
-    update: UpdateId,
-    device: DeviceId)
-    (implicit log: LoggingAdapter): Future[Unit] =
+  def cancelDeviceUpdate(ns: Namespace, update: UpdateId, device: DeviceId)
+                        (implicit log: LoggingAdapter): Future[Unit] =
     director.cancelUpdate(ns, device).flatMap { _ =>
-      campaigns.findCampaignsByUpdate(ns, update).flatMap {
+      campaigns.findCampaignsByUpdate(update).flatMap {
         case cs if cs.isEmpty =>
           log.info(s"No campaign exists for $device.")
           FastFuture.successful(())
@@ -47,37 +46,44 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
       }
     }
 
+  private def UserCampaignPathPrefix(namespace: Namespace): Directive1[Campaign] =
+    pathPrefix(CampaignId.Path).flatMap { campaign =>
+      onSuccess(campaigns.findNamespaceCampaign(namespace, campaign)).flatMap(provide)
+    }
+
+  implicit private val campaignStatusUnmarshaller = Unmarshaller.strict[String, CampaignStatus](CampaignStatus.withName)
+
   val route =
     extractAuth { auth =>
       val ns = auth.namespace
       pathPrefix("campaigns") {
         pathEnd {
-          (get & parameters('limit.as[Long].?) & parameters('offset.as[Long].?)) { (mLimit, mOffset) =>
+          (get & parameter('status.as[CampaignStatus].?) & parameters('limit.as[Long].?) & parameters('offset.as[Long].?)) { (status, mLimit, mOffset) =>
             val offset = mOffset.getOrElse(0L)
             val limit  = mLimit.getOrElse(50L)
-            complete(campaigns.allCampaigns(ns, offset, limit))
+            complete(campaigns.allCampaigns(ns, offset, limit, status))
           } ~
           (post & entity(as[CreateCampaign])) { request =>
             complete(StatusCodes.Created -> createCampaign(ns, request))
           }
         } ~
-        pathPrefix(CampaignId.Path) { id =>
+        UserCampaignPathPrefix(ns) { campaign =>
           pathEnd {
             get {
-              complete(campaigns.findCampaign(ns, id))
+              complete(campaigns.findClientCampaign(campaign.id))
             } ~
             (put & entity(as[UpdateCampaign])) { updated =>
-              complete(campaigns.update(ns, id, updated.name, updated.metadata.toList.flatten.map(_.toCampaignMetadata(id))))
+              complete(campaigns.update(campaign.id, updated.name, updated.metadata.toList.flatten.map(_.toCampaignMetadata(campaign.id))))
             }
           } ~
           (post & path("launch")) {
-            complete(campaigns.launch(ns, id))
+            complete(campaigns.launch(campaign.id))
           } ~
           (get & path("stats")) {
-            complete(campaigns.campaignStats(ns, id))
+            complete(campaigns.campaignStats(campaign.id))
           } ~
           (post & path("cancel")) {
-            complete(campaigns.cancelCampaign(ns, id))
+            complete(campaigns.cancelCampaign(campaign.id))
           }
         }
       } ~

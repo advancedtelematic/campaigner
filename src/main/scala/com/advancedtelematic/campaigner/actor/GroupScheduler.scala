@@ -70,12 +70,12 @@ class GroupScheduler(registry: DeviceRegistryClient,
     if(processed < batchSize) {
       log.debug(s"$group complete")
       val stats = Stats(processed, affected.length.toLong)
-      campaigns.completeGroup(campaign.namespace, campaign.id, group, stats)
+      campaigns.completeGroup(campaign.id, group, stats)
         .map(_ => GroupComplete(group))
     } else {
       val frontier = offset + processed
       log.debug(s"batch complete for $group from $offset to $frontier")
-      campaigns.completeBatch(campaign.namespace, campaign.id, group, Stats(frontier, affected.length.toLong))
+      campaigns.completeBatch(campaign.id, group, Stats(frontier, affected.length.toLong))
         .map(_ => BatchComplete(group, frontier))
     }
   }

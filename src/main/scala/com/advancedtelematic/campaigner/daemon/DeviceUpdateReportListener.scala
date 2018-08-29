@@ -10,12 +10,15 @@ import org.slf4j.LoggerFactory
 import scala.concurrent.{ExecutionContext, Future}
 import slick.jdbc.MySQLProfile.api._
 
-object DeviceUpdateReportListener {
+class DeviceUpdateReportListener()(implicit db: Database, ec: ExecutionContext)
+  extends (DeviceUpdateReport => Future[Unit]) {
+
   private lazy val _log = LoggerFactory.getLogger(this.getClass)
 
-  def apply(msg: DeviceUpdateReport)
-           (implicit db: Database, ec: ExecutionContext): Future[Unit] =
-    Campaigns().finishDevice(
+  val campaigns = Campaigns()
+
+  def apply(msg: DeviceUpdateReport): Future[Unit] =
+    campaigns.finishDevice(
       msg.updateId,
       msg.device,
       if (msg.operationResult.values.forall(_.isSuccess))

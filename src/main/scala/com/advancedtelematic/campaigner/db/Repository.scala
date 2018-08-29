@@ -86,7 +86,7 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
       }
     }
 
-  def setUpdateStatus(update: UpdateId, device: DeviceId, status: DeviceStatus): Future[Unit] = db.run {
+  protected [db] def setUpdateStatusAction(update: UpdateId, device: DeviceId, status: DeviceStatus): DBIO[Unit] =
     Schema.deviceUpdates
       .filter(_.updateId === update)
       .filter(_.deviceId === device)
@@ -96,7 +96,6 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
         case 0 => DBIO.failed(Errors.DeviceNotScheduled)
         case _ => DBIO.successful(())
       }.map(_ => ())
-  }
 
   def setUpdateStatus(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus): Future[Unit] = db.run {
     Schema.deviceUpdates
@@ -116,13 +115,11 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
 }
 
 protected [db] class GroupStatsRepository()(implicit db: Database, ec: ExecutionContext) {
-  def updateGroupStats(campaign: CampaignId, group: GroupId, status: GroupStatus, stats: Stats): Future[Unit] =
-    db.run {
-      Schema.groupStats
-        .insertOrUpdate(GroupStats(campaign, group, status, stats.processed, stats.affected))
-        .map(_ => ())
-        .handleIntegrityErrors(Errors.CampaignMissing)
-    }
+  protected [db] def updateGroupStatsAction(campaign: CampaignId, group: GroupId, status: GroupStatus, stats: Stats): DBIO[Unit] =
+    Schema.groupStats
+      .insertOrUpdate(GroupStats(campaign, group, status, stats.processed, stats.affected))
+      .map(_ => ())
+      .handleIntegrityErrors(Errors.CampaignMissing)
 
   protected [db] def findByCampaignAction(campaign: CampaignId): DBIO[Seq[GroupStats]] =
     Schema.groupStats
@@ -130,55 +127,13 @@ protected [db] class GroupStatsRepository()(implicit db: Database, ec: Execution
       .result
 
   protected [db] def persistManyAction(campaign: CampaignId, groups: Set[GroupId]): DBIO[Unit] =
-    DBIO.sequence {
+    DBIO.sequence(
       groups.toSeq.map { group =>
         persistAction(GroupStats(campaign, group, GroupStatus.scheduled, 0, 0))
       }
-    }.map(_ => ())
+    ).map(_ => ())
 
   protected [db] def persistAction(stats: GroupStats): DBIO[Unit] = (Schema.groupStats += stats).map(_ => ())
-
-  def aggregatedStatus(campaign: CampaignId): Future[CampaignStatus] = {
-    def groupStats(status: GroupStatus) =
-      Schema.groupStats
-        .filter(_.campaignId === campaign)
-        .filter(_.status === status)
-        .length.result
-
-    def affectedDevices() =
-      Schema.groupStats
-        .filter(_.campaignId === campaign)
-        .map(_.affected)
-        .sum.result.map(_.getOrElse(0L))
-
-    def finishedDevices() =
-      Schema.deviceUpdates
-        .filter(_.campaignId === campaign)
-        .map(_.status)
-        .filter(status => status === DeviceStatus.successful || status === DeviceStatus.failed)
-        .length.result
-
-    db.run {
-      for {
-        // groups
-        groups    <- findByCampaignAction(campaign).map(_.length)
-        scheduled <- groupStats(GroupStatus.scheduled)
-        launched  <- groupStats(GroupStatus.launched)
-        cancelled <- groupStats(GroupStatus.cancelled)
-
-        // devices
-        affected <- affectedDevices()
-        finished <- finishedDevices()
-        status    = (groups, scheduled, launched, cancelled, affected, finished) match {
-          case (_, _, _, c, _, _) if c > 0           => CampaignStatus.cancelled
-          case (g, 0, _, _, a, f) if g > 0 && a == f => CampaignStatus.finished
-          case (0, 0, 0, _, _, _)                    => CampaignStatus.prepared
-          case (_, 0, _, _, _, _)                    => CampaignStatus.launched
-          case _                                     => CampaignStatus.scheduled
-        }
-      } yield status
-    }
-  }
 
   def groupStatusFor(campaign: CampaignId, group: GroupId): Future[Option[GroupStatus]] =
     db.run {
@@ -198,7 +153,7 @@ protected [db] class GroupStatsRepository()(implicit db: Database, ec: Execution
       .result
   }
 
-  def cancel(campaign: CampaignId): Future[Unit] = db.run {
+  protected [db] def cancelAction(campaign: CampaignId): DBIO[Unit] = {
     Schema.groupStats
       .filter(_.campaignId === campaign)
       .map(_.status)
@@ -221,27 +176,24 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
     f.transactionally
   }
 
-  protected[db] def findAction(ns: Namespace, campaign: CampaignId): DBIO[Campaign] =
+  protected[db] def findAction(campaign: CampaignId, ns: Option[Namespace] = None): DBIO[Campaign] =
     Schema.campaigns
-      .filter(_.namespace === ns)
+      .maybeFilter(_.namespace === ns)
       .filter(_.id === campaign)
       .result
       .failIfNotSingle(Errors.CampaignMissing)
 
-  protected[db] def findByUpdateAction(ns: Namespace, update: UpdateId): DBIO[Seq[CampaignId]] =
-    Schema.campaigns
-      .filter(_.namespace === ns)
-      .filter(_.update === update)
-      .map(_.id)
-      .result
+  protected[db] def findByUpdateAction(update: UpdateId): DBIO[Seq[Campaign]] =
+    Schema.campaigns.filter(_.update === update).result
 
-  def find(ns: Namespace, campaign: CampaignId): Future[Campaign] =
-    db.run(findAction(ns, campaign))
+  def find(campaign: CampaignId, ns: Option[Namespace] = None): Future[Campaign] =
+    db.run(findAction(campaign, ns))
 
-  def all(ns: Namespace, offset: Long, limit: Long): Future[PaginationResult[CampaignId]] =
+  def all(ns: Namespace, offset: Long, limit: Long, status: Option[CampaignStatus]): Future[PaginationResult[CampaignId]] =
     db.run {
       Schema.campaigns
         .filter(_.namespace === ns)
+        .maybeFilter(_.status === status)
         .map(_.id)
         .paginateResult(offset = offset, limit = limit)
     }
@@ -256,9 +208,9 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
     }
   }
 
-  def update(ns: Namespace, campaign: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
+  def update(campaign: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
     db.run {
-      findAction(ns, campaign).flatMap { _ =>
+      findAction(campaign).flatMap { _ =>
         Schema.campaigns
           .filter(_.id === campaign)
           .map(_.name)
@@ -271,9 +223,8 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
       }.map(_ => ())
     }
 
-  def countDevices(ns: Namespace, campaign: CampaignId)(filterExpr: Rep[DeviceStatus] => Rep[Boolean]): Future[Long] = db.run {
+  def countDevices(campaign: CampaignId)(filterExpr: Rep[DeviceStatus] => Rep[Boolean]): Future[Long] = db.run {
     Schema.campaigns
-      .filter(_.namespace === ns)
       .filter(_.id === campaign)
       .join(Schema.deviceUpdates)
       .on { case (campaign, update) => campaign.update === update.updateId && campaign.id === update.campaignId }
@@ -284,11 +235,14 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
       .map(_.toLong)
   }
 
+  def setStatusAction(campaignId: CampaignId, status: CampaignStatus): DBIO[CampaignId] =
+    Schema.campaigns
+      .filter(_.id === campaignId).map(_.status).update(status).map(_ => campaignId)
 }
 
 
 protected class CancelTaskRepository()(implicit db: Database, ec: ExecutionContext) {
-  def cancel(campaign: CampaignId): Future[CancelTask] = db.run {
+  protected [db] def cancelAction(campaign: CampaignId): DBIO[CancelTask] = {
     val cancel = CancelTask(campaign, CancelTaskStatus.pending)
     (Schema.cancelTasks += cancel)
       .map(_ => cancel)
