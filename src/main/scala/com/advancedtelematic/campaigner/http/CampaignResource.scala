@@ -83,7 +83,7 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
             complete(campaigns.campaignStats(campaign.id))
           } ~
           (post & path("cancel")) {
-            complete(campaigns.cancelCampaign(campaign.id))
+            complete(campaigns.cancel(campaign.id))
           }
         }
       } ~

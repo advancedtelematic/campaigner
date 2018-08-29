@@ -1,6 +1,6 @@
 package com.advancedtelematic.campaigner.db
 
-import cats.syntax.option._
+import cats.syntax.either._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
@@ -20,7 +20,6 @@ object Campaigns {
   def apply()(implicit db: Database, ec: ExecutionContext): Campaigns = new Campaigns()
 }
 
-// TODO:SM Abstract group stats code to separate class?
 protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   extends GroupStatsSupport
     with CampaignSupport
@@ -43,32 +42,11 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       .map(_.map(_.processed))
 
   def completeBatch(campaignId: CampaignId, group: GroupId, stats: Stats): Future[Unit] = db.run {
-    val io = for {
-      _ <- progressGroupAction(campaignId, group, GroupStatus.scheduled, stats)
-      _ <- campaignStatusTransition.groupOrBatchCompleted(campaignId)
-    } yield ()
-
-    io.transactionally
+    campaignStatusTransition.completeBatch(campaignId, group, stats).transactionally
   }
 
   def completeGroup(campaign: CampaignId, group: GroupId, stats: Stats): Future[Unit] = db.run {
-    val io = for {
-      _ <- progressGroupAction(campaign, group, GroupStatus.launched, stats)
-      _ <- campaignStatusTransition.groupOrBatchCompleted(campaign)
-    } yield ()
-
-    io.transactionally
-  }
-
-  def cancelCampaign(campaign: CampaignId): Future[Unit] = db.run {
-    val io = for {
-      _ <- campaignRepo.findAction(campaign)
-      _ <- cancelTaskRepo.cancelAction(campaign)
-      _ <- groupStatsRepo.cancelAction(campaign)
-      _ <- campaignStatusTransition.cancel(campaign)
-    } yield ()
-
-    io.transactionally
+    campaignStatusTransition.completeGroup(campaign, group, stats).transactionally
   }
 
   def failedDevices(campaign: CampaignId): Future[Set[DeviceId]] = db.run {
@@ -95,12 +73,14 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     for {
       _ <- deviceUpdateRepo.setUpdateStatusAction(updateId, device, status)
       campaigns <- campaignRepo.findByUpdateAction(updateId)
-      _ <- DBIO.sequence(campaigns.map(c => campaignStatusTransition.deviceFinished(c.id)))
+      _ <- DBIO.sequence(campaigns.map(c => campaignStatusTransition.devicesFinished(c.id)))
     } yield ()
   }
 
-  def finishDevices(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus): Future[Unit] =
-    deviceUpdateRepo.setUpdateStatus(campaign, devices, status)
+  def finishDevices(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus): Future[Unit] = db.run {
+    deviceUpdateRepo.setUpdateStatusAction(campaign, devices, status)
+      .andThen(campaignStatusTransition.devicesFinished(campaign))
+  }
 
   def countFinished(campaignId: CampaignId): Future[Long] =
     campaignRepo.countDevices(campaignId) { status =>
@@ -134,6 +114,10 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     failed    <- failedDevices(campaignId)
     stats     <- campaignStatsFor(campaignId)
   } yield CampaignStats(campaignId, status, finished, failed, cancelled, stats)
+
+  def cancel(campaignId: CampaignId): Future[Unit] = db.run {
+    campaignStatusTransition.cancel(campaignId)
+  }
 
   def launch(id: CampaignId): Future[Unit] = db.run {
    val io = for {
@@ -180,41 +164,56 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
           .result
           .map(_.toSet)
     }
+}
+
+protected [db] class CampaignStatusTransition(implicit db: Database, ec: ExecutionContext) extends CampaignSupport
+  with GroupStatsSupport with CancelTaskSupport  {
+
+  def devicesFinished(campaignId: CampaignId): DBIO[Unit] =
+    updateToCalculatedStatus(campaignId)
+
+  def launch(campaignId: CampaignId): DBIO[CampaignId] =
+    campaignRepo.setStatusAction(campaignId, CampaignStatus.launched)
+
+  def cancel(campaignId: CampaignId): DBIO[Unit] =
+    for {
+      _ <- campaignRepo.findAction(campaignId)
+      _ <- cancelTaskRepo.cancelAction(campaignId)
+      _ <- groupStatsRepo.cancelAction(campaignId)
+      _ <- campaignRepo.setStatusAction(campaignId, CampaignStatus.cancelled)
+    } yield ()
+
+  def completeBatch(campaignId: CampaignId, group: GroupId, stats: Stats): DBIO[Unit] = {
+    for {
+      _ <- progressGroupAction(campaignId, group, GroupStatus.scheduled, stats)
+      _ <- updateToCalculatedStatus(campaignId)
+    } yield ()
+  }
+
+  def completeGroup(campaign: CampaignId, group: GroupId, stats: Stats): DBIO[Unit] =
+    for {
+      _ <- progressGroupAction(campaign, group, GroupStatus.launched, stats)
+      _ <- updateToCalculatedStatus(campaign)
+    } yield ()
 
   private def progressGroupAction(campaignId: CampaignId, group: GroupId, status: GroupStatus, stats: Stats): DBIO[Unit] =
     if (stats.affected > stats.processed)
       DBIO.failed(Errors.InvalidCounts)
     else
       groupStatsRepo.updateGroupStatsAction(campaignId, group, status, stats)
-}
 
-protected [db] class CampaignStatusTransition(implicit db: Database, ec: ExecutionContext) extends CampaignSupport
-  with GroupStatsSupport  {
-
-  def groupOrBatchCompleted(campaignId: CampaignId): DBIO[Unit] =
-    updateToCalculatedStatus(campaignId)
-
-  def deviceFinished(campaignId: CampaignId): DBIO[Unit] =
-    updateToCalculatedStatus(campaignId)
-
-  def launch(campaignId: CampaignId): DBIO[CampaignId] =
-    campaignRepo.setStatusAction(campaignId, CampaignStatus.launched)
-
-  def cancel(campaignId: CampaignId): DBIO[CampaignId] =
-    campaignRepo.setStatusAction(campaignId, CampaignStatus.cancelled)
-
-  def updateToCalculatedStatus(campaignId: CampaignId): DBIO[Unit] =
+  private def updateToCalculatedStatus(campaignId: CampaignId): DBIO[Unit] =
     for {
       maybeStatus <- calculateCampaignStatus(campaignId)
       _ <-  maybeStatus match {
-        case Some(status) =>
+        case Right(status) =>
           campaignRepo.setStatusAction(campaignId, status)
-        case None =>
+        case _ =>
           DBIO.successful(())
       }
     } yield ()
 
-  private def calculateCampaignStatus(campaign: CampaignId): DBIO[Option[CampaignStatus]] = {
+  protected [db] def calculateCampaignStatus(campaign: CampaignId): DBIO[Either[Unit, CampaignStatus]] = {
     def countDevicesByStatus(status: GroupStatus) =
       Schema.groupStats.filter(_.campaignId === campaign).filter(_.status === status).length.result
 
@@ -235,9 +234,9 @@ protected [db] class CampaignStatusTransition(implicit db: Database, ec: Executi
       affected <- countAffectedDevices
       finished <- countFinishedDevices
       status = (groupCount, scheduled, cancelled, affected, finished) match {
-        case (_, _, c, _, _) if c > 0           => CampaignStatus.cancelled.some
-        case (g, 0, _, a, f) if g > 0 && a == f => CampaignStatus.finished.some
-        case _                                  => None
+        case (_, _, c, _, _) if c > 0           => CampaignStatus.cancelled.asRight
+        case (g, 0, _, a, f) if g > 0 && a == f => CampaignStatus.finished.asRight
+        case _                                  => ().asLeft
       }
     } yield status
   }
