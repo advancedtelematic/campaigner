@@ -1,5 +1,7 @@
 package com.advancedtelematic.campaigner.http
 
+import java.util.UUID
+
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.Uri.Query
@@ -139,9 +141,12 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   "Creating two updates with the same updateId" should "fail with Conflict error" in {
     val request1: CreateUpdate = genCreateUpdate.sample.get
     val request2: CreateUpdate = genCreateUpdate.sample.get.copy(updateSource= request1.updateSource)
-    createUpdateOk(request1)
+    val updateId = createUpdateOk(request1)
     createUpdate(request2) ~> routes ~> check {
       status shouldBe Conflict
+      import org.scalatest.OptionValues._
+      responseAs[ErrorRepresentation].cause.flatMap(_.hcursor.get[UUID]("uuid").toOption).value should equal(updateId.uuid)
+
     }
   }
 

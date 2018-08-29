@@ -104,6 +104,6 @@ flywayUser := sys.env
   .orElse(sys.props.get("campaigner.db.user"))
   .getOrElse("campaigner")
 flywayPassword := sys.env
-  .get("SACHER_DB_PASSWORD")
+  .get("DB_PASSWORD")
   .orElse(sys.props.get("campaigner.db.password"))
   .getOrElse("campaigner")
