@@ -28,7 +28,6 @@ class CampaignsSpec extends AsyncFlatSpec
   "complete batch" should "fail if the campaign does not exist" in {
     recoverToSucceededIf[CampaignMissing.type] {
       campaigns.completeBatch(
-        arbitrary[Namespace].sample.get,
         CampaignId.generate(),
         GroupId.generate(),
         Stats(0, 0)
@@ -44,13 +43,12 @@ class CampaignsSpec extends AsyncFlatSpec
     for {
       campaign <- createDbCampaignWithUpdate()
       _ <- campaigns.completeBatch(
-        campaign.namespace,
         campaign.id,
         group,
         Stats(processed, affected)
       )
       status <- groupStatsRepo.groupStatusFor(campaign.id, group)
-      stats <- campaigns.campaignStatsFor(campaign.namespace, campaign.id)
+      stats <- campaigns.campaignStatsFor(campaign.id)
     } yield {
       status shouldBe Some(GroupStatus.scheduled)
       stats  shouldBe Map(group -> Stats(processed, affected))
@@ -60,7 +58,6 @@ class CampaignsSpec extends AsyncFlatSpec
   "complete group" should "fail if the campaign does not exist" in {
     recoverToSucceededIf[CampaignMissing.type] {
       campaigns.completeGroup(
-        arbitrary[Namespace].sample.get,
         CampaignId.generate(),
         GroupId.generate(),
         Stats(processed = 0, affected = 0)
@@ -77,13 +74,12 @@ class CampaignsSpec extends AsyncFlatSpec
     for {
       campaign <- createDbCampaignWithUpdate()
       _ <- campaigns.completeGroup(
-        campaign.namespace,
         campaign.id,
         group,
         Stats(processed, affected)
       )
       status <- groupStatsRepo.groupStatusFor(campaign.id, group)
-      stats  <- campaigns.campaignStatsFor(campaign.namespace, campaign.id)
+      stats  <- campaigns.campaignStatsFor(campaign.id)
     } yield {
       status shouldBe Some(GroupStatus.launched)
       stats  shouldBe Map(group -> Stats(processed, affected))
@@ -100,7 +96,7 @@ class CampaignsSpec extends AsyncFlatSpec
       newCampaigns <- FastFuture.traverse(arbitrary[Seq[Int]].sample.get)(_ => createDbCampaign(ns, update, Set(group)))
       _ <- FastFuture.traverse(newCampaigns)(c => campaigns.scheduleDevices(c.id, update, device))
       _ <- campaigns.finishDevice(update, device, DeviceStatus.successful)
-      c <- campaigns.countFinished(ns, newCampaigns.head.id)
+      c <- campaigns.countFinished(newCampaigns.head.id)
     } yield c shouldBe 1
   }
 
@@ -112,7 +108,7 @@ class CampaignsSpec extends AsyncFlatSpec
       campaign <- createDbCampaignWithUpdate()
       _ <- FastFuture.traverse(devices)(d => campaigns.scheduleDevices(campaign.id, campaign.updateId, d))
       _ <- FastFuture.traverse(devices)(d => campaigns.finishDevice(campaign.updateId, d, DeviceStatus.failed))
-      c <- campaigns.countFinished(campaign.namespace, campaign.id)
+      c <- campaigns.countFinished(campaign.id)
     } yield c shouldBe devices.length
   }
 }

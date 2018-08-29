@@ -32,7 +32,7 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
 
     val parent   = TestProbe()
 
-    campaigns.scheduleGroups(campaign.namespace, campaign.id, groups).futureValue
+    campaigns.scheduleGroups(campaign.id, groups).futureValue
     groups.foreach { g => deviceRegistry.setGroup(g, arbitrary[Seq[DeviceId]].sample.get) }
 
     parent.childActorOf(CampaignScheduler.props(
@@ -72,7 +72,7 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
         Future.successful(Seq.empty)
     }
 
-    campaigns.scheduleGroups(campaign.namespace, campaign.id, groups).futureValue
+    campaigns.scheduleGroups(campaign.id, groups).futureValue
 
     parent.childActorOf(CampaignScheduler.props(
       deviceRegistry,
@@ -83,7 +83,6 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
     ))
     parent.expectMsg(3.seconds, CampaignComplete(campaign.id))
 
-    campaigns.campaignStats(campaign.namespace, campaign.id)
-      .futureValue.status shouldBe CampaignStatus.finished
+    campaigns.campaignStats(campaign.id).futureValue.status shouldBe CampaignStatus.finished
   }
 }
