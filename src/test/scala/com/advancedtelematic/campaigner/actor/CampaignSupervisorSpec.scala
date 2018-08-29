@@ -85,7 +85,7 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
     parent.expectMsg(2.seconds, CampaignsScheduled(Set(campaign.id)))
     expectNoMessage(2.seconds)
 
-    campaigns.cancelCampaign(campaign.id).futureValue
+    campaigns.cancel(campaign.id).futureValue
     parent.expectMsg(2.seconds, CampaignsCancelled(Set(campaign.id)))
     expectNoMessage(2.seconds)
   }

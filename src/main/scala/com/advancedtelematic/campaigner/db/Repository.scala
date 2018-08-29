@@ -97,7 +97,7 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
         case _ => DBIO.successful(())
       }.map(_ => ())
 
-  def setUpdateStatus(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus): Future[Unit] = db.run {
+  protected [db] def setUpdateStatusAction(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus): DBIO[Unit] =
     Schema.deviceUpdates
       .filter(_.campaignId === campaign)
       .filter(_.deviceId inSet devices)
@@ -107,7 +107,6 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
         case n if devices.length == n => DBIO.successful(())
         case _ => DBIO.failed(Errors.DeviceNotScheduled)
       }.map(_ => ())
-  }
 
   def persistMany(updates: Seq[DeviceUpdate]): Future[Unit] = db.run {
     (Schema.deviceUpdates ++= updates).map(_ => ())
