@@ -5,33 +5,40 @@ import akka.testkit.TestProbe
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.Campaigns
+import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
-import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
 
-import scala.concurrent.duration._
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
-class CampaignSupervisorSpec1 extends ActorSpec[CampaignSupervisor] with CampaignerSpec {
+class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with CampaignerSpec with UpdateSupport {
 
-  import Arbitrary._
   import CampaignScheduler._
   import CampaignSupervisor._
 
   val campaigns = Campaigns()
 
+  def buildCampaignWithUpdate: Campaign = {
+    val updateSource = genUpdateSource.retryUntil(_.sourceType == UpdateType.multi_target).sample.get
+    val update = genUpdate.sample.get.copy(source = updateSource)
+    val updateId = updateRepo.persist(update).futureValue
+    arbitrary[Campaign].sample.get.copy(updateId = updateId)
+  }
+
   "campaign supervisor" should "pick up unfinished and fresh campaigns" in {
-    val campaign1 = arbitrary[Campaign].sample.get
-    val campaign2 = arbitrary[Campaign].sample.get
+    val campaign1 = buildCampaignWithUpdate
+    val campaign2 = buildCampaignWithUpdate
     val group     = GroupId.generate
     val parent    = TestProbe()
 
     campaigns.create(campaign1, Set(group), Seq.empty).futureValue
     campaigns.create(campaign2, Set(group), Seq.empty).futureValue
 
-    campaigns.scheduleGroups(campaign1.namespace, campaign1.id, Set(group)).futureValue
+    campaigns.scheduleGroups(campaign1.id, Set(group)).futureValue
 
     parent.childActorOf(CampaignSupervisor.props(
       deviceRegistry,
@@ -44,22 +51,29 @@ class CampaignSupervisorSpec1 extends ActorSpec[CampaignSupervisor] with Campaig
     parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign1.id)))
     parent.expectMsg(3.seconds, CampaignComplete(campaign1.id))
 
-    campaigns.scheduleGroups(campaign2.namespace, campaign2.id, Set(group)).futureValue
+    campaigns.scheduleGroups(campaign2.id, Set(group)).futureValue
 
     parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign2.id)))
   }
 
 }
 
-class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with CampaignerSpec {
+class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with CampaignerSpec with UpdateSupport {
 
-  import Arbitrary._
   import CampaignSupervisor._
+  import org.scalacheck.Arbitrary._
 
   val campaigns = Campaigns()
 
+  def buildCampaignWithUpdate: Campaign = {
+    val updateSource = genUpdateSource.retryUntil(_.sourceType == UpdateType.multi_target).sample.get
+    val update = genUpdate.sample.get.copy(source = updateSource)
+    val updateId = updateRepo.persist(update).futureValue
+    arbitrary[Campaign].sample.get.copy(updateId = updateId)
+  }
+
   "campaign supervisor" should "clean out campaigns that are marked to be cancelled" in {
-    val campaign = arbitrary[Campaign].sample.get
+    val campaign = buildCampaignWithUpdate
     val group    = GroupId.generate
     val parent   = TestProbe()
     val n        = Gen.choose(batch, batch * 2).sample.get
@@ -73,7 +87,7 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
     }
 
     campaigns.create(campaign, Set(group), Seq.empty).futureValue
-    campaigns.scheduleGroups(campaign.namespace, campaign.id, Set(group))
+    campaigns.scheduleGroups(campaign.id, Set(group))
 
     parent.childActorOf(CampaignSupervisor.props(
       registry,
@@ -85,7 +99,7 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
     parent.expectMsg(2.seconds, CampaignsScheduled(Set(campaign.id)))
     expectNoMessage(2.seconds)
 
-    campaigns.cancelCampaign(campaign.namespace, campaign.id).futureValue
+    campaigns.cancel(campaign.id).futureValue
     parent.expectMsg(2.seconds, CampaignsCancelled(Set(campaign.id)))
     expectNoMessage(2.seconds)
   }

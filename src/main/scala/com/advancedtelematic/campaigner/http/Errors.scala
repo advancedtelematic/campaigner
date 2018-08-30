@@ -6,8 +6,8 @@ import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.{MissingEntity, RawError}
 
 object ErrorCodes {
-
   val ConflictingCampaign = ErrorCode("campaign_already_exists")
+  val MissingUpdateSource = ErrorCode("missing_update_source")
   val ConflictingMetadata = ErrorCode("campaign_metadata_already_exists")
   val CampaignAlreadyLaunched = ErrorCode("campaign_already_launched")
   val InvalidCounts = ErrorCode("invalid_stats_count")
@@ -19,11 +19,14 @@ object ErrorCodes {
 object Errors {
 
   val CampaignMissing = MissingEntity[Campaign]
-  val ConflictingCampaign = RawError(
-    ErrorCodes.ConflictingCampaign,
-    StatusCodes.Conflict,
-    "A campaign with that name already exists."
+
+  val MissingUpdateSource = RawError(
+    ErrorCodes.MissingUpdateSource,
+    StatusCodes.PreconditionFailed,
+    "The update associated with the given campaign does not exist."
   )
+
+  val ConflictingCampaign = RawError(ErrorCodes.ConflictingCampaign, StatusCodes.Conflict, "campaign already exists")
 
   val ConflictingMetadata = RawError(
     ErrorCodes.ConflictingMetadata,

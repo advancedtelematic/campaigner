@@ -33,7 +33,7 @@ object Generators {
     update <- arbitrary[UpdateId]
     ca      = Instant.now()
     ua      = Instant.now()
-  } yield Campaign(ns, id, n, update, ca, ua)
+  } yield Campaign(ns, id, n, update, CampaignStatus.prepared, ca, ua)
 
   val genCreateCampaign: Gen[CreateCampaign] = for {
     n   <- arbitrary[String]
@@ -51,6 +51,14 @@ object Generators {
     id <- arbitrary[String].suchThat(_.length < 200)
     t <- arbitrary[UpdateType]
   } yield UpdateSource(ExternalUpdateId(id), t)
+
+  val genUpdate: Gen[Update] = for {
+    id <- genUpdateId
+    src <- genUpdateSource
+    ns <- genNamespace
+    nm <- Gen.alphaNumStr
+    des <- Gen.option(Gen.alphaStr)
+  } yield Update(id, src, ns, nm, des, Instant.now, Instant.now)
 
   val genCreateUpdate: Gen[CreateUpdate] = for {
     us <- genUpdateSource
@@ -72,6 +80,8 @@ object Generators {
   implicit lazy val arbCreateCampaign: Arbitrary[CreateCampaign] = Arbitrary(genCreateCampaign)
   implicit lazy val arbUpdateCampaign: Arbitrary[UpdateCampaign] = Arbitrary(genUpdateCampaign)
   implicit lazy val arbUpdateType: Arbitrary[UpdateType] = Arbitrary(genUpdateType)
+  implicit lazy val arbUpdateSource: Arbitrary[UpdateSource] = Arbitrary(genUpdateSource)
+  implicit lazy val arbUpdate: Arbitrary[Update] = Arbitrary(genUpdate)
   implicit lazy val arbMetadataType: Arbitrary[MetadataType] = Arbitrary(genMetadataType)
   implicit lazy val arbCreateUpdate: Arbitrary[CreateUpdate] = Arbitrary(genCreateUpdate)
   implicit lazy val arbStats: Arbitrary[Stats] = Arbitrary(genStats)

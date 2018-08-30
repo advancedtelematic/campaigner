@@ -9,4 +9,5 @@ object SlickMapping {
   implicit val groupStatusMapper = SlickEnumMapper.enumMapper(GroupStatus)
   implicit val cancelTaskStatusMapper = SlickEnumMapper.enumMapper(CancelTaskStatus)
   implicit val updateTypeMapper = SlickEnumMapper.enumMapper(UpdateType)
+  implicit val campaignStatusMapper = SlickEnumMapper.enumMapper(CampaignStatus)
 }

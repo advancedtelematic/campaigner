@@ -1,41 +1,39 @@
 package com.advancedtelematic.campaigner.http
 
+
 import akka.http.scaladsl.model.StatusCodes._
 import cats.syntax.show._
+import cats.syntax.option._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns}
-import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
+import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec, UpdateResourceSpecUtil}
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
 import io.circe.syntax._
 import org.scalacheck.Arbitrary._
+import org.scalactic.source
 
-class CampaignResourceSpec extends CampaignerSpec
-    with ResourceSpec
-    with CampaignSupport {
+class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with CampaignSupport with UpdateResourceSpecUtil {
 
   val campaigns = Campaigns()
 
-  def checkStats(
-    id: CampaignId,
-    campaignStatus: CampaignStatus,
-    stats: Map[GroupId, Stats] = Map.empty,
-    finished: Long = 0,
-    failed: Set[DeviceId] = Set.empty,
-    cancelled: Long = 0): Unit =
+  def checkStats(id: CampaignId, campaignStatus: CampaignStatus, stats: Map[GroupId, Stats] = Map.empty,
+                 finished: Long = 0, failed: Set[DeviceId] = Set.empty, cancelled: Long = 0)
+                (implicit pos: source.Position): Unit =
     Get(apiUri(s"campaigns/${id.show}/stats")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
-      responseAs[CampaignStats] shouldBe CampaignStats(id, campaignStatus, finished, failed, cancelled, stats)
+      val campaignStats = responseAs[CampaignStats]
+      campaignStats.status shouldBe campaignStatus
+      campaignStats shouldBe CampaignStats(id, campaignStatus, finished, failed, cancelled, stats)
     }
 
   "POST and GET /campaigns" should "create a campaign, return the created campaign" in {
-    val request = arbitrary[CreateCampaign].sample.get
-    val id = createCampaignOk(request)
+    val (id, request) = createCampaignWithUpdateOk()
 
     val campaign = getCampaignOk(id)
     campaign shouldBe GetCampaign(
@@ -43,6 +41,7 @@ class CampaignResourceSpec extends CampaignerSpec
       id,
       request.name,
       request.update,
+      CampaignStatus.prepared,
       campaign.createdAt,
       campaign.updatedAt,
       request.groups,
@@ -58,8 +57,7 @@ class CampaignResourceSpec extends CampaignerSpec
   }
 
   "POST/GET autoAccept campaign" should "create and return the created campaign" in {
-    val request = arbitrary[CreateCampaign].sample.get.copy(approvalNeeded = Some(false))
-    val id = createCampaignOk(request)
+    val (id, request) = createCampaignWithUpdateOk(arbitrary[CreateCampaign].map(_.copy(approvalNeeded = Some(false))))
 
     val campaign = getCampaignOk(id)
 
@@ -68,6 +66,7 @@ class CampaignResourceSpec extends CampaignerSpec
       id,
       request.name,
       request.update,
+      CampaignStatus.prepared,
       campaign.createdAt,
       campaign.updatedAt,
       request.groups,
@@ -77,10 +76,8 @@ class CampaignResourceSpec extends CampaignerSpec
   }
 
   "PUT /campaigns/:campaign_id" should "update a campaign" in {
-    val request = arbitrary[CreateCampaign].sample.get
+    val (id, request) = createCampaignWithUpdateOk()
     val update  = arbitrary[UpdateCampaign].sample.get
-
-    val id = createCampaignOk(request)
     val createdAt = getCampaignOk(id).createdAt
 
     Put(apiUri("campaigns/" + id.show), update).withHeaders(header) ~> routes ~> check {
@@ -97,16 +94,14 @@ class CampaignResourceSpec extends CampaignerSpec
   }
 
   "POST /campaigns/:campaign_id/launch" should "trigger an update" in {
-    val campaign = arbitrary[CreateCampaign].sample.get
-    val campaignId = createCampaignOk(campaign)
+    val (campaignId, campaign) = createCampaignWithUpdateOk()
     val request = Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header)
 
     request ~> routes ~> check {
       status shouldBe OK
     }
 
-    checkStats(campaignId, CampaignStatus.scheduled,
-      campaign.groups.map(_ -> Stats(0, 0)).toMap)
+    checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toMap)
 
     request ~> routes ~> check {
       status shouldBe Conflict
@@ -114,8 +109,7 @@ class CampaignResourceSpec extends CampaignerSpec
   }
 
   "POST /campaigns/:campaign_id/cancel" should "cancel a campaign" in {
-    val campaign = arbitrary[CreateCampaign].sample.get
-    val campaignId = createCampaignOk(campaign)
+    val (campaignId, campaign) = createCampaignWithUpdateOk()
 
     checkStats(campaignId, CampaignStatus.prepared)
 
@@ -123,8 +117,7 @@ class CampaignResourceSpec extends CampaignerSpec
       status shouldBe OK
     }
 
-    checkStats(campaignId, CampaignStatus.scheduled,
-      campaign.groups.map(_ -> Stats(0, 0)).toMap)
+    checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toMap)
 
     Post(apiUri(s"campaigns/${campaignId.show}/cancel")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
@@ -135,51 +128,45 @@ class CampaignResourceSpec extends CampaignerSpec
   }
 
   "POST /cancel_device_update_campaign" should "cancel a single device update" in {
-    val campaign   = arbitrary[CreateCampaign].sample.get
-    val campaignId = createCampaignOk(campaign)
-    val update     = campaign.update
-    val device     = DeviceId.generate()
+    val (campaignId, campaign) = createCampaignWithUpdateOk()
+    val updateId = campaign.update
+    val device = DeviceId.generate()
 
     Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
     }
 
-    checkStats(campaignId, CampaignStatus.scheduled,
-      campaign.groups.map(_ -> Stats(0, 0)).toMap)
+    checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toMap)
 
-    campaigns.scheduleDevices(campaignId, update, device).futureValue
+    campaigns.scheduleDevices(campaignId, updateId, device).futureValue
 
-    val entity = Json.obj("update" -> update.asJson, "device" -> device.asJson)
+    val entity = Json.obj("update" -> updateId.asJson, "device" -> device.asJson)
     Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
       director.cancelled.contains(device) shouldBe true
     }
 
-    checkStats(campaignId, CampaignStatus.scheduled,
-      campaign.groups.map(_ -> Stats(0, 0)).toMap, 0, Set.empty, 1)
+    checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toMap, 0, Set.empty, 1)
   }
 
   it should "fail if device has not been scheduled" in {
-    val campaign   = arbitrary[CreateCampaign].sample.get
-    val campaignId = createCampaignOk(campaign)
-    val update     = campaign.update
+    val (campaignId, campaign) = createCampaignWithUpdateOk()
+    val updateId = campaign.update
     val device     = DeviceId.generate()
 
     Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
     }
 
-    checkStats(campaignId, CampaignStatus.scheduled,
-      campaign.groups.map(_ -> Stats(0, 0)).toMap)
+    checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toMap)
 
-    val entity = Json.obj("update" -> update.asJson, "device" -> device.asJson)
+    val entity = Json.obj("update" -> updateId.asJson, "device" -> device.asJson)
     Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe PreconditionFailed
       director.cancelled.contains(device) shouldBe true
     }
 
-    checkStats(campaignId, CampaignStatus.scheduled,
-      campaign.groups.map(_ -> Stats(0, 0)).toMap)
+    checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toMap)
   }
 
   it should "accept request to cancel device if no campaign is associated" in {
@@ -193,28 +180,29 @@ class CampaignResourceSpec extends CampaignerSpec
     }
   }
 
-  it should "accept metadata as part of campaign creation" in {
-    val request = arbitrary[CreateCampaign].retryUntil(_.metadata.nonEmpty).sample.get
-    createCampaignOk(request)
-  }
-
   it should "return metadata if campaign has it" in {
-    val request = arbitrary[CreateCampaign].retryUntil(_.metadata.nonEmpty).sample.get
-    val id = createCampaignOk(request)
-
+    val (id, request) = createCampaignWithUpdateOk(arbitrary[CreateCampaign].retryUntil(_.metadata.nonEmpty))
     val result = getCampaignOk(id)
 
     result.metadata shouldBe request.metadata.get
   }
 
-  it should "return error when metadata already exists" in {
-    val metadata = genCampaignMetadata.sample.get
-    val metadatas = Seq(metadata, genCampaignMetadata.sample.get.copy(`type` = metadata.`type`))
-    val request = arbitrary[CreateCampaign].sample.get.copy(metadata = Some(metadatas))
+  it should "return error when metadata is duplicated in request" in {
+    val updateId = createUpdateOk(arbitrary[CreateUpdate].gen)
+    val metadata = Seq(CreateCampaignMetadata(MetadataType.DESCRIPTION, "desc"), CreateCampaignMetadata(MetadataType.DESCRIPTION, "desc 2"))
+    val createRequest = arbitrary[CreateCampaign].map(_.copy(update = updateId, metadata = Some(metadata))).gen
 
-    Post(apiUri("campaigns"), request).withHeaders(header) ~> routes ~> check {
+    Post(apiUri("campaigns"), createRequest).withHeaders(header) ~> routes ~> check {
       status shouldBe Conflict
       responseAs[ErrorRepresentation].code shouldBe ErrorCodes.ConflictingMetadata
     }
+  }
+
+  "GET all campaigns" should "return only campaigns matching campaign filter" in {
+    val (id, request) = createCampaignWithUpdateOk()
+
+    getCampaignsOk(CampaignStatus.prepared.some).values should contain(id)
+
+    getCampaignsOk(CampaignStatus.launched.some).values shouldNot contain(id)
   }
 }

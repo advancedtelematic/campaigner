@@ -2,6 +2,7 @@ package com.advancedtelematic.campaigner.db
 
 import java.time.Instant
 
+import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
@@ -23,12 +24,15 @@ object Schema {
     def namespace = column[Namespace] ("namespace")
     def id        = column[CampaignId]("uuid", O.PrimaryKey)
     def name      = column[String]    ("name")
-    def update    = column[UpdateId]  ("update_id")
+    def update    = column[UpdateId]  ("update_uuid")
+    def status = column[CampaignStatus]("status")
     def autoAccept = column[Boolean]   ("auto_accept")
     def createdAt = column[Instant]   ("created_at")
     def updatedAt = column[Instant]   ("updated_at")
 
-    override def * = (namespace, id, name, update, createdAt, updatedAt, autoAccept) <>
+    def updateForeignKey = foreignKey("update_fk", update, updates)(_.uuid)
+
+    override def * = (namespace, id, name, update, status, createdAt, updatedAt, autoAccept) <>
                      ((Campaign.apply _).tupled, Campaign.unapply)
   }
 

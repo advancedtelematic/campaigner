@@ -30,7 +30,7 @@ class DeviceUpdateProcess(director: DirectorClient)(implicit db: Database, ec: E
 
   def processDeviceAcceptedUpdate(ns: Namespace, campaignId: CampaignId, deviceId: DeviceId): Future[Unit] = {
     for {
-      campaign <- campaigns.findCampaign(ns, campaignId)
+      campaign <- campaigns.findClientCampaign(campaignId)
       affected <- director.setMultiUpdateTarget(ns, campaign.update, Seq(deviceId))
       _ <- affected.find(_ == deviceId) match {
         case Some(_) =>

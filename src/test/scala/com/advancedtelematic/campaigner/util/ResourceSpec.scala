@@ -1,11 +1,14 @@
 package com.advancedtelematic.campaigner.util
 
+import org.scalactic.source
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.Uri
+import akka.http.scaladsl.model.Uri.Query
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.Codecs._
+import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.data.DataType.Namespace
@@ -46,10 +49,13 @@ trait ResourceSpec extends ScalatestRouteTest
       responseAs[GetCampaign]
     }
 
-  def getCampaignsOk(): PaginationResult[CampaignId] =
-    Get(apiUri("campaigns")).withHeaders(header) ~> routes ~> check {
+  def getCampaignsOk(campaignStatus: Option[CampaignStatus] = None)(implicit pos: source.Position): PaginationResult[CampaignId] = {
+    val query = Query(campaignStatus.map(s => Map("status" -> s.toString)).getOrElse(Map.empty))
+
+    Get(apiUri("campaigns").withQuery(query)).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
       responseAs[PaginationResult[CampaignId]]
     }
+  }
 }
 
