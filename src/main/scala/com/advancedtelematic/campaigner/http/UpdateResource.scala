@@ -4,7 +4,7 @@ import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.model.headers.Location
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.{Directive1, ExceptionHandler, Route}
+import akka.http.scaladsl.server.{Directive1, ExceptionHandler, PathMatchers, Route}
 import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, Resolver}
 import com.advancedtelematic.campaigner.data.AkkaSupport._
@@ -13,8 +13,10 @@ import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, ExternalUpd
 import com.advancedtelematic.campaigner.db.UpdateSupport
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.{ErrorRepresentation, PaginationResult}
+import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.{Encoder, Json}
+import com.advancedtelematic.libats.http.UUIDKeyAkka._
 import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.ExecutionContext
@@ -74,6 +76,9 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
   val route: Route =
     extractNamespace { ns =>
       pathPrefix("updates") {
+        (path( UpdateId.Path ) & pathEnd) { updateUuid =>
+          complete(updateRepo.findById(updateUuid))
+        } ~
         pathEnd {
           (get & parameter('groupId.as[GroupId].?) & parameters('limit.as[Long].?) & parameters('offset.as[Long].?)) { (groupId, limit, offset) =>
             groupId match {
