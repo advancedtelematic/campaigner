@@ -162,7 +162,6 @@ protected [db] class GroupStatsRepository()(implicit db: Database, ec: Execution
 }
 
 protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext) {
-  import com.advancedtelematic.campaigner.db.SlickHandleFkErrorOps._
   import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 
   def persist(campaign: Campaign, groups: Set[GroupId], metadata: Seq[CampaignMetadata]): Future[CampaignId] = db.run {
