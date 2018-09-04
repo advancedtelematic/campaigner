@@ -129,12 +129,15 @@ class CampaignSupervisor(registry: DeviceRegistryClient,
       if (newlyScheduled.nonEmpty) {
         become(supervising(campaignSchedulers ++ newlyScheduled))
         parent ! CampaignsScheduled(newlyScheduled.keySet)
-      }
+      } else
+        log.debug(s"Not creating scheduler for campaigns, scheduler already exists")
     case CampaignComplete(id) =>
       log.info(s"$id completed")
       become(supervising(campaignSchedulers - id))
       parent ! CampaignComplete(id)
-    case Error(msg, err) => log.error(s"$msg: ${err.getMessage}")
+    case Error(msg, err) =>
+      // TODO: Move campaign to failed?
+      log.error(err, s"An error occurred: $msg")
   }
 
   def receive: Receive = supervising(Map.empty)
