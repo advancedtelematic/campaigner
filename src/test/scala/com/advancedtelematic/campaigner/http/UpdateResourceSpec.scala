@@ -12,6 +12,7 @@ import com.advancedtelematic.campaigner.data.DataType.GroupId._
 import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, GroupId, Update}
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.UpdateSupport
+import com.advancedtelematic.campaigner.http.Errors.MissingUpdate
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
 import com.advancedtelematic.libats.data.{ErrorRepresentation, PaginationResult}
 import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
@@ -137,13 +138,12 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates/:updateId" should "return 404 Not Found if update does not exists" in {
-    import com.advancedtelematic.libats.data.ErrorCodes.MissingEntity
     val updateId = genUpdateId.sample.get
     val error = getUpdateResult(updateId) ~> check {
       status shouldBe NotFound
       responseAs[ErrorRepresentation]
     }
-    error.code shouldBe MissingEntity
+    error.code shouldBe ErrorCodes.MissingUpdate
   }
 
   "POST to /updates" should "create a new update" in {

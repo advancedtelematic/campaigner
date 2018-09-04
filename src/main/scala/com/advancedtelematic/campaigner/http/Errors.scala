@@ -3,11 +3,13 @@ package com.advancedtelematic.campaigner.http
 import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.data.ErrorCode
-import com.advancedtelematic.libats.http.Errors.{MissingEntity, RawError}
+import com.advancedtelematic.libats.http.Errors.{MissingEntity, RawError, Error}
+import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
 
 object ErrorCodes {
   val ConflictingCampaign = ErrorCode("campaign_already_exists")
   val MissingUpdateSource = ErrorCode("missing_update_source")
+  val MissingUpdate = ErrorCode("missing_update")
   val ConflictingMetadata = ErrorCode("campaign_metadata_already_exists")
   val CampaignAlreadyLaunched = ErrorCode("campaign_already_launched")
   val InvalidCounts = ErrorCode("invalid_stats_count")
@@ -20,7 +22,8 @@ object Errors {
 
   val CampaignMissing = MissingEntity[Campaign]
 
-val UpdateMissing = MissingEntity[Update]
+  case class MissingUpdate(id: UpdateId) extends Error(ErrorCodes.MissingUpdate, StatusCodes.NotFound, s"Missing $id")
+
   val MissingUpdateSource = RawError(
     ErrorCodes.MissingUpdateSource,
     StatusCodes.PreconditionFailed,

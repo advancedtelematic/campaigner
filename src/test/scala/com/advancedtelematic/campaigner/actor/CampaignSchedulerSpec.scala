@@ -8,7 +8,7 @@ import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec, DatabaseUpdateSpecUtil}
 import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
+import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.scalacheck.Arbitrary
 
 import scala.concurrent.Future
@@ -55,7 +55,7 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
     val director = new DirectorClient {
       override def setMultiUpdateTarget(
         ns: Namespace,
-        update: UpdateId,
+        update: ExternalUpdateId,
         devices: Seq[DeviceId]
       ): Future[Seq[DeviceId]] = FastFuture.successful(Seq.empty)
 
@@ -68,7 +68,7 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
         ns: Namespace,
         device: DeviceId): Future[Unit] = FastFuture.successful(())
 
-      override def findAffected(ns: Namespace, updateId: UpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] =
+      override def findAffected(ns: Namespace, updateId: ExternalUpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] =
         Future.successful(Seq.empty)
     }
 

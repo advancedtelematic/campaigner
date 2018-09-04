@@ -279,9 +279,9 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
     (Schema.updates += update).map(_ => update.uuid).handleIntegrityErrors(Errors.ConflictingUpdate)
   }
 
-  def findById(updateId: UpdateId): Future[Update] = db.run(
-    Schema.updates.filter(_.uuid === updateId).resultHead(Errors.UpdateMissing)
-  )
+  def findById(id: UpdateId): Future[Update] = db.run {
+    Schema.updates.filter(_.uuid === id).result.failIfNotSingle(Errors.MissingUpdate(id))
+  }
 
   def findByExternalIds(ns: Namespace, ids: Seq[ExternalUpdateId]): Future[Seq[Update]] = db.run {
     Schema.updates.filter(_.namespace === ns).filter(_.updateId.inSet(ids)).result

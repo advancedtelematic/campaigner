@@ -1,12 +1,12 @@
 package com.advancedtelematic.campaigner.util
 
-import akka.http.scaladsl.util.FastFuture
-import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import java.util.concurrent.ConcurrentHashMap
 
+import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, DirectorClient, Resolver}
+import com.advancedtelematic.campaigner.data.DataType._
+import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.scalacheck.Gen
 
 import scala.collection.JavaConverters._
@@ -14,12 +14,12 @@ import scala.concurrent.Future
 
 class FakeDirectorClient extends DirectorClient {
 
-  val updates = new ConcurrentHashMap[UpdateId, Set[DeviceId]]()
-  val affected = new ConcurrentHashMap[UpdateId, Set[DeviceId]]()
+  val updates = new ConcurrentHashMap[ExternalUpdateId, Set[DeviceId]]()
+  val affected = new ConcurrentHashMap[ExternalUpdateId, Set[DeviceId]]()
   val cancelled = ConcurrentHashMap.newKeySet[DeviceId]()
 
   override def setMultiUpdateTarget(namespace: Namespace,
-                                    update: UpdateId,
+                                    update: ExternalUpdateId,
                                     devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
     val affected = devices.filterNot(cancelled.asScala.contains)
 
@@ -48,7 +48,7 @@ class FakeDirectorClient extends DirectorClient {
     FastFuture.successful(())
   }
 
-  override def findAffected(ns: Namespace, updateId: UpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
+  override def findAffected(ns: Namespace, updateId: ExternalUpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
     FastFuture.successful(affected.asScala.get(updateId).toSeq.flatten)
   }
 }

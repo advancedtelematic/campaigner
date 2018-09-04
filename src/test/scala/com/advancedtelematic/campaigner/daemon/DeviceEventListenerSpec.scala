@@ -33,12 +33,13 @@ class DeviceEventListenerSpec extends CampaignerSpec with DatabaseSpec with Devi
 
   "listener" should "schedule update in director" in {
     val campaign = createDbCampaignWithUpdate().futureValue
+    val update = updateRepo.findById(campaign.updateId).futureValue
     val device = arbitrary[DeviceId].generate
     val msg = genDeviceEvent(campaign, device)
 
     listener.apply(msg).futureValue shouldBe Done
 
-    director.updates.get(campaign.updateId) shouldBe Set(device)
+    director.updates.get(update.source.id) shouldBe Set(device)
   }
 
   it should "set device update status to accepted" in {

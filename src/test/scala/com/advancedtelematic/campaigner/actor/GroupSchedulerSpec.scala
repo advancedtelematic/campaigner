@@ -33,6 +33,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
 
   "group scheduler" should "trigger updates for each device in batch" in {
     val campaign = buildCampaignWithUpdate
+    val update = updateRepo.findById(campaign.updateId).futureValue
     val group    = GroupId.generate()
     val parent = TestProbe()
 
@@ -49,11 +50,12 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
       case GroupComplete(grp) => grp
     }
 
-    deviceRegistry.allGroupDevices(group).take(batch) should contain allElementsOf director.updates.get(campaign.updateId)
+    deviceRegistry.allGroupDevices(group).take(batch) should contain allElementsOf director.updates.get(update.source.id)
   }
 
   "group scheduler" should "respect groups with processed devices > batch size" in {
     val campaign = buildCampaignWithUpdate
+    val update = updateRepo.findById(campaign.updateId).futureValue
     val group    = GroupId.generate()
     val n        = Gen.choose(batch, batch * 10).sample.get
     val devs     = Gen.listOfN(n, genDeviceId).sample.get
@@ -71,13 +73,14 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
       parent.expectMsg(BatchComplete(group, (i+1).toLong * batch))
     }
     parent.expectMsg(GroupComplete(group))
-    director.updates.get(campaign.updateId).subsetOf(
+    director.updates.get(update.source.id).subsetOf(
       devs.toSet
     ) shouldBe true
   }
 
   "group scheduler" should "set devices to `scheduled` when campaign is not set to auto-accept" in {
     val campaign = buildCampaignWithUpdate.copy(autoAccept = false)
+    val update = updateRepo.findById(campaign.updateId).futureValue
     val group    = GroupId.generate()
     val n        = Gen.choose(1, batch-1).sample.get
     val devs     = Gen.listOfN(n, genDeviceId).sample.get
@@ -86,7 +89,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
 
     deviceRegistry.setGroup(group, devs)
     campaigns.create(campaign, Set(group), Seq.empty).futureValue
-    director.affected.put(campaign.updateId, devs.toSet)
+    director.affected.put(update.source.id, devs.toSet)
 
     val parent = TestProbe()
     val props  = GroupScheduler.props(deviceRegistry, director, schedulerDelay, schedulerBatchSize, campaign, group)
@@ -99,11 +102,12 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     deviceStatus shouldNot be(empty)
     deviceStatus shouldBe devs.toSet
 
-    director.updates.asScala.get(campaign.updateId) shouldBe empty
+    director.updates.asScala.get(update.source.id) shouldBe empty
   }
 
   "PRO-3745: group scheduler" should "properly set devices to `accepted` when affected devices < batch size" in {
     val campaign = buildCampaignWithUpdate
+    val update = updateRepo.findById(campaign.updateId).futureValue
     val group    = GroupId.generate()
     val n        = Gen.choose(1, batch-1).sample.get
     val devs     = Gen.listOfN(n, genDeviceId).sample.get
@@ -122,6 +126,6 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     val deviceStatus = deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.accepted).futureValue
 
     deviceStatus shouldNot be(empty)
-    deviceStatus shouldBe director.updates.get(campaign.updateId)
+    deviceStatus shouldBe director.updates.get(update.source.id)
   }
 }
