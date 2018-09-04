@@ -19,6 +19,7 @@ object ErrorCodes {
 object Errors {
 
   val CampaignMissing = MissingEntity[Campaign]
+  val UpdateMissing = MissingEntity[Update]
   val ConflictingCampaign = RawError(
     ErrorCodes.ConflictingCampaign,
     StatusCodes.Conflict,

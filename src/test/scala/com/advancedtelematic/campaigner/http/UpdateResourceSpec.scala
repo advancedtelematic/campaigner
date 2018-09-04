@@ -33,6 +33,10 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
 
   private def getUpdates: HttpRequest = Get(apiUri("updates")).withHeaders(header)
 
+  private def getUpdateResult(id: UpdateId): RouteTestResult = {
+    Get(apiUri(s"updates/${id.uuid.toString}")).withHeaders(header) ~> routes
+  }
+
   private def getGroupUpdates(groupId: GroupId) =
     Get(apiUri("updates").withQuery(Query("groupId" -> groupId.show))).withHeaders(header)
 
@@ -132,10 +136,27 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     }
   }
 
+  "GET to /updates/:updateId" should "return 404 Not Found if update does not exists" in {
+    import com.advancedtelematic.libats.data.ErrorCodes.MissingEntity
+    val updateId = genUpdateId.sample.get
+    val error = getUpdateResult(updateId) ~> check {
+      status shouldBe NotFound
+      responseAs[ErrorRepresentation]
+    }
+    error.code shouldBe MissingEntity
+  }
 
   "POST to /updates" should "create a new update" in {
     val request: CreateUpdate = genCreateUpdate.sample.get
-    createUpdateOk(request)
+    val updateId = createUpdateOk(request)
+    val update = getUpdateResult(updateId) ~> check {
+      status shouldBe OK
+      responseAs[Update]
+    }
+    update.uuid shouldBe updateId
+    request.name should equal(update.name)
+    request.description should equal(update.description)
+    request.updateSource should equal(update.source)
   }
 
   "Creating two updates with the same updateId" should "fail with Conflict error" in {
