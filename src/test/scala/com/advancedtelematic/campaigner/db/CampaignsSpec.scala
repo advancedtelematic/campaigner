@@ -101,7 +101,7 @@ class CampaignsSpec extends AsyncFlatSpec
   }
 
   "finishing devices" should "work with one campaign" in {
-    val group    = GroupId.generate()
+    val _    = GroupId.generate()
     val devices  = arbitrary[Seq[DeviceId]].sample.get
 
     for {
