@@ -1,11 +1,13 @@
 package com.advancedtelematic.campaigner.actor
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import akka.actor.{Actor, ActorLogging, ActorRef, Props, Status}
+import akka.pattern.{Backoff, BackoffSupervisor}
 import akka.stream.Materializer
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.data.DataType.Namespace
+
 import scala.concurrent.duration._
 import slick.jdbc.MySQLProfile.api._
 
@@ -19,8 +21,6 @@ object CampaignSupervisor {
   // only for test
   final case class CampaignsScheduled(campaigns: Set[CampaignId])
   final case class CampaignsCancelled(campaigns: Set[CampaignId])
-
-  private final case class Error(msg: String, error: Throwable)
 
   def props(registry: DeviceRegistryClient,
             director: DirectorClient,
@@ -51,33 +51,21 @@ class CampaignSupervisor(registry: DeviceRegistryClient,
 
   override def preStart(): Unit = {
     // periodically clear out cancelled campaigns
-    scheduler.schedule(
-      0.milliseconds,
-      pollingTimeout,
-      self,
-      CleanUpCampaigns
-    )
+    scheduler.schedule(0.milliseconds, pollingTimeout, self, CleanUpCampaigns)
 
     // periodically (re-)schedule non-completed campaigns
-    scheduler.schedule(
-      0.milliseconds,
-      pollingTimeout,
-      self,
-      PickUpCampaigns
-    )
+    scheduler.schedule(0.milliseconds, pollingTimeout, self, PickUpCampaigns)
 
     // pick up campaigns where they left
     campaigns
       .remainingCampaigns()
       .map(x => ResumeCampaigns(x.toSet))
-      .recover { case err => Error("could not retrieve remaining campaigns", err) }
       .pipeTo(self)
 
     // pick up cancelled campaigns where they left
     campaigns
       .remainingCancelling()
       .map(x => CancelCampaigns(x.toSet))
-      .recover { case err => Error("could not retrieve remaining cancelling campaigns", err)}
       .pipeTo(self)
   }
 
@@ -89,40 +77,47 @@ class CampaignSupervisor(registry: DeviceRegistryClient,
       batchSize.toInt
     ))
 
-  def scheduleCampaign(campaign: Campaign): ActorRef =
-    context.actorOf(CampaignScheduler.props(
-      registry,
-      director,
-      campaign,
-      delay,
-      batchSize
-    ))
+  def scheduleCampaign(campaign: Campaign): ActorRef = {
+    val childProps = CampaignScheduler.props(registry, director, campaign, delay, batchSize)
+
+    val props = BackoffSupervisor.props(
+      Backoff.onFailure(
+        childProps,
+        childName = s"campaignScheduler-${campaign.id.uuid.toString}",
+        minBackoff = 3.seconds,
+        maxBackoff = 1.hour,
+        randomFactor = 0.2 // adds 20% "noise" to vary the intervals slightly
+      ).withAutoReset(10.seconds))
+
+    context.actorOf(props)
+  }
 
   def supervising(campaignSchedulers: Map[CampaignId, ActorRef]): Receive = {
     case CleanUpCampaigns =>
       log.debug(s"cleaning up campaigns")
       campaigns.freshCancelled()
         .map(x => CancelCampaigns(x.toSet))
-        .recover { case err => Error("could not get campaigns to be cancelled", err) }
         .pipeTo(self)
+
     case PickUpCampaigns =>
       log.debug(s"picking up campaigns")
       campaigns
         .freshCampaigns()
         .map(x => ResumeCampaigns(x.toSet))
-        .recover { case err => Error("could not get newly scheduled campaigns", err) }
         .pipeTo(self)
-    case CancelCampaigns(campaigns) if campaigns.nonEmpty =>
-      log.info(s"cancelling campaigns $campaigns")
-      campaigns.foreach{case (_, c) => campaignSchedulers.get(c).foreach(stop)}
-      campaigns.foreach{case (ns, c) => cancelCampaign(ns, c)}
-      become(supervising(campaignSchedulers -- campaigns.map(_._2)))
-      parent ! CampaignsCancelled(campaigns.map(_._2))
-    case ResumeCampaigns(campaigns) if campaigns.nonEmpty =>
-      log.info(s"resume campaigns ${campaigns.map(_.id)}")
+
+    case CancelCampaigns(cs) if cs.nonEmpty =>
+      log.info(s"cancelling campaigns $cs")
+      cs.foreach{case (_, c) => campaignSchedulers.get(c).foreach(stop)}
+      cs.foreach{case (ns, c) => cancelCampaign(ns, c)}
+      become(supervising(campaignSchedulers -- cs.map(_._2)))
+      parent ! CampaignsCancelled(cs.map(_._2))
+
+    case ResumeCampaigns(cs) if cs.nonEmpty =>
+      log.info(s"resume campaigns ${cs.map(_.id)}")
       // only create schedulers for campaigns without a scheduler
       val newlyScheduled =
-        campaigns
+        cs
           .filterNot(c => campaignSchedulers.contains(c.id))
           .map(c => c.id -> scheduleCampaign(c))
           .toMap
@@ -131,13 +126,15 @@ class CampaignSupervisor(registry: DeviceRegistryClient,
         parent ! CampaignsScheduled(newlyScheduled.keySet)
       } else
         log.debug(s"Not creating scheduler for campaigns, scheduler already exists")
+
     case CampaignComplete(id) =>
       log.info(s"$id completed")
-      become(supervising(campaignSchedulers - id))
       parent ! CampaignComplete(id)
-    case Error(msg, err) =>
+      become(supervising(campaignSchedulers - id))
+
+    case Status.Failure(ex) =>
       // TODO: Move campaign to failed?
-      log.error(err, s"An error occurred: $msg")
+      log.error(ex, s"An error occurred scheduling a campaign: ${ex.getMessage}")
   }
 
   def receive: Receive = supervising(Map.empty)

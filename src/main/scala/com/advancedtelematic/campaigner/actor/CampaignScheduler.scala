@@ -70,6 +70,7 @@ class CampaignScheduler(registry: DeviceRegistryClient,
       self ! NextGroup
 
     case Status.Failure(ex) =>
-      log.error(ex, "Error occurred")
+      log.error(ex, s"An Error occurred ${ex.getMessage}")
+      throw ex
   }
 }
