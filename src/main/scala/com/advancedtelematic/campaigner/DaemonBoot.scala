@@ -41,7 +41,7 @@ object DaemonBoot extends BootApp
     schedulerBatchSize
   ))
 
-  startListener[DeviceUpdateReport](DeviceUpdateReportListener.apply)
+  startListener[DeviceUpdateReport](new DeviceUpdateReportListener())
   startListener[DeviceEventMessage](new DeviceEventListener(director))
 
   val routes: Route = (versionHeaders(version) & logResponseMetrics(projectName)) {

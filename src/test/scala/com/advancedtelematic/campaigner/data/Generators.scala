@@ -33,7 +33,7 @@ object Generators {
     update <- arbitrary[UpdateId]
     ca      = Instant.now()
     ua      = Instant.now()
-  } yield Campaign(ns, id, n, update, ca, ua)
+  } yield Campaign(ns, id, n, update, CampaignStatus.prepared, ca, ua)
 
   val genCreateCampaign: Gen[CreateCampaign] = for {
     n   <- arbitrary[String]

@@ -26,6 +26,7 @@ object DataType {
     id: CampaignId,
     name: String,
     updateId: UpdateId,
+    status: CampaignStatus,
     createdAt: Instant,
     updatedAt: Instant,
     autoAccept: Boolean = true
@@ -68,6 +69,7 @@ object DataType {
         CampaignId.generate(),
         name,
         update,
+        CampaignStatus.prepared,
         Instant.now(),
         Instant.now(),
         !approvalNeeded.getOrElse(false)
@@ -87,6 +89,7 @@ object DataType {
     id: CampaignId,
     name: String,
     update: UpdateId,
+    status: CampaignStatus,
     createdAt: Instant,
     updatedAt: Instant,
     groups: Set[GroupId],
@@ -101,6 +104,7 @@ object DataType {
         c.id,
         c.name,
         c.updateId,
+        c.status,
         c.createdAt,
         c.updatedAt,
         groups,
@@ -149,7 +153,7 @@ object DataType {
 
   object CampaignStatus extends Enumeration {
     type CampaignStatus = Value
-    val prepared, scheduled, launched, finished, cancelled = Value
+    val prepared, launched, finished, cancelled = Value
   }
 
   object DeviceStatus extends Enumeration {

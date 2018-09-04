@@ -31,7 +31,7 @@ class CampaignSupervisorSpec1 extends ActorSpec[CampaignSupervisor] with Campaig
     campaigns.create(campaign1, Set(group), Seq.empty).futureValue
     campaigns.create(campaign2, Set(group), Seq.empty).futureValue
 
-    campaigns.scheduleGroups(campaign1.namespace, campaign1.id, Set(group)).futureValue
+    campaigns.scheduleGroups(campaign1.id, Set(group)).futureValue
 
     parent.childActorOf(CampaignSupervisor.props(
       deviceRegistry,
@@ -44,7 +44,7 @@ class CampaignSupervisorSpec1 extends ActorSpec[CampaignSupervisor] with Campaig
     parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign1.id)))
     parent.expectMsg(3.seconds, CampaignComplete(campaign1.id))
 
-    campaigns.scheduleGroups(campaign2.namespace, campaign2.id, Set(group)).futureValue
+    campaigns.scheduleGroups(campaign2.id, Set(group)).futureValue
 
     parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign2.id)))
   }
@@ -73,7 +73,7 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
     }
 
     campaigns.create(campaign, Set(group), Seq.empty).futureValue
-    campaigns.scheduleGroups(campaign.namespace, campaign.id, Set(group))
+    campaigns.scheduleGroups(campaign.id, Set(group))
 
     parent.childActorOf(CampaignSupervisor.props(
       registry,
@@ -85,7 +85,7 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
     parent.expectMsg(2.seconds, CampaignsScheduled(Set(campaign.id)))
     expectNoMessage(2.seconds)
 
-    campaigns.cancelCampaign(campaign.namespace, campaign.id).futureValue
+    campaigns.cancel(campaign.id).futureValue
     parent.expectMsg(2.seconds, CampaignsCancelled(Set(campaign.id)))
     expectNoMessage(2.seconds)
   }
