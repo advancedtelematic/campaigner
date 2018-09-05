@@ -1,5 +1,6 @@
 package com.advancedtelematic.campaigner.data
 
+import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
@@ -57,4 +58,7 @@ object Codecs {
 
   implicit val decoderCampaignStats: Decoder[CampaignStats] = deriveDecoder
   implicit val encoderCampaignStats: Encoder[CampaignStats] = deriveEncoder
+
+  implicit val uriEncoder: Encoder[Uri] = Encoder.encodeString.contramap(_.toString)
+  implicit val uriDecoder: Decoder[Uri] = Decoder.decodeString.map(Uri.apply)
 }

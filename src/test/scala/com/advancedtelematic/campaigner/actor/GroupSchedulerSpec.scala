@@ -7,6 +7,7 @@ import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, Upda
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.scalacheck.{Arbitrary, Gen}
+
 import scala.collection.JavaConverters._
 
 class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec with DeviceUpdateSupport with UpdateSupport {

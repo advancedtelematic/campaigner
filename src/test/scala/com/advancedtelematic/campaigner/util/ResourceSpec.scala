@@ -25,17 +25,17 @@ trait ResourceSpec extends ScalatestRouteTest
   implicit val defaultTimeout = RouteTestTimeout(Span(5, Seconds))
 
   def apiUri(path: String): Uri = "/api/v2/" + path
-  val director = new FakeDirectorClient
 
   def testNs = Namespace("testNs")
 
   def header = RawHeader("x-ats-namespace", testNs.get)
 
+  val fakeDirector = new FakeDirectorClient
   val fakeRegistry = new FakeDeviceRegistry
+  val fakeUserProfile = new FakeUserProfileClient
+  val fakeResolver = new FakeResolverClient
 
-  val fakeResolver = new FakeResolver
-
-  lazy val routes = new Routes(director, fakeRegistry, fakeResolver).routes
+  lazy val routes = new Routes(fakeDirector, fakeRegistry, fakeResolver, fakeUserProfile).routes
 
   def createCampaignOk(request: CreateCampaign): CampaignId =
     Post(apiUri("campaigns"), request).withHeaders(header) ~> routes ~> check {

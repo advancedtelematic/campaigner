@@ -2,7 +2,7 @@ package com.advancedtelematic.campaigner
 
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.{Directives, Route}
-import com.advancedtelematic.campaigner.client.{DeviceRegistryHttpClient, DirectorHttpClient, NoOpResolver}
+import com.advancedtelematic.campaigner.client.{DeviceRegistryHttpClient, DirectorHttpClient, ResolverHttpClient, UserProfileHttpClient}
 import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.http.BootApp
 import com.advancedtelematic.libats.http.LogDirectives._
@@ -14,8 +14,10 @@ import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
 import com.advancedtelematic.metrics.{AkkaHttpRequestMetrics, InfluxdbMetricsReporterSupport}
 
 trait Settings {
-  import com.typesafe.config.ConfigFactory
   import java.util.concurrent.TimeUnit
+
+  import com.typesafe.config.ConfigFactory
+
   import scala.concurrent.duration._
 
   private lazy val _config = ConfigFactory.load()
@@ -25,6 +27,7 @@ trait Settings {
 
   val deviceRegistryUri = _config.getString("deviceRegistry.uri")
   val directorUri = _config.getString("director.uri")
+  val userProfileUri = _config.getString("userProfile.uri")
 
   val schedulerPollingTimeout =
     FiniteDuration(_config.getDuration("scheduler.pollingTimeout").toNanos, TimeUnit.NANOSECONDS)
@@ -49,14 +52,15 @@ object Boot extends BootApp
 
   log.info(s"Starting $version on http://$host:$port")
 
-  val director = new DirectorHttpClient(directorUri)
-
   val deviceRegistry = new DeviceRegistryHttpClient(deviceRegistryUri)
+  val director = new DirectorHttpClient(directorUri)
+  val userProfile = new UserProfileHttpClient(userProfileUri)
+  val resolver = new ResolverHttpClient()
 
   val routes: Route =
     (versionHeaders(version) & requestMetrics(metricRegistry) & logResponseMetrics(projectName)) {
       prometheusMetricsRoutes ~
-      new Routes(director, deviceRegistry, new NoOpResolver).routes
+        new Routes(director, deviceRegistry, resolver, userProfile).routes
     }
 
   Http().bindAndHandle(routes, host, port)
