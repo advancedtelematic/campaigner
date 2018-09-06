@@ -30,6 +30,8 @@ trait ResourceSpec extends ScalatestRouteTest
 
   def header = RawHeader("x-ats-namespace", testNs.get)
 
+  def testResolverUri = Uri("http://test.com")
+
   val fakeDirector = new FakeDirectorClient
   val fakeRegistry = new FakeDeviceRegistry
   val fakeUserProfile = new FakeUserProfileClient

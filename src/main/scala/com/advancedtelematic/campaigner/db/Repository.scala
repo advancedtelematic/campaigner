@@ -294,7 +294,13 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
     findByExternalIdsAction(ns, Seq(id)).failIfNotSingle(Errors.MissingExternalUpdate(id))
   }
 
-  def all(ns: Namespace, offset: Option[Long], limit: Option[Long]): Future[PaginationResult[Update]] = db.run {
+  def all(ns: Namespace): Future[Seq[Update]] = db.run {
+    Schema.updates
+      .filter(_.namespace === ns)
+      .result
+  }
+
+  def allPaginated(ns: Namespace, offset: Option[Long], limit: Option[Long]): Future[PaginationResult[Update]] = db.run {
     Schema.updates
       .filter(_.namespace === ns)
       .paginateResult(offset.getOrElse(0L), limit.getOrElse(50L))

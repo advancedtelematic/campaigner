@@ -72,9 +72,12 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
   }
 
   private[this] def getGroupUpdates(ns: Namespace, gid: GroupId): Future[PaginationResult[HypermediaResource[Update]]] =
-    userProfile.externalResolverUri(ns)
-      .map(new GroupUpdateResolver(deviceRegistry, resolver, _))
-      .flatMap(_.groupUpdates(ns, gid))
+    userProfile
+      .externalResolverUri(ns)
+      .flatMap {
+        case Some(uri) => new GroupUpdateResolver(deviceRegistry, resolver, uri).groupUpdates(ns, gid)
+        case None => updateRepo.all(ns) // TODO use the internal resolver from director once it's implemented
+      }
       .map(updates => PaginationResult(updates.size.toLong, updates.size.toLong, 0, updates).map(linkToSelf))
 
 
@@ -88,7 +91,7 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
           (get & parameter('groupId.as[GroupId].?) & parameters('limit.as[Long].?) & parameters('offset.as[Long].?)) { (groupId, limit, offset) =>
             groupId match {
               case Some(gid) => complete(getGroupUpdates(ns, gid))
-              case None => complete(updateRepo.all(ns, offset, limit).map(_.map(linkToSelf)))
+              case None => complete(updateRepo.allPaginated(ns, offset, limit).map(_.map(linkToSelf)))
             }
           } ~
           (post & entity(as[CreateUpdate])) { request =>

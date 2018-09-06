@@ -4,10 +4,10 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.{Directives, Route}
 import com.advancedtelematic.campaigner.client.{DeviceRegistryHttpClient, DirectorHttpClient, ResolverHttpClient, UserProfileHttpClient}
 import com.advancedtelematic.campaigner.http.Routes
-import com.advancedtelematic.libats.http.BootApp
 import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.monitoring.MetricsSupport
+import com.advancedtelematic.libats.http.{BootApp, ServiceHttpClientSupport}
 import com.advancedtelematic.libats.slick.db.DatabaseConfig
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
@@ -46,7 +46,8 @@ object Boot extends BootApp
   with DatabaseMetrics
   with InfluxdbMetricsReporterSupport
   with AkkaHttpRequestMetrics
-  with PrometheusMetricsSupport {
+  with PrometheusMetricsSupport
+  with ServiceHttpClientSupport {
 
   implicit val _db = db
 
@@ -54,7 +55,7 @@ object Boot extends BootApp
 
   val deviceRegistry = new DeviceRegistryHttpClient(deviceRegistryUri)
   val director = new DirectorHttpClient(directorUri)
-  val userProfile = new UserProfileHttpClient(userProfileUri)
+  val userProfile = new UserProfileHttpClient(userProfileUri, defaultHttpClient)
   val resolver = new ResolverHttpClient()
 
   val routes: Route =
