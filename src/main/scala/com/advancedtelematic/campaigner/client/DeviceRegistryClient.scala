@@ -7,7 +7,10 @@ import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
+import com.advancedtelematic.libats.http.HttpOps.HttpRequestOps
+import com.advancedtelematic.libats.http.ServiceHttpClient
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
+
 import scala.concurrent.{ExecutionContext, Future}
 
 trait DeviceRegistryClient {
@@ -17,20 +20,17 @@ trait DeviceRegistryClient {
                      limit: Long): Future[Seq[DeviceId]]
 }
 
-class DeviceRegistryHttpClient(uri: Uri)
+class DeviceRegistryHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResponse])
     (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer)
-    extends HttpClient("device_registry", uri) with DeviceRegistryClient {
+    extends ServiceHttpClient(httpClient) with DeviceRegistryClient {
 
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
-  override def devicesInGroup(namespace: Namespace,
-                              groupId: GroupId,
-                              offset: Long,
-                              limit: Long): Future[Seq[DeviceId]] = {
+  override def devicesInGroup(ns: Namespace, groupId: GroupId, offset: Long, limit: Long): Future[Seq[DeviceId]] = {
     val path  = uri.path / "api" / "v1" / "device_groups" / groupId.show / "devices"
     val query = Uri.Query(Map("offset" -> offset.toString, "limit" -> limit.toString))
-    val req   = HttpRequest(HttpMethods.GET, uri = uri.withPath(path).withQuery(query))
-    execHttp[PaginationResult[DeviceId]](namespace, req).map(_.values)
+    val req = HttpRequest(HttpMethods.GET, uri.withPath(path).withQuery(query)).withNs(ns)
+    execHttp[PaginationResult[DeviceId]](req)().map(_.values)
   }
 
 }
