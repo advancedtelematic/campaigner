@@ -7,6 +7,7 @@ import com.advancedtelematic.campaigner.db.Campaigns
 import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.duration._
+import cats.syntax.show._
 
 object CampaignScheduler {
 
@@ -49,7 +50,8 @@ class CampaignScheduler(registry: DeviceRegistryClient,
       delay,
       batchSize,
       campaign,
-      group)
+      group),
+      s"group-scheduler-${group.show}"
     )
 
   def receive: Receive = {
@@ -62,9 +64,11 @@ class CampaignScheduler(registry: DeviceRegistryClient,
     case Some(group: GroupId) =>
       log.debug(s"scheduling $group")
       schedule(group)
+
     case None =>
       parent ! CampaignComplete(campaign.id)
       context.stop(self)
+
     case GroupComplete(group) =>
       log.debug(s"$group complete")
       self ! NextGroup

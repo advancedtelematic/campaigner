@@ -10,6 +10,7 @@ import com.advancedtelematic.libats.data.DataType.Namespace
 
 import scala.concurrent.duration._
 import slick.jdbc.MySQLProfile.api._
+import cats.syntax.show._
 
 object CampaignSupervisor {
 
@@ -83,7 +84,7 @@ class CampaignSupervisor(registry: DeviceRegistryClient,
     val props = BackoffSupervisor.props(
       Backoff.onFailure(
         childProps,
-        childName = s"campaignScheduler-${campaign.id.uuid.toString}",
+        childName = s"campaignScheduler-${campaign.id.show}",
         minBackoff = 3.seconds,
         maxBackoff = 1.hour,
         randomFactor = 0.2 // adds 20% "noise" to vary the intervals slightly

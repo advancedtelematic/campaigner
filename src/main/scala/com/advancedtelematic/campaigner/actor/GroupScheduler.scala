@@ -94,7 +94,6 @@ class GroupScheduler(registry: DeviceRegistryClient,
       context.stop(self)
 
     case msg: Status.Failure =>
-      msg.cause.printStackTrace()
       parent ! msg
   }
 }
