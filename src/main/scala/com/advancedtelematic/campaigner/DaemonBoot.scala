@@ -39,7 +39,9 @@ object DaemonBoot extends BootApp
     schedulerPollingTimeout,
     schedulerDelay,
     schedulerBatchSize
-  ))
+  ),
+    "campaign-supervisor"
+  )
 
   startListener[DeviceUpdateReport](new DeviceUpdateReportListener())
   startListener[DeviceEventMessage](new DeviceEventListener(director))
