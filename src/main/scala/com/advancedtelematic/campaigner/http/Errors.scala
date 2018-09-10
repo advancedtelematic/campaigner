@@ -3,11 +3,13 @@ package com.advancedtelematic.campaigner.http
 import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.data.ErrorCode
-import com.advancedtelematic.libats.http.Errors.{MissingEntity, RawError}
+import com.advancedtelematic.libats.http.Errors.{MissingEntity, RawError, Error}
+import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
 
 object ErrorCodes {
-
   val ConflictingCampaign = ErrorCode("campaign_already_exists")
+  val MissingUpdateSource = ErrorCode("missing_update_source")
+  val MissingUpdate = ErrorCode("missing_update")
   val ConflictingMetadata = ErrorCode("campaign_metadata_already_exists")
   val CampaignAlreadyLaunched = ErrorCode("campaign_already_launched")
   val InvalidCounts = ErrorCode("invalid_stats_count")
@@ -19,12 +21,16 @@ object ErrorCodes {
 object Errors {
 
   val CampaignMissing = MissingEntity[Campaign]
-  val UpdateMissing = MissingEntity[Update]
-  val ConflictingCampaign = RawError(
-    ErrorCodes.ConflictingCampaign,
-    StatusCodes.Conflict,
-    "A campaign with that name already exists."
+
+  case class MissingUpdate(id: UpdateId) extends Error(ErrorCodes.MissingUpdate, StatusCodes.NotFound, s"Missing $id")
+
+  val MissingUpdateSource = RawError(
+    ErrorCodes.MissingUpdateSource,
+    StatusCodes.PreconditionFailed,
+    "The update associated with the given campaign does not exist."
   )
+
+  val ConflictingCampaign = RawError(ErrorCodes.ConflictingCampaign, StatusCodes.Conflict, "campaign already exists")
 
   val ConflictingMetadata = RawError(
     ErrorCodes.ConflictingMetadata,

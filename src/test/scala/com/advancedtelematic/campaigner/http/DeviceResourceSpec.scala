@@ -1,25 +1,25 @@
 package com.advancedtelematic.campaigner.http
 
 import akka.http.scaladsl.model.StatusCodes
-import com.advancedtelematic.campaigner.data.DataType.{CreateCampaign, GetDeviceCampaigns}
-import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns}
-import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
-import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
-import org.scalacheck.Arbitrary._
-import com.advancedtelematic.campaigner.data.Generators._
-import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import com.advancedtelematic.campaigner.data.Codecs._
+import com.advancedtelematic.campaigner.data.DataType.{CreateCampaign, GetDeviceCampaigns}
+import com.advancedtelematic.campaigner.data.Generators._
+import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns}
+import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec, UpdateResourceSpecUtil}
+import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
+import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import org.scalacheck.Arbitrary._
 
 class DeviceResourceSpec
   extends CampaignerSpec
   with ResourceSpec
-  with CampaignSupport {
+    with CampaignSupport
+    with UpdateResourceSpecUtil {
 
   val campaigns = Campaigns()
 
   it should "returns scheduled campaigns for device" in {
-    val request = arbitrary[CreateCampaign].retryUntil(_.metadata.nonEmpty).sample.get
-    val campaignId = createCampaignOk(request)
+    val (campaignId,request) = createCampaignWithUpdateOk(arbitrary[CreateCampaign].retryUntil(_.metadata.nonEmpty))
     val device = DeviceId.generate()
 
     campaigns.scheduleDevices(campaignId, request.update, device).futureValue

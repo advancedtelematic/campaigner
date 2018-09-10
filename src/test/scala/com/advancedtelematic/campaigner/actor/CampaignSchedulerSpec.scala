@@ -5,17 +5,18 @@ import akka.testkit.TestProbe
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.Campaigns
-import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
+import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
+import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec, DatabaseUpdateSpecUtil}
 import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
-import org.scalacheck.{Arbitrary, Gen}
+import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
+import org.scalacheck.Arbitrary
+
 import scala.concurrent.Future
 
-class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with CampaignerSpec {
-
+class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with CampaignerSpec with UpdateSupport with DatabaseUpdateSpecUtil {
   import Arbitrary._
   import CampaignScheduler._
+
   import scala.concurrent.duration._
 
   val campaigns = Campaigns()
@@ -26,13 +27,12 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
   }
 
   "campaign scheduler" should "trigger updates for each group" in {
-    val campaign = arbitrary[Campaign].sample.get
-    val groups   = Gen.listOfN(3, arbitrary[GroupId]).sample.get.toSet
+    val groups   = arbitrary[Set[GroupId]].sample.get
+    val campaign = createDbCampaignWithUpdate(groups = groups).futureValue
+
     val parent   = TestProbe()
 
-    campaigns.create(campaign, groups, Seq.empty).futureValue
     campaigns.scheduleGroups(campaign.id, groups).futureValue
-
     groups.foreach { g => deviceRegistry.setGroup(g, arbitrary[Seq[DeviceId]].sample.get) }
 
     parent.childActorOf(CampaignScheduler.props(
@@ -48,15 +48,14 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
   }
 
   "PRO-3672: campaign with 0 affected devices" should "yield a `finished` status" in {
-
-    val campaign = arbitrary[Campaign].sample.get
     val groups   = Set(arbitrary[GroupId].sample.get)
+    val campaign = createDbCampaignWithUpdate(groups = groups).futureValue
     val parent   = TestProbe()
 
     val director = new DirectorClient {
       override def setMultiUpdateTarget(
         ns: Namespace,
-        update: UpdateId,
+        update: ExternalUpdateId,
         devices: Seq[DeviceId]
       ): Future[Seq[DeviceId]] = FastFuture.successful(Seq.empty)
 
@@ -69,11 +68,10 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
         ns: Namespace,
         device: DeviceId): Future[Unit] = FastFuture.successful(())
 
-      override def findAffected(ns: Namespace, updateId: UpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] =
+      override def findAffected(ns: Namespace, updateId: ExternalUpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] =
         Future.successful(Seq.empty)
     }
 
-    campaigns.create(campaign, groups, Seq.empty).futureValue
     campaigns.scheduleGroups(campaign.id, groups).futureValue
 
     parent.childActorOf(CampaignScheduler.props(
@@ -87,6 +85,4 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
 
     campaigns.campaignStats(campaign.id).futureValue.status shouldBe CampaignStatus.finished
   }
-
-
 }

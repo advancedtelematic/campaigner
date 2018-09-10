@@ -137,13 +137,11 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates/:updateId" should "return 404 Not Found if update does not exists" in {
-    import com.advancedtelematic.libats.data.ErrorCodes.MissingEntity
     val updateId = genUpdateId.sample.get
-    val error = getUpdateResult(updateId) ~> check {
+    getUpdateResult(updateId) ~> check {
       status shouldBe NotFound
-      responseAs[ErrorRepresentation]
+      responseAs[ErrorRepresentation].code shouldBe ErrorCodes.MissingUpdate
     }
-    error.code shouldBe MissingEntity
   }
 
   "POST to /updates" should "create a new update" in {

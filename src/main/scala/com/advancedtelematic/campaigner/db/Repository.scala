@@ -162,12 +162,11 @@ protected [db] class GroupStatsRepository()(implicit db: Database, ec: Execution
 }
 
 protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext) {
-
   import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 
   def persist(campaign: Campaign, groups: Set[GroupId], metadata: Seq[CampaignMetadata]): Future[CampaignId] = db.run {
     val f = for {
-      _ <- (Schema.campaigns += campaign).handleIntegrityErrors(Errors.ConflictingCampaign)
+      _ <- (Schema.campaigns += campaign).handleForeignKeyError(Errors.MissingUpdateSource).handleIntegrityErrors(Errors.ConflictingCampaign)
       _ <- Schema.campaignGroups ++= groups.map(g => (campaign.id, g))
       _ <- (Schema.campaignMetadata ++= metadata).handleIntegrityErrors(Errors.ConflictingMetadata)
     } yield campaign.id
@@ -279,9 +278,9 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
     (Schema.updates += update).map(_ => update.uuid).handleIntegrityErrors(Errors.ConflictingUpdate)
   }
 
-  def findById(updateId: UpdateId): Future[Update] = db.run(
-    Schema.updates.filter(_.uuid === updateId).resultHead(Errors.UpdateMissing)
-  )
+  def findById(id: UpdateId): Future[Update] = db.run {
+    Schema.updates.filter(_.uuid === id).result.failIfNotSingle(Errors.MissingUpdate(id))
+  }
 
   def findByExternalIds(ns: Namespace, ids: Seq[ExternalUpdateId]): Future[Seq[Update]] = db.run {
     Schema.updates.filter(_.namespace === ns).filter(_.updateId.inSet(ids)).result
