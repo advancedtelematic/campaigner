@@ -12,6 +12,7 @@ import com.advancedtelematic.campaigner.db.SlickMapping._
 import com.advancedtelematic.campaigner.http.Errors
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
+import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
@@ -282,8 +283,15 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
     Schema.updates.filter(_.uuid === id).result.failIfNotSingle(Errors.MissingUpdate(id))
   }
 
-  def findByExternalIds(ns: Namespace, ids: Seq[ExternalUpdateId]): Future[Seq[Update]] = db.run {
+  private def findByExternalIdsAction(ns: Namespace, ids: Seq[ExternalUpdateId]): DBIO[Seq[Update]] =
     Schema.updates.filter(_.namespace === ns).filter(_.updateId.inSet(ids)).result
+
+  def findByExternalIds(ns: Namespace, ids: Seq[ExternalUpdateId]): Future[Seq[Update]] = db.run {
+    findByExternalIdsAction(ns, ids)
+  }
+
+  def findByExternalId(ns: Namespace, id: ExternalUpdateId): Future[Update] = db.run {
+    findByExternalIdsAction(ns, Seq(id)).failIfNotSingle(Errors.MissingExternalUpdate(id))
   }
 
   def all(ns: Namespace, offset: Option[Long], limit: Option[Long]): Future[PaginationResult[Update]] = db.run {

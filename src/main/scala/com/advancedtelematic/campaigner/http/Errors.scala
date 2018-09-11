@@ -24,6 +24,8 @@ object Errors {
 
   case class MissingUpdate(id: UpdateId) extends Error(ErrorCodes.MissingUpdate, StatusCodes.NotFound, s"Missing $id")
 
+  case class MissingExternalUpdate(externalUpdateId: ExternalUpdateId) extends Error(ErrorCodes.MissingUpdate, StatusCodes.NotFound, s"Missing $externalUpdateId")
+
   val MissingUpdateSource = RawError(
     ErrorCodes.MissingUpdateSource,
     StatusCodes.PreconditionFailed,
