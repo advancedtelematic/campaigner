@@ -67,6 +67,7 @@ class CampaignScheduler(registry: DeviceRegistryClient,
 
     case None =>
       parent ! CampaignComplete(campaign.id)
+      // TODO: Should move to finished
       context.stop(self)
 
     case GroupComplete(group) =>
