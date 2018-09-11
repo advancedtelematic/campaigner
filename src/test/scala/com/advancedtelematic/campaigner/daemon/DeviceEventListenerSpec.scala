@@ -4,7 +4,7 @@ import java.time.Instant
 
 import akka.Done
 import com.advancedtelematic.campaigner.daemon.DeviceEventListener.AcceptedCampaign
-import com.advancedtelematic.campaigner.data.DataType.{Campaign, DeviceStatus}
+import com.advancedtelematic.campaigner.data.DataType.{Campaign, DeviceStatus, DeviceUpdate}
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.util.FakeDirectorClient
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, UpdateSupport}
@@ -45,6 +45,9 @@ class DeviceEventListenerSpec extends CampaignerSpec with DatabaseSpec with Devi
   it should "set device update status to accepted" in {
     val campaign = createDbCampaignWithUpdate().futureValue
     val device = arbitrary[DeviceId].generate
+
+    deviceUpdateRepo.persistMany(Seq(DeviceUpdate(campaign.id, campaign.updateId, device, DeviceStatus.scheduled))).futureValue
+
     val msg = genDeviceEvent(campaign, device)
 
     listener.apply(msg).futureValue shouldBe Done
