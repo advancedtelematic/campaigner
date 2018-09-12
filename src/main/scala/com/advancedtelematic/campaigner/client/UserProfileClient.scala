@@ -15,6 +15,15 @@ trait UserProfileClient {
   def externalResolverUri(ns: Namespace): Future[Option[Uri]]
 }
 
+object UserProfileClient {
+  final case class NsSettings(namespace: Namespace, resolverUri: Option[Uri])
+
+  object NsSettings {
+    import com.advancedtelematic.libats.codecs.CirceCodecs.namespaceDecoder
+    implicit val DecoderInstance = io.circe.generic.semiauto.deriveDecoder[NsSettings]
+  }
+}
+
 class UserProfileHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResponse])
                            (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer)
   extends ServiceHttpClient(httpClient) with UserProfileClient {
@@ -23,10 +32,10 @@ class UserProfileHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResp
     val path = uri.path / "api" / "v1" / "namespace_settings" / ns.get
     val request = HttpRequest(HttpMethods.GET, uri.withPath(path))
 
-    val errorHandler: PartialFunction[RemoteServiceError, Future[Uri]] = {
-      case e: RemoteServiceError if e.status == StatusCodes.NotFound => Future(Uri.Empty)
+    val errorHandler: PartialFunction[Throwable, Option[Uri]] = {
+      case e: RemoteServiceError if e.status == StatusCodes.NotFound => None
     }
-    execHttp[Uri](request)(errorHandler).map { f => if (f.isEmpty) None else Some(f) }
+    execHttp[UserProfileClient.NsSettings](request)().map(_.resolverUri).recover(errorHandler)
   }
 
 }
