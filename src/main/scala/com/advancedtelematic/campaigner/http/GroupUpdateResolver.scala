@@ -16,14 +16,6 @@ class GroupUpdateResolver(deviceRegistry: DeviceRegistryClient, resolver: Resolv
 
   def groupUpdates(ns: Namespace, groupId: GroupId, maxRequests: Int = 50): Future[Seq[Update]] = {
 
-    def calculateLocalUpdates(uri: Uri) =
-      fetchDevices(offset = 0, limit = 50).flatMap { devices =>
-        for {
-          externalUpdates <- resolver.availableUpdatesFor(uri, ns, devices)
-          localUpdates <- updateRepo.findByExternalIds(ns, externalUpdates)
-        } yield localUpdates
-      }
-
     def fetchDevices(offset: Long, limit: Long, requests: Int = 1): Future[Seq[DeviceId]] = {
       deviceRegistry.devicesInGroup(ns, groupId, offset, limit).flatMap { devicesInBatch =>
         if (devicesInBatch.isEmpty)
@@ -35,6 +27,11 @@ class GroupUpdateResolver(deviceRegistry: DeviceRegistryClient, resolver: Resolv
       }
     }
 
-    calculateLocalUpdates(resolverUri)
+    for {
+      devices <- fetchDevices(offset = 0, limit = 50)
+      externalUpdates <- resolver.availableUpdatesFor(resolverUri, ns, devices)
+      localUpdates <- updateRepo.findByExternalIds(ns, externalUpdates)
+    } yield localUpdates
+
   }
 }

@@ -12,7 +12,6 @@ import com.advancedtelematic.campaigner.db.SlickMapping._
 import com.advancedtelematic.campaigner.http.Errors
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
-import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
