@@ -6,22 +6,22 @@ import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive1, Route}
 import com.advancedtelematic.campaigner.Settings
-import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, Resolver}
+import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, ResolverClient, UserProfileClient}
 import com.advancedtelematic.campaigner.data.AkkaSupport._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, GroupId, Update}
 import com.advancedtelematic.campaigner.db.UpdateSupport
+import com.advancedtelematic.campaigner.http.Errors.ConflictingUpdate
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.{ErrorRepresentation, PaginationResult}
+import com.advancedtelematic.libats.http.UUIDKeyAkka._
 import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-import io.circe.{Encoder, Json}
-import com.advancedtelematic.libats.http.UUIDKeyAkka._
-import slick.jdbc.MySQLProfile.api._
-import Errors.ConflictingUpdate
 import io.circe.syntax._
+import io.circe.{Encoder, Json}
+import slick.jdbc.MySQLProfile.api._
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
 object HypermediaResource {
@@ -30,8 +30,6 @@ object HypermediaResource {
   object Link {
     def self(uri: Uri): Link = Link("self", uri)
   }
-
-  import com.advancedtelematic.libats.http.HttpCodecs.uriEncoder
   private[this] implicit val LinkEncoder = io.circe.generic.semiauto.deriveEncoder[Link]
 
   implicit def createEncoder[T](implicit tEnc: Encoder[T]): Encoder[HypermediaResource[T]] = {
@@ -44,7 +42,7 @@ object HypermediaResource {
 
 final case class HypermediaResource[T](links: Seq[HypermediaResource.Link], value: T)
 
-class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: DeviceRegistryClient, resolver: Resolver)
+class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: DeviceRegistryClient, resolver: ResolverClient, userProfile: UserProfileClient)
                     (implicit db: Database, ec: ExecutionContext) extends Settings with UpdateSupport {
 
   private[this] val pathToUpdates = Path.Empty / "api" / "v2" / "updates"
@@ -55,8 +53,6 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
     ) :: Nil
     HypermediaResource(links, update)
   }
-
-  val groupUpdateResolver = new GroupUpdateResolver(deviceRegistry, resolver)
 
   private def createUpdate(ns: Namespace, createUpdateRequest: CreateUpdate): Route = (extractLog & extractRequest) { (log, req) =>
     onComplete(updateRepo.persist(createUpdateRequest.mkUpdate(ns))) {
@@ -75,22 +71,27 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
     }
   }
 
+  private[this] def getGroupUpdates(ns: Namespace, gid: GroupId): Future[PaginationResult[HypermediaResource[Update]]] =
+    userProfile
+      .externalResolverUri(ns)
+      .flatMap {
+        case Some(uri) => new GroupUpdateResolver(deviceRegistry, resolver, uri).groupUpdates(ns, gid)
+        case None => updateRepo.all(ns) // TODO use the internal resolver from director once it's implemented
+      }
+      .map(updates => PaginationResult(updates.size.toLong, updates.size.toLong, 0, updates).map(linkToSelf))
+
+
   val route: Route =
     extractNamespace { ns =>
       pathPrefix("updates") {
-        (path( UpdateId.Path ) & pathEnd) { updateUuid =>
+        (path(UpdateId.Path) & pathEnd) { updateUuid =>
           complete(updateRepo.findById(updateUuid))
         } ~
         pathEnd {
           (get & parameter('groupId.as[GroupId].?) & parameters('limit.as[Long].?) & parameters('offset.as[Long].?)) { (groupId, limit, offset) =>
             groupId match {
-              case Some(gid) =>
-                val f = groupUpdateResolver.groupUpdates(ns, gid).map { res =>
-                  PaginationResult(res.size, res.size, 0, res).map(linkToSelf)
-                }
-                complete(f)
-              case None =>
-                complete(updateRepo.all(ns, offset, limit).map(_.map(linkToSelf)))
+              case Some(gid) => complete(getGroupUpdates(ns, gid))
+              case None => complete(updateRepo.allPaginated(ns, offset, limit).map(_.map(linkToSelf)))
             }
           } ~
           (post & entity(as[CreateUpdate])) { request =>

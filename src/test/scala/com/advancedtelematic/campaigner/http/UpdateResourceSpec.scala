@@ -40,7 +40,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   private def getGroupUpdates(groupId: GroupId) =
     Get(apiUri("updates").withQuery(Query("groupId" -> groupId.show))).withHeaders(header)
 
-  "GET to /updates with group id" should "forwards to external resolver" in {
+  "GET to /updates with group id" should "forward to external resolver" in {
     val request = genCreateUpdate.sample.get
     val updateId = createUpdateOk(request)
 
@@ -49,19 +49,19 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     val devices = Gen.listOfN(1024, genDeviceId).sample.get
 
     fakeRegistry.setGroup(groupId, devices)
-
-    fakeResolver.setUpdates(devices, List(request.updateSource.id))
+    fakeUserProfile.setNamespaceSetting(testNs, testResolverUri)
+    fakeResolver.setUpdates(testResolverUri, devices, List(request.updateSource.id))
 
     getGroupUpdates(groupId) ~> routes ~> check {
       status shouldBe OK
       val updates = responseAs[PaginationResult[Update]]
 
-      updates.values should have size(1)
+      updates.values should have size 1
       updates.values.map(_.uuid) should contain(updateId)
     }
   }
 
-  "GET to /updates with group id for many devices" should "returns updates for all devices" in {
+  "GET to /updates with group id for many devices" should "return updates for all devices" in {
     val requests = Gen.listOfN(10, genCreateUpdate).sample.get
     val updateIds = requests.map(createUpdateOk)
 
@@ -70,21 +70,22 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     val devices = Gen.listOfN(10, genDeviceId).sample.get
 
     fakeRegistry.setGroup(groupId, devices)
+    fakeUserProfile.setNamespaceSetting(testNs, testResolverUri)
 
     requests.zip(devices).foreach { case (r, d) =>
-      fakeResolver.setUpdates(Seq(d), Seq(r.updateSource.id))
+      fakeResolver.setUpdates(testResolverUri, Seq(d), Seq(r.updateSource.id))
     }
 
     getGroupUpdates(groupId) ~> routes ~> check {
       status shouldBe OK
       val updates = responseAs[PaginationResult[Update]]
 
-      updates.values should have size(10)
+      updates.values should have size 10
       updates.values.map(_.uuid) contains allElementsOf(updateIds)
     }
   }
 
-  "GET to /updates with group id" should "returns all updates for a device" in {
+  "GET to /updates with group id" should "return all updates for a device" in {
     val requests = Gen.listOfN(10, genCreateUpdate).sample.get
     val updateIds = requests.map(createUpdateOk)
 
@@ -93,14 +94,14 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     val device = genDeviceId.sample.get
 
     fakeRegistry.setGroup(groupId, Seq(device))
-
-    fakeResolver.setUpdates(Seq(device), requests.map(_.updateSource.id))
+    fakeUserProfile.setNamespaceSetting(testNs, testResolverUri)
+    fakeResolver.setUpdates(testResolverUri, Seq(device), requests.map(_.updateSource.id))
 
     getGroupUpdates(groupId) ~> routes ~> check {
       status shouldBe OK
       val updates = responseAs[PaginationResult[Update]]
 
-      updates.values should have size(10)
+      updates.values should have size 10
       updates.values.map(_.uuid) contains allElementsOf(updateIds)
     }
   }
@@ -114,8 +115,8 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     val devices = Gen.listOfN(5001, genDeviceId).sample.get.sortBy(_.uuid)
 
     fakeRegistry.setGroup(groupId, devices)
-
-    fakeResolver.setUpdates(Seq(devices.last), Seq(request.updateSource.id))
+    fakeUserProfile.setNamespaceSetting(testNs, testResolverUri)
+    fakeResolver.setUpdates(testResolverUri, Seq(devices.last), Seq(request.updateSource.id))
 
     getGroupUpdates(groupId) ~> routes ~> check {
       status shouldBe InternalServerError

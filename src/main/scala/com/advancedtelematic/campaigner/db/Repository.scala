@@ -12,7 +12,6 @@ import com.advancedtelematic.campaigner.db.SlickMapping._
 import com.advancedtelematic.campaigner.http.Errors
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
-import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
@@ -294,7 +293,13 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
     findByExternalIdsAction(ns, Seq(id)).failIfNotSingle(Errors.MissingExternalUpdate(id))
   }
 
-  def all(ns: Namespace, offset: Option[Long], limit: Option[Long]): Future[PaginationResult[Update]] = db.run {
+  def all(ns: Namespace): Future[Seq[Update]] = db.run {
+    Schema.updates
+      .filter(_.namespace === ns)
+      .result
+  }
+
+  def allPaginated(ns: Namespace, offset: Option[Long], limit: Option[Long]): Future[PaginationResult[Update]] = db.run {
     Schema.updates
       .filter(_.namespace === ns)
       .paginateResult(offset.getOrElse(0L), limit.getOrElse(50L))

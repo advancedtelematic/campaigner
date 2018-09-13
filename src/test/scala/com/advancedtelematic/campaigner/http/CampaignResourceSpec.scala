@@ -143,7 +143,7 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
     val entity = Json.obj("update" -> updateId.asJson, "device" -> device.asJson)
     Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
-      director.cancelled.contains(device) shouldBe true
+      fakeDirector.cancelled.contains(device) shouldBe true
     }
 
     checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toMap, 0, Set.empty, 1)
@@ -163,7 +163,7 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
     val entity = Json.obj("update" -> updateId.asJson, "device" -> device.asJson)
     Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe PreconditionFailed
-      director.cancelled.contains(device) shouldBe true
+      fakeDirector.cancelled.contains(device) shouldBe true
     }
 
     checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toMap)
@@ -176,7 +176,7 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
     val entity = Json.obj("update" -> update.asJson, "device" -> device.asJson)
     Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
-      director.cancelled.contains(device) shouldBe true
+      fakeDirector.cancelled.contains(device) shouldBe true
     }
   }
 

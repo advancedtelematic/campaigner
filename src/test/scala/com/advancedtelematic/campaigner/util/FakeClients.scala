@@ -2,8 +2,9 @@ package com.advancedtelematic.campaigner.util
 
 import java.util.concurrent.ConcurrentHashMap
 
+import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.util.FastFuture
-import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, DirectorClient, Resolver}
+import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, DirectorClient, ResolverClient, UserProfileClient}
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
@@ -74,23 +75,38 @@ class FakeDeviceRegistry extends DeviceRegistryClient {
   }
 }
 
-class FakeResolver extends Resolver {
-  val updates = new ConcurrentHashMap[DeviceId, Seq[ExternalUpdateId]]()
+class FakeResolverClient extends ResolverClient {
+  val updates = new ConcurrentHashMap[Uri, ConcurrentHashMap[DeviceId, Seq[ExternalUpdateId]]]()
 
-  def setUpdates(devices: Seq[DeviceId], externalUpdates: Seq[ExternalUpdateId]): Unit = {
-    updates.putAll(devices.map(_ -> externalUpdates).toMap.asJava)
+  def setUpdates(resolverUri: Uri, devices: Seq[DeviceId], externalUpdates: Seq[ExternalUpdateId]): Unit = {
+    updates.putIfAbsent(resolverUri, new ConcurrentHashMap[DeviceId, Seq[ExternalUpdateId]]())
+    updates.get(resolverUri).putAll(devices.map(_ -> externalUpdates).toMap.asJava)
   }
 
-  override def availableUpdatesFor(devices: Seq[DeviceId]): Future[Seq[ExternalUpdateId]] = FastFuture.successful {
+  override def availableUpdatesFor(resolverUri: Uri, ns: Namespace, devices: Seq[DeviceId]): Future[Seq[ExternalUpdateId]] = FastFuture.successful {
     val deviceSet = devices.toSet
 
-    val set = updates.asScala.foldLeft(Set.empty[ExternalUpdateId]) { case (acc, (deviceId, u)) =>
-      if(deviceSet.contains(deviceId))
-        acc ++ u.toSet
-      else
-        acc
+    val set =
+      if (updates.containsKey(resolverUri)) {
+        updates.get(resolverUri).asScala.foldLeft(Set.empty[ExternalUpdateId]) { case (acc, (deviceId, u)) =>
+          if (deviceSet.contains(deviceId)) acc ++ u.toSet else acc
+        }
+      } else {
+        updates.values().asScala.foldLeft(Set.empty[ExternalUpdateId]) { case (acc, map) =>
+          acc ++ map.values().asScala.flatten
+        }
     }
 
     set.toSeq
+  }
+}
+
+class FakeUserProfileClient extends UserProfileClient {
+  val namespaceSettings = new ConcurrentHashMap[Namespace, Uri]()
+
+  def setNamespaceSetting(ns : Namespace, uri: Uri): Uri = namespaceSettings.put(ns, uri)
+
+  override def externalResolverUri(ns: Namespace): Future[Option[Uri]] = FastFuture.successful {
+    if (namespaceSettings.containsKey(ns)) Some(namespaceSettings.get(ns)) else None
   }
 }
