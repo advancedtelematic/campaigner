@@ -6,6 +6,7 @@ import akka.stream.Materializer
 import com.advancedtelematic.campaigner.data.Codecs.uriDecoder
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.http.Errors.RemoteServiceError
+import com.advancedtelematic.libats.http.HttpOps.HttpRequestOps
 import com.advancedtelematic.libats.http.ServiceHttpClient
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
@@ -30,7 +31,7 @@ class UserProfileHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResp
 
   override def externalResolverUri(ns: Namespace): Future[Option[Uri]] = {
     val path = uri.path / "api" / "v1" / "namespace_settings" / ns.get
-    val request = HttpRequest(HttpMethods.GET, uri.withPath(path))
+    val request = HttpRequest(HttpMethods.GET, uri.withPath(path)).withNs(ns)
 
     val errorHandler: PartialFunction[Throwable, Option[Uri]] = {
       case e: RemoteServiceError if e.status == StatusCodes.NotFound => None

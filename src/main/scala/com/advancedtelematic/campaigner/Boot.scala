@@ -53,10 +53,10 @@ object Boot extends BootApp
 
   log.info(s"Starting $version on http://$host:$port")
 
-  val deviceRegistry = new DeviceRegistryHttpClient(deviceRegistryUri)
-  val director = new DirectorHttpClient(directorUri)
+  val deviceRegistry = new DeviceRegistryHttpClient(deviceRegistryUri, defaultHttpClient)
+  val director = new DirectorHttpClient(directorUri, defaultHttpClient)
   val userProfile = new UserProfileHttpClient(userProfileUri, defaultHttpClient)
-  val resolver = new ResolverHttpClient()
+  val resolver = new ResolverHttpClient(defaultHttpClient)
 
   val routes: Route =
     (versionHeaders(version) & requestMetrics(metricRegistry) & logResponseMetrics(projectName)) {
