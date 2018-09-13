@@ -42,6 +42,13 @@ object Generators {
     meta   <- Gen.option(genCampaignMetadata.map(List(_)))
   } yield CreateCampaign(n, update, gs, meta)
 
+  val genCreateCampaignWithAlphanumericName: Gen[CreateCampaign] = for {
+    n   <- Gen.alphaNumStr.retryUntil(_.nonEmpty)
+    update <- arbitrary[UpdateId]
+    gs  <- arbitrary[Set[GroupId]]
+    meta   <- Gen.option(genCampaignMetadata.map(List(_)))
+  } yield CreateCampaign(n, update, gs, meta)
+
   val genUpdateCampaign: Gen[UpdateCampaign] = for {
     n   <- arbitrary[String].suchThat(!_.isEmpty)
     meta   <- genCampaignMetadata
@@ -63,6 +70,12 @@ object Generators {
   val genCreateUpdate: Gen[CreateUpdate] = for {
     us <- genUpdateSource
     n <- arbitrary[String]
+    d <- Gen.option(arbitrary[String])
+  } yield CreateUpdate(us, n, d)
+
+  val genCreateUpdateWithAlphanumericName: Gen[CreateUpdate] = for {
+    us <- genUpdateSource
+    n <- Gen.alphaNumStr.retryUntil(_.nonEmpty)
     d <- Gen.option(arbitrary[String])
   } yield CreateUpdate(us, n, d)
 

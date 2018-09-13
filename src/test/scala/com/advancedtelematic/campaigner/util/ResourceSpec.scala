@@ -5,10 +5,12 @@ import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.model.Uri.Query
 import akka.http.scaladsl.model.headers.RawHeader
+import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
+import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.data.DataType.Namespace
@@ -37,7 +39,7 @@ trait ResourceSpec extends ScalatestRouteTest
   val fakeUserProfile = new FakeUserProfileClient
   val fakeResolver = new FakeResolverClient
 
-  lazy val routes = new Routes(fakeDirector, fakeRegistry, fakeResolver, fakeUserProfile).routes
+  lazy val routes: Route = new Routes(fakeDirector, fakeRegistry, fakeResolver, fakeUserProfile).routes
 
   def createCampaignOk(request: CreateCampaign): CampaignId =
     Post(apiUri("campaigns"), request).withHeaders(header) ~> routes ~> check {
@@ -51,10 +53,10 @@ trait ResourceSpec extends ScalatestRouteTest
       responseAs[GetCampaign]
     }
 
-  def getCampaignsOk(campaignStatus: Option[CampaignStatus] = None)(implicit pos: source.Position): PaginationResult[CampaignId] = {
-    val query = Query(campaignStatus.map(s => Map("status" -> s.toString)).getOrElse(Map.empty))
+  def getCampaignsOk(campaignStatus: Option[CampaignStatus] = None, sortBy: Option[SortBy] = None)(implicit pos: source.Position): PaginationResult[CampaignId] = {
+    val m = List("status" -> campaignStatus, "sortBy" -> sortBy).collect { case (k, Some(v)) => k -> v.toString }.toMap
 
-    Get(apiUri("campaigns").withQuery(query)).withHeaders(header) ~> routes ~> check {
+    Get(apiUri("campaigns").withQuery(Query(m))).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
       responseAs[PaginationResult[CampaignId]]
     }

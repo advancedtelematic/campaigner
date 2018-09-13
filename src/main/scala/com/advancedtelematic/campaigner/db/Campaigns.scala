@@ -4,6 +4,7 @@ import cats.syntax.either._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
+import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.SlickMapping._
 import com.advancedtelematic.campaigner.http.Errors
@@ -92,8 +93,8 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       status === DeviceStatus.cancelled
     }
 
-  def allCampaigns(ns: Namespace, offset: Long, limit: Long, status: Option[CampaignStatus]): Future[PaginationResult[CampaignId]] =
-    campaignRepo.all(ns, offset, limit, status)
+  def allCampaigns(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, status: Option[CampaignStatus]): Future[PaginationResult[CampaignId]] =
+    campaignRepo.all(ns, sortBy, offset, limit, status)
 
   def findNamespaceCampaign(ns: Namespace, campaignId: CampaignId): Future[Campaign] =
     campaignRepo.find(campaignId, Option(ns))

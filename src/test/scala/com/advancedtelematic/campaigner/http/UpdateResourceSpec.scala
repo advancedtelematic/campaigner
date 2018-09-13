@@ -9,7 +9,8 @@ import akka.http.scaladsl.model.headers.Location
 import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.GroupId._
-import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, GroupId, Update}
+import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
+import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, GroupId, SortBy, Update}
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.UpdateSupport
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
@@ -32,6 +33,9 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     }
 
   private def getUpdates: HttpRequest = Get(apiUri("updates")).withHeaders(header)
+
+  private def getUpdatesSorted(sortBy: SortBy): HttpRequest =
+    Get(apiUri("updates").withQuery(Query("sortBy" -> sortBy.toString))).withHeaders(header)
 
   private def getUpdateResult(id: UpdateId): RouteTestResult = {
     Get(apiUri(s"updates/${id.uuid.toString}")).withHeaders(header) ~> routes
@@ -133,7 +137,30 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     getUpdates ~> routes ~> check {
       status shouldBe OK
       val updates = responseAs[PaginationResult[Update]]
-      updates.values.map(_.uuid) should contain allElementsOf(updateIds)
+      updates.values.map(_.uuid) should contain allElementsOf updateIds
+    }
+  }
+
+  "GET to /updates" should "get all updates sorted by name" in {
+    val requests = Gen.listOfN(20, genCreateUpdateWithAlphanumericName).sample.get
+    val sortedNames = requests.map(_.name).sortWith(_.toLowerCase < _.toLowerCase)
+    requests.map(createUpdateOk)
+
+    getUpdates ~> routes ~> check {
+      status shouldBe OK
+      val updates = responseAs[PaginationResult[Update]]
+      updates.values.map(_.name).filter(sortedNames.contains) shouldBe sortedNames
+    }
+  }
+
+  "GET to /updates?sortBy=createdAt" should "get all updates sorted from newest to oldest" in {
+    val requests = Gen.listOfN(20, genCreateUpdateWithAlphanumericName).sample.get
+    requests.map(createUpdateOk)
+
+    getUpdatesSorted(SortBy.CreatedAt) ~> routes ~> check {
+      status shouldBe OK
+      val updates = responseAs[PaginationResult[Update]]
+      updates.values.reverse.map(_.createdAt) shouldBe sorted
     }
   }
 

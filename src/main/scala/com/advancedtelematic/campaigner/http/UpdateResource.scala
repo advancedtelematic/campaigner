@@ -9,7 +9,8 @@ import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, ResolverClient, UserProfileClient}
 import com.advancedtelematic.campaigner.data.AkkaSupport._
 import com.advancedtelematic.campaigner.data.Codecs._
-import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, GroupId, Update}
+import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
+import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, GroupId, SortBy, Update}
 import com.advancedtelematic.campaigner.db.UpdateSupport
 import com.advancedtelematic.campaigner.http.Errors.ConflictingUpdate
 import com.advancedtelematic.libats.data.DataType.Namespace
@@ -88,10 +89,10 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
           complete(updateRepo.findById(updateUuid))
         } ~
         pathEnd {
-          (get & parameter('groupId.as[GroupId].?) & parameters('limit.as[Long].?) & parameters('offset.as[Long].?)) { (groupId, limit, offset) =>
+          (get & parameters(('groupId.as[GroupId].?, 'sortBy.as[SortBy].?, 'offset.as[Long] ? 0L, 'limit.as[Long] ? 50L))) { (groupId, sortBy, offset, limit) =>
             groupId match {
               case Some(gid) => complete(getGroupUpdates(ns, gid))
-              case None => complete(updateRepo.allPaginated(ns, offset, limit).map(_.map(linkToSelf)))
+              case None => complete(updateRepo.allPaginated(ns, sortBy.getOrElse(SortBy.Name), offset, limit).map(_.map(linkToSelf)))
             }
           } ~
           (post & entity(as[CreateUpdate])) { request =>

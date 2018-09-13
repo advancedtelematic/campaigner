@@ -2,14 +2,15 @@ package com.advancedtelematic.campaigner.http
 
 import akka.event.LoggingAdapter
 import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.server.Directive1
+import akka.http.scaladsl.server.{Directive1, Route}
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.unmarshalling.Unmarshaller
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.client.DirectorClient
+import com.advancedtelematic.campaigner.data.AkkaSupport._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
+import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.auth.AuthedNamespaceScope
@@ -51,17 +52,13 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
       onSuccess(campaigns.findNamespaceCampaign(namespace, campaign)).flatMap(provide)
     }
 
-  implicit private val campaignStatusUnmarshaller = Unmarshaller.strict[String, CampaignStatus](CampaignStatus.withName)
-
-  val route =
+  val route: Route =
     extractAuth { auth =>
       val ns = auth.namespace
       pathPrefix("campaigns") {
         pathEnd {
-          (get & parameter('status.as[CampaignStatus].?) & parameters('limit.as[Long].?) & parameters('offset.as[Long].?)) { (status, mLimit, mOffset) =>
-            val offset = mOffset.getOrElse(0L)
-            val limit  = mLimit.getOrElse(50L)
-            complete(campaigns.allCampaigns(ns, offset, limit, status))
+          (get & parameters(('status.as[CampaignStatus].?, 'sortBy.as[SortBy].?, 'offset.as[Long] ? 0L, 'limit.as[Long] ? 50L))) { (status, sortBy, offset, limit) =>
+            complete(campaigns.allCampaigns(ns, sortBy.getOrElse(SortBy.Name), offset, limit, status))
           } ~
           (post & entity(as[CreateCampaign])) { request =>
             complete(StatusCodes.Created -> createCampaign(ns, request))

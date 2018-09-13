@@ -146,6 +146,12 @@ object DataType {
     status: CancelTaskStatus
   )
 
+  object SortBy {
+    sealed trait SortBy
+    case object Name      extends SortBy
+    case object CreatedAt extends SortBy
+  }
+
   object GroupStatus extends Enumeration {
     type GroupStatus = Value
     val scheduled, launched, cancelled = Value
@@ -175,5 +181,4 @@ object DataType {
     type MetadataType = Value
     val DESCRIPTION, ESTIMATED_INSTALLATION_DURATION, ESTIMATED_PREPARATION_DURATION = Value
   }
-
 }
