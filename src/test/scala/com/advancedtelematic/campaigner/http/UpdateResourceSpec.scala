@@ -45,7 +45,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     Get(apiUri("updates").withQuery(Query("groupId" -> groupId.show))).withHeaders(header)
 
   "GET to /updates with group id" should "forward to external resolver" in {
-    val request = genCreateUpdate.sample.get
+    val request = genCreateUpdate().sample.get
     val updateId = createUpdateOk(request)
 
     val groupId = GroupId.generate()
@@ -66,7 +66,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates with group id for many devices" should "return updates for all devices" in {
-    val requests = Gen.listOfN(10, genCreateUpdate).sample.get
+    val requests = Gen.listOfN(10, genCreateUpdate()).sample.get
     val updateIds = requests.map(createUpdateOk)
 
     val groupId = GroupId.generate()
@@ -90,7 +90,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates with group id" should "return all updates for a device" in {
-    val requests = Gen.listOfN(10, genCreateUpdate).sample.get
+    val requests = Gen.listOfN(10, genCreateUpdate()).sample.get
     val updateIds = requests.map(createUpdateOk)
 
     val groupId = GroupId.generate()
@@ -111,7 +111,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates with group id for TOO many devices" should "return an error" in {
-    val request = genCreateUpdate.sample.get
+    val request = genCreateUpdate().sample.get
     createUpdateOk(request)
 
     val groupId = GroupId.generate()
@@ -131,7 +131,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
 
   "GET to /updates" should "get all existing updates" in {
     // Make sure the external IDs are different to avoid random integrity violations on the unique key (namespace, externalId).
-    val requests = Gen.listOfN(2, genCreateUpdate).sample.get
+    val requests = Gen.listOfN(2, genCreateUpdate()).sample.get
     val updateIds = requests.map(createUpdateOk)
 
     getUpdates ~> routes ~> check {
@@ -142,8 +142,8 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates" should "get all updates sorted by name" in {
-    val requests = Gen.listOfN(20, genCreateUpdateWithAlphanumericName).sample.get
-    val sortedNames = requests.map(_.name).sortWith(_.toLowerCase < _.toLowerCase)
+    val requests = Gen.listOfN(20, genCreateUpdate(Gen.alphaNumStr.retryUntil(_.nonEmpty))).sample.get
+    val sortedNames = requests.map(_.name).sortBy(_.toLowerCase)
     requests.map(createUpdateOk)
 
     getUpdates ~> routes ~> check {
@@ -154,7 +154,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates?sortBy=createdAt" should "get all updates sorted from newest to oldest" in {
-    val requests = Gen.listOfN(20, genCreateUpdateWithAlphanumericName).sample.get
+    val requests = Gen.listOfN(20, genCreateUpdate(Gen.alphaNumStr.retryUntil(_.nonEmpty))).sample.get
     requests.map(createUpdateOk)
 
     getUpdatesSorted(SortBy.CreatedAt) ~> routes ~> check {
@@ -173,7 +173,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "POST to /updates" should "create a new update" in {
-    val request: CreateUpdate = genCreateUpdate.sample.get
+    val request: CreateUpdate = genCreateUpdate().sample.get
     val updateId = createUpdateOk(request)
     val update = getUpdateResult(updateId) ~> check {
       status shouldBe OK
@@ -186,8 +186,8 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "Creating two updates with the same updateId" should "fail with Conflict error" in {
-    val request1: CreateUpdate = genCreateUpdate.sample.get
-    val request2: CreateUpdate = genCreateUpdate.sample.get.copy(updateSource= request1.updateSource)
+    val request1: CreateUpdate = genCreateUpdate().sample.get
+    val request2: CreateUpdate = genCreateUpdate().sample.get.copy(updateSource= request1.updateSource)
     val updateId = createUpdateOk(request1)
     createUpdate(request2) ~> routes ~> check {
       status shouldBe Conflict

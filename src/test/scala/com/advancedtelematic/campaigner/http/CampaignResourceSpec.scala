@@ -209,8 +209,8 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
   }
 
   "GET all campaigns" should "get all campaigns sorted by name when no sorting is given" in {
-    val requests = Gen.listOfN(20, genCreateCampaignWithAlphanumericName).sample.get
-    val sortedNames = requests.map(_.name).sortWith(_.toLowerCase < _.toLowerCase)
+    val requests = Gen.listOfN(20, genCreateCampaign(Gen.alphaNumStr.retryUntil(_.nonEmpty))).sample.get
+    val sortedNames = requests.map(_.name).sortBy(_.toLowerCase)
     requests.map(createCampaignWithUpdateOk(_))
 
     val campaignNames = getCampaignsOk().values.map(getCampaignOk).map(_.name).filter(sortedNames.contains)
@@ -218,7 +218,7 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
   }
 
   "GET all campaigns sorted by creation time" should "sort the campaigns from newest to oldest" in {
-    val requests = Gen.listOfN(20, genCreateCampaign).sample.get
+    val requests = Gen.listOfN(20, genCreateCampaign()).sample.get
     requests.map(createCampaignWithUpdateOk(_))
 
     val campaignsNewestToOldest = getCampaignsOk(sortBy = Some(SortBy.CreatedAt)).values.map(getCampaignOk)
