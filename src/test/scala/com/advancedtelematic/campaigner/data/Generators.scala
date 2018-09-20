@@ -35,8 +35,8 @@ object Generators {
     ua      = Instant.now()
   } yield Campaign(ns, id, n, update, CampaignStatus.prepared, ca, ua)
 
-  val genCreateCampaign: Gen[CreateCampaign] = for {
-    n   <- arbitrary[String]
+  def genCreateCampaign(genName: Gen[String] = arbitrary[String]): Gen[CreateCampaign] = for {
+    n   <- genName
     update <- arbitrary[UpdateId]
     gs  <- arbitrary[Set[GroupId]]
     meta   <- Gen.option(genCampaignMetadata.map(List(_)))
@@ -60,9 +60,9 @@ object Generators {
     des <- Gen.option(Gen.alphaStr)
   } yield Update(id, src, ns, nm, des, Instant.now, Instant.now)
 
-  val genCreateUpdate: Gen[CreateUpdate] = for {
+  def genCreateUpdate(genName: Gen[String] = arbitrary[String]): Gen[CreateUpdate] = for {
     us <- genUpdateSource
-    n <- arbitrary[String]
+    n <- genName
     d <- Gen.option(arbitrary[String])
   } yield CreateUpdate(us, n, d)
 
@@ -77,13 +77,13 @@ object Generators {
   implicit lazy val arbUpdateId: Arbitrary[UpdateId] = Arbitrary(genUpdateId)
   implicit lazy val arbNamespace: Arbitrary[Namespace] = Arbitrary(genNamespace)
   implicit lazy val arbCampaign: Arbitrary[Campaign] = Arbitrary(genCampaign)
-  implicit lazy val arbCreateCampaign: Arbitrary[CreateCampaign] = Arbitrary(genCreateCampaign)
+  implicit lazy val arbCreateCampaign: Arbitrary[CreateCampaign] = Arbitrary(genCreateCampaign())
   implicit lazy val arbUpdateCampaign: Arbitrary[UpdateCampaign] = Arbitrary(genUpdateCampaign)
   implicit lazy val arbUpdateType: Arbitrary[UpdateType] = Arbitrary(genUpdateType)
   implicit lazy val arbUpdateSource: Arbitrary[UpdateSource] = Arbitrary(genUpdateSource)
   implicit lazy val arbUpdate: Arbitrary[Update] = Arbitrary(genUpdate)
   implicit lazy val arbMetadataType: Arbitrary[MetadataType] = Arbitrary(genMetadataType)
-  implicit lazy val arbCreateUpdate: Arbitrary[CreateUpdate] = Arbitrary(genCreateUpdate)
+  implicit lazy val arbCreateUpdate: Arbitrary[CreateUpdate] = Arbitrary(genCreateUpdate())
   implicit lazy val arbStats: Arbitrary[Stats] = Arbitrary(genStats)
 
 }

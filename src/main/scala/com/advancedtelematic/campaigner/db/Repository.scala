@@ -6,10 +6,12 @@ import com.advancedtelematic.campaigner.data.DataType.CampaignStatus._
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus._
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus._
+import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Schema.GroupStatsTable
 import com.advancedtelematic.campaigner.db.SlickMapping._
 import com.advancedtelematic.campaigner.http.Errors
+import SlickUtil.{sortBySlickOrderedCampaignConversion, sortBySlickOrderedUpdateConversion}
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
@@ -187,14 +189,16 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
   def find(campaign: CampaignId, ns: Option[Namespace] = None): Future[Campaign] =
     db.run(findAction(campaign, ns))
 
-  def all(ns: Namespace, offset: Long, limit: Long, status: Option[CampaignStatus]): Future[PaginationResult[CampaignId]] =
+  def all(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, status: Option[CampaignStatus]): Future[PaginationResult[CampaignId]] = {
     db.run {
       Schema.campaigns
         .filter(_.namespace === ns)
         .maybeFilter(_.status === status)
+        .sortBy(sortBy)
         .map(_.id)
-        .paginateResult(offset = offset, limit = limit)
+        .paginateResult(offset, limit)
     }
+  }
 
   def findAllScheduled(filter: GroupStatsTable => Rep[Boolean] = _ => true.bind): Future[Seq[Campaign]] = {
     db.run {
@@ -225,7 +229,7 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
     Schema.campaigns
       .filter(_.id === campaign)
       .join(Schema.deviceUpdates)
-      .on { case (campaign, update) => campaign.update === update.updateId && campaign.id === update.campaignId }
+      .on { case (c, u) => c.update === u.updateId && c.id === u.campaignId }
       .filter { case (_, update) => filterExpr(update.status) }
       .distinct
       .length
@@ -293,15 +297,13 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
     findByExternalIdsAction(ns, Seq(id)).failIfNotSingle(Errors.MissingExternalUpdate(id))
   }
 
-  def all(ns: Namespace): Future[Seq[Update]] = db.run {
+  def all(ns: Namespace, sortBy: SortBy = SortBy.Name): Future[Seq[Update]] = db.run {
     Schema.updates
       .filter(_.namespace === ns)
+      .sortBy(sortBy)
       .result
   }
 
-  def allPaginated(ns: Namespace, offset: Option[Long], limit: Option[Long]): Future[PaginationResult[Update]] = db.run {
-    Schema.updates
-      .filter(_.namespace === ns)
-      .paginateResult(offset.getOrElse(0L), limit.getOrElse(50L))
-  }
+  def allPaginated(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long): Future[PaginationResult[Update]] =
+    all(ns, sortBy).map(u => PaginationResult(u.size.toLong, limit, offset, u))
 }

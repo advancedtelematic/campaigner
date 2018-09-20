@@ -16,6 +16,7 @@ import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
 import io.circe.syntax._
 import org.scalacheck.Arbitrary._
+import org.scalacheck.Gen
 import org.scalactic.source
 
 class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with CampaignSupport with UpdateResourceSpecUtil {
@@ -206,4 +207,22 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
 
     getCampaignsOk(CampaignStatus.launched.some).values shouldNot contain(id)
   }
+
+  "GET all campaigns" should "get all campaigns sorted by name when no sorting is given" in {
+    val requests = Gen.listOfN(20, genCreateCampaign(Gen.alphaNumStr.retryUntil(_.nonEmpty))).sample.get
+    val sortedNames = requests.map(_.name).sortBy(_.toLowerCase)
+    requests.map(createCampaignWithUpdateOk(_))
+
+    val campaignNames = getCampaignsOk().values.map(getCampaignOk).map(_.name).filter(sortedNames.contains)
+    campaignNames shouldBe sortedNames
+  }
+
+  "GET all campaigns sorted by creation time" should "sort the campaigns from newest to oldest" in {
+    val requests = Gen.listOfN(20, genCreateCampaign()).sample.get
+    requests.map(createCampaignWithUpdateOk(_))
+
+    val campaignsNewestToOldest = getCampaignsOk(sortBy = Some(SortBy.CreatedAt)).values.map(getCampaignOk)
+    campaignsNewestToOldest.reverse.map(_.createdAt) shouldBe sorted
+  }
+
 }

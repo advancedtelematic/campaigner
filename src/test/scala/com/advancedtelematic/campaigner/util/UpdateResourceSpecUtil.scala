@@ -27,8 +27,8 @@ trait UpdateResourceSpecUtil {
     }
   }
 
-  def createCampaignWithUpdateOk(gen: Gen[CreateCampaign] = genCreateCampaign) = {
-    val createUpdate = genCreateUpdate.map(cu => cu.copy(updateSource = UpdateSource(cu.updateSource.id, UpdateType.multi_target))).sample.get
+  def createCampaignWithUpdateOk(gen: Gen[CreateCampaign] = genCreateCampaign()) = {
+    val createUpdate = genCreateUpdate().map(cu => cu.copy(updateSource = UpdateSource(cu.updateSource.id, UpdateType.multi_target))).sample.get
     val updateId = createUpdateOk(createUpdate)
     val createCampaign = gen.map(_.copy(update = updateId)).gen
     createCampaignOk(createCampaign) -> createCampaign
