@@ -22,10 +22,8 @@ import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
-                       director: DirectorClient)
-                      (implicit db: Database, ec: ExecutionContext)
-  extends Settings {
+class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: DirectorClient)
+                      (implicit db: Database, ec: ExecutionContext) extends Settings {
 
   val campaigns = Campaigns()
 
@@ -57,8 +55,8 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
       val ns = auth.namespace
       pathPrefix("campaigns") {
         pathEnd {
-          (get & parameters(('status.as[CampaignStatus].?, 'sortBy.as[SortBy].?, 'offset.as[Long] ? 0L, 'limit.as[Long] ? 50L))) { (status, sortBy, offset, limit) =>
-            complete(campaigns.allCampaigns(ns, sortBy.getOrElse(SortBy.Name), offset, limit, status))
+          (get & parameters(('status.as[CampaignStatus].?, 'nameContains.as[String].?, 'sortBy.as[SortBy].?, 'offset.as[Long] ? 0L, 'limit.as[Long] ? 50L))) {
+            (status, nameContains, sortBy, offset, limit) => complete(campaigns.allCampaigns(ns, sortBy.getOrElse(SortBy.Name), offset, limit, status, nameContains))
           } ~
           (post & entity(as[CreateCampaign])) { request =>
             complete(StatusCodes.Created -> createCampaign(ns, request))

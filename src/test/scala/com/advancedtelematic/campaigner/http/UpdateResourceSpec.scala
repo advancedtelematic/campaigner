@@ -17,6 +17,7 @@ import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
 import com.advancedtelematic.libats.data.{ErrorRepresentation, PaginationResult}
 import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import org.scalacheck.Arbitrary._
 import org.scalacheck.Gen
 
 class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSupport {
@@ -32,7 +33,25 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
       responseAs[UpdateId]
     }
 
-  private def getUpdates: HttpRequest = Get(apiUri("updates")).withHeaders(header)
+  private def getUpdates(groupId: Option[GroupId] = None, nameContains: Option[String] = None): HttpRequest = {
+    val m = List("groupId" -> groupId, "nameContains" -> nameContains).collect{
+      case (k, Some(v: GroupId)) => k -> v.show
+      case (k, Some(v)) => k -> v.toString
+    }
+    Get(apiUri("updates").withQuery(Query(m.toMap))).withHeaders(header)
+  }
+
+  private def getUpdateOk(updateId: UpdateId): Update =
+    Get(apiUri(s"updates/${updateId.show}")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+      responseAs[Update]
+    }
+
+  private def getUpdatesOk(nameContains: String): PaginationResult[Update] =
+    Get(apiUri("updates").withQuery(Query("nameContains" -> nameContains))).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+      responseAs[PaginationResult[Update]]
+    }
 
   private def getUpdatesSorted(sortBy: SortBy): HttpRequest =
     Get(apiUri("updates").withQuery(Query("sortBy" -> sortBy.toString))).withHeaders(header)
@@ -40,9 +59,6 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   private def getUpdateResult(id: UpdateId): RouteTestResult = {
     Get(apiUri(s"updates/${id.uuid.toString}")).withHeaders(header) ~> routes
   }
-
-  private def getGroupUpdates(groupId: GroupId) =
-    Get(apiUri("updates").withQuery(Query("groupId" -> groupId.show))).withHeaders(header)
 
   "GET to /updates with group id" should "forward to external resolver" in {
     val request = genCreateUpdate().sample.get
@@ -56,7 +72,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     fakeUserProfile.setNamespaceSetting(testNs, testResolverUri)
     fakeResolver.setUpdates(testResolverUri, devices, List(request.updateSource.id))
 
-    getGroupUpdates(groupId) ~> routes ~> check {
+    getUpdates(Some(groupId)) ~> routes ~> check {
       status shouldBe OK
       val updates = responseAs[PaginationResult[Update]]
 
@@ -80,7 +96,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
       fakeResolver.setUpdates(testResolverUri, Seq(d), Seq(r.updateSource.id))
     }
 
-    getGroupUpdates(groupId) ~> routes ~> check {
+    getUpdates(Some(groupId)) ~> routes ~> check {
       status shouldBe OK
       val updates = responseAs[PaginationResult[Update]]
 
@@ -101,7 +117,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     fakeUserProfile.setNamespaceSetting(testNs, testResolverUri)
     fakeResolver.setUpdates(testResolverUri, Seq(device), requests.map(_.updateSource.id))
 
-    getGroupUpdates(groupId) ~> routes ~> check {
+    getUpdates(Some(groupId)) ~> routes ~> check {
       status shouldBe OK
       val updates = responseAs[PaginationResult[Update]]
 
@@ -122,7 +138,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     fakeUserProfile.setNamespaceSetting(testNs, testResolverUri)
     fakeResolver.setUpdates(testResolverUri, Seq(devices.last), Seq(request.updateSource.id))
 
-    getGroupUpdates(groupId) ~> routes ~> check {
+    getUpdates(Some(groupId)) ~> routes ~> check {
       status shouldBe InternalServerError
       val error = responseAs[ErrorRepresentation]
       error.code shouldBe ErrorCodes.TooManyRequestsToRemote
@@ -134,7 +150,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     val requests = Gen.listOfN(2, genCreateUpdate()).sample.get
     val updateIds = requests.map(createUpdateOk)
 
-    getUpdates ~> routes ~> check {
+    getUpdates() ~> routes ~> check {
       status shouldBe OK
       val updates = responseAs[PaginationResult[Update]]
       updates.values.map(_.uuid) should contain allElementsOf updateIds
@@ -146,7 +162,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     val sortedNames = requests.map(_.name).sortBy(_.toLowerCase)
     requests.map(createUpdateOk)
 
-    getUpdates ~> routes ~> check {
+    getUpdates() ~> routes ~> check {
       status shouldBe OK
       val updates = responseAs[PaginationResult[Update]]
       updates.values.map(_.name).filter(sortedNames.contains) shouldBe sortedNames
@@ -161,6 +177,34 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
       status shouldBe OK
       val updates = responseAs[PaginationResult[Update]]
       updates.values.reverse.map(_.createdAt) shouldBe sorted
+    }
+  }
+
+  "GET to /updates filtered by name" should "get only the campaigns that contain the filter parameter" in {
+    val names = Seq("aabb", "baaxbc", "a123ba", "cba3b")
+    val updatesIdNames = names
+      .map(Gen.const)
+      .map(genCreateUpdate(_).sample.get)
+      .map(createUpdateOk)
+      .map(getUpdateOk)
+      .map(u => u.uuid -> u.name)
+      .toMap
+
+    val tests = Map("" -> names, "a1" -> Seq("a123ba"), "aa" -> Seq("aabb", "baaxbc"), "3b" -> Seq("a123ba", "cba3b"), "3" -> Seq("a123ba", "cba3b"))
+
+    tests.foreach { case (nameContains, expected) =>
+      val resultIds = getUpdatesOk(nameContains).values.map(_.uuid).filter(updatesIdNames.keySet.contains)
+      val resultNames = updatesIdNames.filterKeys(resultIds.contains).values
+      resultNames.size shouldBe expected.size
+      resultNames should contain allElementsOf expected
+    }
+  }
+
+  "GET to /updates filtered by groupId and name" should "fail with BadRequest" in {
+    val groupId = GroupId.generate()
+    val nameContains = arbitrary[String].sample.get
+    getUpdates(Some(groupId), Some(nameContains)) ~> routes ~> check {
+      status shouldBe BadRequest
     }
   }
 

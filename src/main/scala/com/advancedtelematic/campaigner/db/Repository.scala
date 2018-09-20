@@ -189,11 +189,12 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
   def find(campaign: CampaignId, ns: Option[Namespace] = None): Future[Campaign] =
     db.run(findAction(campaign, ns))
 
-  def all(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, status: Option[CampaignStatus]): Future[PaginationResult[CampaignId]] = {
+  def all(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, status: Option[CampaignStatus], nameContains: Option[String]): Future[PaginationResult[CampaignId]] = {
     db.run {
       Schema.campaigns
         .filter(_.namespace === ns)
         .maybeFilter(_.status === status)
+        .maybeContains(_.name, nameContains)
         .sortBy(sortBy)
         .map(_.id)
         .paginateResult(offset, limit)
@@ -297,13 +298,14 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
     findByExternalIdsAction(ns, Seq(id)).failIfNotSingle(Errors.MissingExternalUpdate(id))
   }
 
-  def all(ns: Namespace, sortBy: SortBy = SortBy.Name): Future[Seq[Update]] = db.run {
+  def all(ns: Namespace, sortBy: SortBy = SortBy.Name, nameContains: Option[String] = None): Future[Seq[Update]] = db.run {
     Schema.updates
       .filter(_.namespace === ns)
+      .maybeContains(_.name, nameContains)
       .sortBy(sortBy)
       .result
   }
 
-  def allPaginated(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long): Future[PaginationResult[Update]] =
-    all(ns, sortBy).map(u => PaginationResult(u.size.toLong, limit, offset, u))
+  def allPaginated(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, nameContains: Option[String]): Future[PaginationResult[Update]] =
+    all(ns, sortBy, nameContains).map(u => PaginationResult(u.size.toLong, limit, offset, u))
 }

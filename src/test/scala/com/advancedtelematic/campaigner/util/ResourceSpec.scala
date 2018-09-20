@@ -53,8 +53,10 @@ trait ResourceSpec extends ScalatestRouteTest
       responseAs[GetCampaign]
     }
 
-  def getCampaignsOk(campaignStatus: Option[CampaignStatus] = None, sortBy: Option[SortBy] = None)(implicit pos: source.Position): PaginationResult[CampaignId] = {
-    val m = List("status" -> campaignStatus, "sortBy" -> sortBy).collect { case (k, Some(v)) => k -> v.toString }.toMap
+  def getCampaignsOk(campaignStatus: Option[CampaignStatus] = None, nameContains: Option[String] = None, sortBy: Option[SortBy] = None)
+                    (implicit pos: source.Position): PaginationResult[CampaignId] = {
+    val m = List("status" -> campaignStatus, "nameContains" -> nameContains, "sortBy" -> sortBy)
+      .collect { case (k, Some(v)) => k -> v.toString }.toMap
 
     Get(apiUri("campaigns").withQuery(Query(m))).withHeaders(header) ~> routes ~> check {
       status shouldBe OK

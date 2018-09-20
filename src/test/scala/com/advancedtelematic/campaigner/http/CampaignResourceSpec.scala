@@ -225,4 +225,25 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
     campaignsNewestToOldest.reverse.map(_.createdAt) shouldBe sorted
   }
 
+  "GET campaigns filtered by name" should "get only the campaigns that contain the filter parameter" in {
+    val names = Seq("aabb", "baaxbc", "a123ba", "cba3b")
+    val campaignsIdNames = names
+      .map(Gen.const)
+      .map(genCreateCampaign)
+      .map(createCampaignWithUpdateOk)
+      .map(_._1)
+      .map(getCampaignOk)
+      .map(c => c.id -> c.name)
+      .toMap
+
+    val tests = Map("" -> names, "a1" -> Seq("a123ba"), "aa" -> Seq("aabb", "baaxbc"), "3b" -> Seq("a123ba", "cba3b"), "3" -> Seq("a123ba", "cba3b"))
+
+    tests.foreach{ case (nameContains, expected) =>
+      val resultIds = getCampaignsOk(nameContains = Some(nameContains)).values.filter(campaignsIdNames.keySet.contains)
+      val resultNames = campaignsIdNames.filterKeys(resultIds.contains).values
+      resultNames.size shouldBe expected.size
+      resultNames should contain allElementsOf expected
+    }
+  }
+
 }
