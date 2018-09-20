@@ -72,6 +72,9 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
     }
   }
 
+  private def getUpdates(ns: Namespace, offset: Long, limit: Long, sortBy: Option[SortBy], nameContains: Option[String]) =
+    updateRepo.allPaginated(ns, sortBy.getOrElse(SortBy.Name), offset, limit, nameContains).map(_.map(linkToSelf))
+
   private[this] def getGroupUpdates(ns: Namespace, gid: GroupId): Future[PaginationResult[HypermediaResource[Update]]] =
     userProfile
       .externalResolverUri(ns)
@@ -81,7 +84,6 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
       }
       .map(updates => PaginationResult(updates.size.toLong, updates.size.toLong, 0, updates).map(linkToSelf))
 
-
   val route: Route =
     extractNamespace { ns =>
       pathPrefix("updates") {
@@ -89,10 +91,12 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
           complete(updateRepo.findById(updateUuid))
         } ~
         pathEnd {
-          (get & parameters(('groupId.as[GroupId].?, 'sortBy.as[SortBy].?, 'offset.as[Long] ? 0L, 'limit.as[Long] ? 50L))) { (groupId, sortBy, offset, limit) =>
-            groupId match {
-              case Some(gid) => complete(getGroupUpdates(ns, gid))
-              case None => complete(updateRepo.allPaginated(ns, sortBy.getOrElse(SortBy.Name), offset, limit).map(_.map(linkToSelf)))
+          (get & parameters(('groupId.as[GroupId].?, 'nameContains.as[String].?, 'sortBy.as[SortBy].?, 'offset.as[Long] ? 0L, 'limit.as[Long] ? 50L))) {
+            (groupId, nameContains, sortBy, offset, limit) =>
+              (groupId, nameContains) match {
+              case (Some(gid), None) => complete(getGroupUpdates(ns, gid))
+              case (None, _) => complete(getUpdates(ns, offset, limit, sortBy, nameContains))
+              case _ => complete((StatusCodes.BadRequest, "Cannot filter updates by group and name at the same time."))
             }
           } ~
           (post & entity(as[CreateUpdate])) { request =>
