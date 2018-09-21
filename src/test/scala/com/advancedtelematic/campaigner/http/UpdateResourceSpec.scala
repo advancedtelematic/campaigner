@@ -10,7 +10,7 @@ import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.GroupId._
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
-import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, GroupId, SortBy, Update}
+import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.UpdateSupport
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec}
@@ -58,6 +58,26 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
 
   private def getUpdateResult(id: UpdateId): RouteTestResult = {
     Get(apiUri(s"updates/${id.uuid.toString}")).withHeaders(header) ~> routes
+  }
+
+  "GET to /updates with group id" should "get only MTU updates if no external resolver is set" in {
+    val mtuRequests = Gen.listOfN(2, genCreateUpdate(genType = Gen.const(UpdateType.multi_target))).sample.get
+    val externalUpdateRequests = Gen.listOfN(2, genCreateUpdate(genType = Gen.const(UpdateType.external))).sample.get
+    val mtuIds = mtuRequests.map(createUpdateOk)
+    externalUpdateRequests.foreach(createUpdateOk)
+
+    val groupId = GroupId.generate()
+    val devices = Gen.listOfN(100, genDeviceId).sample.get
+    fakeRegistry.setGroup(groupId, devices)
+
+    getUpdates(Some(groupId)) ~> routes ~> check {
+      status shouldBe OK
+      val updates = responseAs[PaginationResult[Update]].values
+      val sourceType = updates.map(_.source.sourceType).toSet
+      sourceType.size shouldBe 1
+      sourceType.head shouldBe UpdateType.multi_target
+      updates.map(_.uuid) should contain allElementsOf mtuIds
+    }
   }
 
   "GET to /updates with group id" should "forward to external resolver" in {
@@ -146,7 +166,6 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates" should "get all existing updates" in {
-    // Make sure the external IDs are different to avoid random integrity violations on the unique key (namespace, externalId).
     val requests = Gen.listOfN(2, genCreateUpdate()).sample.get
     val updateIds = requests.map(createUpdateOk)
 

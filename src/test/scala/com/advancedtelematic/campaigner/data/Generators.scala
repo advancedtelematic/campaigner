@@ -47,21 +47,23 @@ object Generators {
     meta   <- genCampaignMetadata
   } yield UpdateCampaign(n, Option(List(meta)))
 
-  val genUpdateSource: Gen[UpdateSource] = for {
+  def genUpdateSource(genType: Gen[UpdateType]): Gen[UpdateSource] = for {
     id <- arbitrary[String].suchThat(_.length < 200)
-    t <- arbitrary[UpdateType]
+    t <- genType
   } yield UpdateSource(ExternalUpdateId(id), t)
 
-  val genUpdate: Gen[Update] = for {
+  def genUpdate(genType: Gen[UpdateType] = arbitrary[UpdateType]): Gen[Update] = for {
     id <- genUpdateId
-    src <- genUpdateSource
+    src <- genUpdateSource(genType)
     ns <- genNamespace
     nm <- Gen.alphaNumStr
     des <- Gen.option(Gen.alphaStr)
   } yield Update(id, src, ns, nm, des, Instant.now, Instant.now)
 
-  def genCreateUpdate(genName: Gen[String] = arbitrary[String]): Gen[CreateUpdate] = for {
-    us <- genUpdateSource
+  val genMultiTargetUpdate: Gen[Update] = genUpdate(Gen.const(UpdateType.multi_target))
+
+  def genCreateUpdate(genName: Gen[String] = arbitrary[String], genType: Gen[UpdateType] = arbitrary[UpdateType]): Gen[CreateUpdate] = for {
+    us <- genUpdateSource(genType)
     n <- genName
     d <- Gen.option(arbitrary[String])
   } yield CreateUpdate(us, n, d)
@@ -80,8 +82,7 @@ object Generators {
   implicit lazy val arbCreateCampaign: Arbitrary[CreateCampaign] = Arbitrary(genCreateCampaign())
   implicit lazy val arbUpdateCampaign: Arbitrary[UpdateCampaign] = Arbitrary(genUpdateCampaign)
   implicit lazy val arbUpdateType: Arbitrary[UpdateType] = Arbitrary(genUpdateType)
-  implicit lazy val arbUpdateSource: Arbitrary[UpdateSource] = Arbitrary(genUpdateSource)
-  implicit lazy val arbUpdate: Arbitrary[Update] = Arbitrary(genUpdate)
+  implicit lazy val arbUpdate: Arbitrary[Update] = Arbitrary(genUpdate())
   implicit lazy val arbMetadataType: Arbitrary[MetadataType] = Arbitrary(genMetadataType)
   implicit lazy val arbCreateUpdate: Arbitrary[CreateUpdate] = Arbitrary(genCreateUpdate())
   implicit lazy val arbStats: Arbitrary[Stats] = Arbitrary(genStats)

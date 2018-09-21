@@ -23,8 +23,7 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
   val campaigns = Campaigns()
 
   def buildCampaignWithUpdate: Campaign = {
-    val updateSource = genUpdateSource.retryUntil(_.sourceType == UpdateType.multi_target).sample.get
-    val update = genUpdate.sample.get.copy(source = updateSource)
+    val update = genMultiTargetUpdate.sample.get
     val updateId = updateRepo.persist(update).futureValue
     arbitrary[Campaign].sample.get.copy(updateId = updateId)
   }
@@ -66,8 +65,7 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
   val campaigns = Campaigns()
 
   def buildCampaignWithUpdate: Campaign = {
-    val updateSource = genUpdateSource.retryUntil(_.sourceType == UpdateType.multi_target).sample.get
-    val update = genUpdate.sample.get.copy(source = updateSource)
+    val update = genMultiTargetUpdate.sample.get
     val updateId = updateRepo.persist(update).futureValue
     arbitrary[Campaign].sample.get.copy(updateId = updateId)
   }
