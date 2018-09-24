@@ -14,14 +14,14 @@ import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import scala.concurrent.Future
 
 trait ResolverClient {
-  def availableUpdatesFor(resolverUri: Uri, ns: Namespace, devices: Seq[DeviceId]): Future[Seq[ExternalUpdateId]]
+  def availableUpdatesFor(resolverUri: Uri, ns: Namespace, devices: Set[DeviceId]): Future[Seq[ExternalUpdateId]]
 }
 
 class ResolverHttpClient(httpClient: HttpRequest => Future[HttpResponse])
                         (implicit system: ActorSystem, mat: Materializer)
   extends ServiceHttpClient(httpClient) with ResolverClient {
 
-  override def availableUpdatesFor(resolverUri: Uri, ns: Namespace, devices: Seq[DeviceId]): Future[Seq[ExternalUpdateId]] = {
+  override def availableUpdatesFor(resolverUri: Uri, ns: Namespace, devices: Set[DeviceId]): Future[Seq[ExternalUpdateId]] = {
     val query = Uri.Query(Map("ids" -> devices.map(_.uuid).mkString(",")))
     val request = HttpRequest(HttpMethods.GET, resolverUri.withQuery(query)).withNs(ns)
     execHttp[Seq[ExternalUpdateId]](request)()

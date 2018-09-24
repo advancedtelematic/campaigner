@@ -1,5 +1,7 @@
 package com.advancedtelematic.campaigner.http
 
+import java.util.concurrent.TimeoutException
+
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.model.headers.Location
 import akka.http.scaladsl.model.{StatusCodes, Uri}
@@ -72,14 +74,22 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
     }
   }
 
-  private def getUpdates(ns: Namespace, offset: Long, limit: Long, sortBy: Option[SortBy], nameContains: Option[String]) =
+  private def availableUpdatesForGroups(ns: Namespace, groups: Set[GroupId]): Route = {
+    onComplete(getGroupUpdates(ns, groups)) {
+      case Success(r) => complete(r)
+      case Failure(_: TimeoutException) => complete(Errors.TimeoutFetchingUpdates)
+      case _ => complete(StatusCodes.InternalServerError)
+    }
+  }
+
+  private def getAllUpdates(ns: Namespace, offset: Long, limit: Long, sortBy: Option[SortBy], nameContains: Option[String]) =
     updateRepo.allPaginated(ns, sortBy.getOrElse(SortBy.Name), offset, limit, nameContains).map(_.map(linkToSelf))
 
-  private[this] def getGroupUpdates(ns: Namespace, gid: GroupId): Future[PaginationResult[HypermediaResource[Update]]] =
+  private def getGroupUpdates(ns: Namespace, groups: Set[GroupId]): Future[PaginationResult[HypermediaResource[Update]]] =
     userProfile
       .externalResolverUri(ns)
       .flatMap {
-        case Some(uri) => new GroupUpdateResolver(deviceRegistry, resolver, uri).groupUpdates(ns, gid)
+        case Some(uri) => new GroupUpdateResolver(deviceRegistry, resolver, uri).groupUpdates(ns, groups)
         case None => updateRepo.all(ns, updateType = Some(UpdateType.multi_target)) // TODO use the internal resolver from director once it's implemented
       }
       .map(updates => PaginationResult(updates.size.toLong, updates.size.toLong, 0, updates).map(linkToSelf))
@@ -91,16 +101,15 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
           complete(updateRepo.findById(updateUuid))
         } ~
         pathEnd {
-          (get & parameters(('groupId.as[GroupId].?, 'nameContains.as[String].?, 'sortBy.as[SortBy].?, 'offset.as[Long] ? 0L, 'limit.as[Long] ? 50L))) {
-            (groupId, nameContains, sortBy, offset, limit) =>
-              (groupId, nameContains) match {
-              case (Some(gid), None) => complete(getGroupUpdates(ns, gid))
-              case (None, _) => complete(getUpdates(ns, offset, limit, sortBy, nameContains))
-              case _ => complete((StatusCodes.BadRequest, "Cannot filter updates by group and name at the same time."))
-            }
-          } ~
           (post & entity(as[CreateUpdate])) { request =>
             createUpdate(ns, request)
+          } ~
+          (get & parameters(('groupId.as[GroupId].*, 'nameContains.as[String].?, 'sortBy.as[SortBy].?, 'offset.as[Long] ? 0L, 'limit.as[Long] ? 50L))) {
+            (groupId, nameContains, sortBy, offset, limit) => (groupId, nameContains) match {
+              case (Nil, _) => complete(getAllUpdates(ns, offset, limit, sortBy, nameContains))
+              case (groups, None) => availableUpdatesForGroups(ns, groups.toSet)
+              case _ => complete((StatusCodes.BadRequest, "Cannot filter updates by group and name at the same time."))
+            }
           }
         }
       }
