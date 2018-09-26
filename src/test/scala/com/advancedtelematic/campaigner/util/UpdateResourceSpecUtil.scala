@@ -43,8 +43,7 @@ trait DatabaseUpdateSpecUtil {
   private val campaigns = Campaigns()
 
   def createDbUpdate(updateId: UpdateId): Future[UpdateId] = {
-    val updateSource = genUpdateSource.sample.get.copy(sourceType = UpdateType.multi_target)
-    val update = genUpdate.sample.get.copy(uuid = updateId, source = updateSource)
+    val update = genMultiTargetUpdate.sample.get.copy(uuid = updateId)
     updateRepo.persist(update)
   }
 

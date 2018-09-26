@@ -10,7 +10,7 @@ import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, ResolverCl
 import com.advancedtelematic.campaigner.data.AkkaSupport._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
-import com.advancedtelematic.campaigner.data.DataType.{CreateUpdate, GroupId, SortBy, Update}
+import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.UpdateSupport
 import com.advancedtelematic.campaigner.http.Errors.ConflictingUpdate
 import com.advancedtelematic.libats.data.DataType.Namespace
@@ -80,7 +80,7 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
       .externalResolverUri(ns)
       .flatMap {
         case Some(uri) => new GroupUpdateResolver(deviceRegistry, resolver, uri).groupUpdates(ns, gid)
-        case None => updateRepo.all(ns) // TODO use the internal resolver from director once it's implemented
+        case None => updateRepo.all(ns, updateType = Some(UpdateType.multi_target)) // TODO use the internal resolver from director once it's implemented
       }
       .map(updates => PaginationResult(updates.size.toLong, updates.size.toLong, 0, updates).map(linkToSelf))
 

@@ -24,8 +24,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
   }
 
   def buildCampaignWithUpdate: Campaign = {
-    val updateSource = genUpdateSource.retryUntil(_.sourceType == UpdateType.multi_target).sample.get
-    val update = genUpdate.sample.get.copy(source = updateSource)
+    val update = genMultiTargetUpdate.sample.get
     val updateId = updateRepo.persist(update).futureValue
     arbitrary[Campaign].sample.get.copy(updateId = updateId)
   }

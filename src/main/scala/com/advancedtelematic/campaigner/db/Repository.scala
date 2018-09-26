@@ -7,11 +7,12 @@ import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTas
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus._
 import com.advancedtelematic.campaigner.data.DataType.GroupStatus._
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
+import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Schema.GroupStatsTable
 import com.advancedtelematic.campaigner.db.SlickMapping._
+import com.advancedtelematic.campaigner.db.SlickUtil.{sortBySlickOrderedCampaignConversion, sortBySlickOrderedUpdateConversion}
 import com.advancedtelematic.campaigner.http.Errors
-import SlickUtil.{sortBySlickOrderedCampaignConversion, sortBySlickOrderedUpdateConversion}
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
@@ -298,14 +299,15 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
     findByExternalIdsAction(ns, Seq(id)).failIfNotSingle(Errors.MissingExternalUpdate(id))
   }
 
-  def all(ns: Namespace, sortBy: SortBy = SortBy.Name, nameContains: Option[String] = None): Future[Seq[Update]] = db.run {
+  def all(ns: Namespace, sortBy: SortBy = SortBy.Name, nameContains: Option[String] = None, updateType: Option[UpdateType] = None): Future[Seq[Update]] = db.run {
     Schema.updates
       .filter(_.namespace === ns)
+      .maybeFilter(_.updateSourceType === updateType)
       .maybeContains(_.name, nameContains)
       .sortBy(sortBy)
       .result
   }
 
   def allPaginated(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, nameContains: Option[String]): Future[PaginationResult[Update]] =
-    all(ns, sortBy, nameContains).map(u => PaginationResult(u.size.toLong, limit, offset, u))
+    all(ns, sortBy, nameContains).map(r => PaginationResult(r.size.toLong, limit, offset, r))
 }
