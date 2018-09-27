@@ -124,8 +124,7 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
       status shouldBe OK
     }
 
-    checkStats(campaignId, CampaignStatus.cancelled,
-      campaign.groups.map(_ -> Stats(0, 0)).toMap)
+    checkStats(campaignId, CampaignStatus.cancelled, campaign.groups.map(_ -> Stats(0, 0)).toMap)
   }
 
   "POST /cancel_device_update_campaign" should "cancel a single device update" in {
@@ -209,7 +208,7 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
   }
 
   "GET all campaigns" should "get all campaigns sorted by name when no sorting is given" in {
-    val requests = Gen.listOfN(20, genCreateCampaign(Gen.alphaNumStr.retryUntil(_.nonEmpty))).sample.get
+    val requests = Gen.listOfN(10, genCreateCampaign(Gen.alphaNumStr.retryUntil(_.nonEmpty))).sample.get
     val sortedNames = requests.map(_.name).sortBy(_.toLowerCase)
     requests.map(createCampaignWithUpdateOk(_))
 
@@ -218,7 +217,7 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
   }
 
   "GET all campaigns sorted by creation time" should "sort the campaigns from newest to oldest" in {
-    val requests = Gen.listOfN(20, genCreateCampaign()).sample.get
+    val requests = Gen.listOfN(10, genCreateCampaign()).sample.get
     requests.map(createCampaignWithUpdateOk(_))
 
     val campaignsNewestToOldest = getCampaignsOk(sortBy = Some(SortBy.CreatedAt)).values.map(getCampaignOk)

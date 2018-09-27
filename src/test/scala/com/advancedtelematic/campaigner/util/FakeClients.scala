@@ -75,6 +75,13 @@ class FakeDeviceRegistry extends DeviceRegistryClient {
   }
 }
 
+class SlowFakeDeviceRegistry extends FakeDeviceRegistry {
+  override def devicesInGroup(namespace: Namespace, groupId: GroupId, offset: Long, limit: Long): Future[Seq[DeviceId]] = {
+    Thread.sleep(11000L)
+    super.devicesInGroup(namespace, groupId, offset, limit)
+  }
+}
+
 class FakeResolverClient extends ResolverClient {
   val updates = new ConcurrentHashMap[Uri, ConcurrentHashMap[DeviceId, Seq[ExternalUpdateId]]]()
 
@@ -83,8 +90,8 @@ class FakeResolverClient extends ResolverClient {
     updates.get(resolverUri).putAll(devices.map(_ -> externalUpdates).toMap.asJava)
   }
 
-  override def availableUpdatesFor(resolverUri: Uri, ns: Namespace, devices: Seq[DeviceId]): Future[Seq[ExternalUpdateId]] = FastFuture.successful {
-    val deviceSet = devices.toSet
+  override def availableUpdatesFor(resolverUri: Uri, ns: Namespace, devices: Set[DeviceId]): Future[Seq[ExternalUpdateId]] = FastFuture.successful {
+    val deviceSet = devices
 
     val set =
       if (updates.containsKey(resolverUri)) {
