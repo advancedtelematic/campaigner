@@ -1,7 +1,8 @@
 package com.advancedtelematic.campaigner.db
 
+import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.client.DirectorClient
-import com.advancedtelematic.campaigner.data.DataType.{Campaign, CampaignId, DeviceStatus}
+import com.advancedtelematic.campaigner.data.DataType.{Campaign, CampaignId, DeviceStatus, UpdateType}
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.slf4j.LoggerFactory
@@ -24,7 +25,8 @@ class DeviceUpdateProcess(director: DirectorClient)(implicit db: Database, ec: E
         } yield affected
       else {
         for {
-          affected <- director.findAffected(campaign.namespace, update.source.id, devices)
+          affected <- if(update.source.sourceType == UpdateType.external) FastFuture.successful(devices)
+                      else director.findAffected(campaign.namespace, update.source.id, devices)
           _ <- campaigns.scheduleDevices(campaign.id, campaign.updateId, affected: _*)
         } yield affected
       }
