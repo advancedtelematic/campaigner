@@ -2,6 +2,7 @@ package com.advancedtelematic.campaigner.daemon
 
 import java.util.UUID
 
+import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, UpdateSupport}
@@ -22,9 +23,10 @@ class DeviceUpdateReportListenerSpec extends CampaignerSpec with DatabaseSpec wi
     val updateSource = UpdateSource(ExternalUpdateId(UUID.randomUUID().toString), UpdateType.multi_target)
     val update = arbitrary[Update].gen.copy(source = updateSource)
     val campaign = arbitrary[Campaign].gen.copy(namespace = update.namespace, updateId = update.uuid)
+    val group = NonEmptyList.one(GroupId.generate())
 
     updateRepo.persist(update).futureValue
-    campaigns.create(campaign, Set.empty, Seq.empty).futureValue
+    campaigns.create(campaign, group, Seq.empty).futureValue
 
     val deviceUpdate = DeviceUpdate(campaign.id, update.uuid, DeviceId.generate(), DeviceStatus.accepted)
 

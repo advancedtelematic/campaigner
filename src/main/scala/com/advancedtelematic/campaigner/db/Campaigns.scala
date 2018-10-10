@@ -1,5 +1,6 @@
 package com.advancedtelematic.campaigner.db
 
+import cats.data.NonEmptyList
 import cats.syntax.either._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
@@ -130,8 +131,8 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     io.transactionally
   }
 
-  def create(campaign: Campaign, groups: Set[GroupId], metadata: Seq[CampaignMetadata]): Future[CampaignId] =
-    campaignRepo.persist(campaign, groups, metadata)
+  def create(campaign: Campaign, groups: NonEmptyList[GroupId], metadata: Seq[CampaignMetadata]): Future[CampaignId] =
+    campaignRepo.persist(campaign, groups.toList.toSet, metadata)
 
   def update(id: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
     campaignRepo.update(id, name, metadata)
@@ -143,8 +144,8 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       .transactionally
       .handleIntegrityErrors(Errors.CampaignAlreadyLaunched)
 
-  def scheduleGroups(campaign: CampaignId, groups: Set[GroupId]): Future[Unit] =
-    db.run(scheduleGroupsAction(campaign, groups))
+  def scheduleGroups(campaign: CampaignId, groups: NonEmptyList[GroupId]): Future[Unit] =
+    db.run(scheduleGroupsAction(campaign, groups.toList.toSet))
 
   def campaignStatsFor(campaign: CampaignId): Future[Map[GroupId, Stats]] =
     db.run {
