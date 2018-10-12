@@ -57,7 +57,8 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
       override def setMultiUpdateTarget(
         ns: Namespace,
         update: ExternalUpdateId,
-        devices: Seq[DeviceId]
+        devices: Seq[DeviceId],
+        correlationId: CorrelationId
       ): Future[Seq[DeviceId]] = FastFuture.successful(Seq.empty)
 
       override def cancelUpdate(

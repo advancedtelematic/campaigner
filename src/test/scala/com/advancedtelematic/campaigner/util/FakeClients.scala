@@ -21,7 +21,8 @@ class FakeDirectorClient extends DirectorClient {
 
   override def setMultiUpdateTarget(namespace: Namespace,
                                     update: ExternalUpdateId,
-                                    devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
+                                    devices: Seq[DeviceId],
+                                    correlationId: CorrelationId): Future[Seq[DeviceId]] = {
     val affected = devices.filterNot(cancelled.asScala.contains)
 
     updates.compute(update, (_, existing) => {

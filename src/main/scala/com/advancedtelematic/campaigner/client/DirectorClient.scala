@@ -4,7 +4,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model._
 import akka.stream.Materializer
 import cats.syntax.show._
-import com.advancedtelematic.campaigner.data.DataType.ExternalUpdateId
+import com.advancedtelematic.campaigner.data.DataType.{CorrelationId, ExternalUpdateId}
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.http.HttpOps.HttpRequestOps
 import com.advancedtelematic.libats.http.ServiceHttpClient
@@ -14,7 +14,11 @@ import scala.concurrent.Future
 
 trait DirectorClient {
 
-  def setMultiUpdateTarget(ns: Namespace, updateId: ExternalUpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]]
+  def setMultiUpdateTarget(
+    ns: Namespace,
+    updateId: ExternalUpdateId,
+    devices: Seq[DeviceId],
+    correlationId: CorrelationId): Future[Seq[DeviceId]]
 
   def findAffected(ns: Namespace, updateId: ExternalUpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]]
 
@@ -37,10 +41,14 @@ class DirectorHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespons
   override def setMultiUpdateTarget(
     ns: Namespace,
     updateId: ExternalUpdateId,
-    devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
+    devices: Seq[DeviceId],
+    correlationId: CorrelationId): Future[Seq[DeviceId]] = {
     val path   = uri.path / "api" / "v1" / "admin" / "multi_target_updates" / updateId.value
     val entity = HttpEntity(ContentTypes.`application/json`, devices.asJson.noSpaces)
-    val req = HttpRequest(HttpMethods.PUT, uri.withPath(path), entity = entity).withNs(ns)
+    val req = HttpRequest(
+      HttpMethods.PUT,
+      uri.withPath(path).withQuery(Uri.Query("correlationId" -> correlationId.value)),
+      entity = entity).withNs(ns)
     execHttp[Seq[DeviceId]](req)()
   }
 

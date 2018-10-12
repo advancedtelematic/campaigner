@@ -179,4 +179,12 @@ object DataType {
     type MetadataType = Value
     val DESCRIPTION, ESTIMATED_INSTALLATION_DURATION, ESTIMATED_PREPARATION_DURATION = Value
   }
+
+  final case class CorrelationId(value: String) extends AnyVal
+  object CorrelationId {
+    val namespace = "here-ota"
+    def make(resource: String, id: String) = CorrelationId(s"$namespace:$resource:$id")
+    def from(id: CampaignId) = make("campaigns", id.uuid.toString)
+  }
+
 }
