@@ -8,7 +8,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec, DatabaseUpdateSpecUtil}
-import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, Namespace}
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.scalacheck.Arbitrary
 
@@ -57,7 +57,8 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
       override def setMultiUpdateTarget(
         ns: Namespace,
         update: ExternalUpdateId,
-        devices: Seq[DeviceId]
+        devices: Seq[DeviceId],
+        correlationId: CorrelationId
       ): Future[Seq[DeviceId]] = FastFuture.successful(Seq.empty)
 
       override def cancelUpdate(

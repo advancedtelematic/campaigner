@@ -6,7 +6,7 @@ import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, DirectorClient, ExternalUpdate, ResolverClient, UserProfileClient}
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, Namespace}
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.scalacheck.Gen
 
@@ -21,7 +21,8 @@ class FakeDirectorClient extends DirectorClient {
 
   override def setMultiUpdateTarget(namespace: Namespace,
                                     update: ExternalUpdateId,
-                                    devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
+                                    devices: Seq[DeviceId],
+                                    correlationId: CorrelationId): Future[Seq[DeviceId]] = {
     val affected = devices.filterNot(cancelled.asScala.contains)
 
     updates.compute(update, (_, existing) => {
