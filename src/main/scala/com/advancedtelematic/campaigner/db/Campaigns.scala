@@ -33,7 +33,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 
   def remainingCancelling(): Future[Seq[(Namespace, CampaignId)]] = cancelTaskRepo.findInprogress()
 
-  def remainingCampaigns(): Future[Seq[Campaign]] = campaignRepo.findAllScheduled()
+  def remainingCampaigns(maxErrors: Int): Future[Seq[Campaign]] = campaignRepo.findAllScheduled(maxErrors)()
 
   def remainingGroups(campaign: CampaignId): Future[Seq[GroupId]] =
     groupStatsRepo.findScheduled(campaign).map(_.map(_.group))
@@ -60,8 +60,8 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def freshCancelled(): Future[Seq[(Namespace, CampaignId)]] =
     cancelTaskRepo.findPending()
 
-  def freshCampaigns(): Future[Seq[Campaign]] =
-    campaignRepo.findAllScheduled { groupStats =>
+  def freshCampaigns(maxErrors: Int): Future[Seq[Campaign]] =
+    campaignRepo.findAllScheduled(maxErrors) { groupStats =>
       groupStats.processed === 0L && groupStats.affected === 0L
     }
 

@@ -127,6 +127,18 @@ object Schema {
 
     override def * : ProvenShape[Update] = (uuid, updateId, updateSourceType, namespace, name, description, createdAt, updatedAt) <> (fromRow, toRow)
   }
+
   protected [db] val updates = TableQuery[UpdatesTable]
 
+  class CampaignErrorsTable(tag: Tag) extends Table[CampaignErrors](tag, "campaign_errors") {
+    def campaignId = column[CampaignId]("campaign_id")
+    def errorCount = column[Int]("error_count")
+    def lastError = column[String]("last_error")
+
+    def pk = primaryKey("campaign_errors_pk", campaignId)
+
+    override def * = (campaignId, errorCount, lastError) <> ((CampaignErrors.apply _).tupled, CampaignErrors.unapply)
+  }
+
+  protected [db] val campaignErrors = TableQuery[CampaignErrorsTable]
 }

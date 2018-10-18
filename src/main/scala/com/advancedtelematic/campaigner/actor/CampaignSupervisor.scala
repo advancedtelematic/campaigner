@@ -57,9 +57,10 @@ class CampaignSupervisor(registry: DeviceRegistryClient,
     // periodically (re-)schedule non-completed campaigns
     scheduler.schedule(0.milliseconds, pollingTimeout, self, PickUpCampaigns)
 
+    // TODO:SM On start it always runs this twice...
     // pick up campaigns where they left
     campaigns
-      .remainingCampaigns()
+      .remainingCampaigns(CampaignScheduler.MAX_CAMPAIGN_ERROR_COUNT)
       .map(x => ResumeCampaigns(x.toSet))
       .pipeTo(self)
 
@@ -80,17 +81,7 @@ class CampaignSupervisor(registry: DeviceRegistryClient,
 
   def scheduleCampaign(campaign: Campaign): ActorRef = {
     val childProps = CampaignScheduler.props(registry, director, campaign, delay, batchSize)
-
-    val props = BackoffSupervisor.props(
-      Backoff.onFailure(
-        childProps,
-        childName = s"campaignScheduler-${campaign.id.show}",
-        minBackoff = 3.seconds,
-        maxBackoff = 1.hour,
-        randomFactor = 0.2 // adds 20% "noise" to vary the intervals slightly
-      ).withAutoReset(10.seconds))
-
-    context.actorOf(props)
+    context.actorOf(childProps)
   }
 
   def supervising(campaignSchedulers: Map[CampaignId, ActorRef]): Receive = {
@@ -103,22 +94,22 @@ class CampaignSupervisor(registry: DeviceRegistryClient,
     case PickUpCampaigns =>
       log.debug(s"picking up campaigns")
       campaigns
-        .freshCampaigns()
+        .freshCampaigns(CampaignScheduler.MAX_CAMPAIGN_ERROR_COUNT)
         .map(x => ResumeCampaigns(x.toSet))
         .pipeTo(self)
 
     case CancelCampaigns(cs) if cs.nonEmpty =>
-      log.info(s"cancelling campaigns $cs")
+      log.info(s"cancelling campaigns ${cs.map(_._2)}")
       cs.foreach{case (_, c) => campaignSchedulers.get(c).foreach(stop)}
       cs.foreach{case (ns, c) => cancelCampaign(ns, c)}
-      become(supervising(campaignSchedulers -- cs.map(_._2)))
       parent ! CampaignsCancelled(cs.map(_._2))
+      become(supervising(campaignSchedulers -- cs.map(_._2)))
 
-    case ResumeCampaigns(cs) if cs.nonEmpty =>
-      log.info(s"resume campaigns ${cs.map(_.id)}")
+    case ResumeCampaigns(runningCampaigns) if runningCampaigns.nonEmpty =>
+      log.info(s"resume campaigns ${runningCampaigns.map(_.id)}")
       // only create schedulers for campaigns without a scheduler
       val newlyScheduled =
-        cs
+        runningCampaigns
           .filterNot(c => campaignSchedulers.contains(c.id))
           .map(c => c.id -> scheduleCampaign(c))
           .toMap
@@ -128,13 +119,16 @@ class CampaignSupervisor(registry: DeviceRegistryClient,
       } else
         log.debug(s"Not creating scheduler for campaigns, scheduler already exists")
 
-    case CampaignComplete(id) =>
+    case CampaignSchedulingFailed(id) =>
+      // TODO:SM Move campaign to failed when that state exists
+      become(supervising(campaignSchedulers - id))
+
+    case CampaignSchedulingComplete(id) =>
       log.info(s"$id completed")
-      parent ! CampaignComplete(id)
+      parent ! CampaignSchedulingComplete(id)
       become(supervising(campaignSchedulers - id))
 
     case Status.Failure(ex) =>
-      // TODO: Move campaign to failed?
       log.error(ex, s"An error occurred scheduling a campaign: ${ex.getMessage}")
   }
 
