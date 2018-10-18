@@ -3,6 +3,7 @@ package com.advancedtelematic.campaigner.db
 import akka.NotUsed
 import akka.stream.scaladsl.Source
 import cats.data.NonEmptyList
+import com.advancedtelematic.campaigner.actor.CampaignScheduler
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus._
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus._
@@ -46,6 +47,10 @@ trait UpdateSupport {
 
 trait CampaignMetadataSupport {
   def campaignMetadataRepo(implicit db: Database, ec: ExecutionContext) = new CampaignMetadataRepository()
+}
+
+trait CampaignErrorsSupport {
+  def campaignErrorsRepo(implicit db: Database, ec: ExecutionContext) = new CampaignErrorsRepository()
 }
 
 protected [db] class CampaignMetadataRepository()(implicit db: Database) {
@@ -203,14 +208,17 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
     }
   }
 
-  def findAllScheduled(filter: GroupStatsTable => Rep[Boolean] = _ => true.bind): Future[Seq[Campaign]] = {
-    db.run {
-      Schema.groupStats.join(Schema.campaigns).on(_.campaignId === _.id)
-        .filter { case (groupStats, _) => groupStats.status === GroupStatus.scheduled }
-        .filter { case (groupStats, _) => filter(groupStats) }
-        .map(_._2)
-        .result
-    }
+  def findAllScheduled(maxErrors: Int)(filter: GroupStatsTable => Rep[Boolean] = _ => true.bind): Future[Seq[Campaign]] = db.run {
+    val q = for {
+      groupStats <- Schema.groupStats
+      campaigns <- Schema.campaigns if groupStats.campaignId === campaigns.id && groupStats.status === GroupStatus.scheduled && filter(groupStats)
+    } yield campaigns
+
+    val filterErrored = for {
+      (a, b) <- q.joinLeft(Schema.campaignErrors.filter(_.errorCount >= maxErrors)).on(_.id === _.campaignId) if b.isEmpty
+    } yield a
+
+    filterErrored.result
   }
 
   def update(campaign: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
@@ -315,4 +323,16 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
 
   def allPaginated(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, nameContains: Option[String]): Future[PaginationResult[Update]] =
     all(ns, sortBy, nameContains).map(r => PaginationResult(r.size.toLong, limit, offset, r))
+}
+
+protected class CampaignErrorsRepository()(implicit db: Database, ec: ExecutionContext) {
+  def addError(campaignId: CampaignId, desc: String): Future[Unit] = db.run {
+    sqlu"""insert into campaign_errors(campaign_id, error_count, last_error) values
+         (${campaignId.uuid.toString}, 1, $desc) ON DUPLICATE KEY UPDATE error_count = error_count + 1, last_error = $desc
+      """
+  }.map(_ => ())
+
+  def find(campaignId: CampaignId): Future[Seq[CampaignErrors]] = db.run {
+    Schema.campaignErrors.filter(_.campaignId === campaignId).result
+  }
 }

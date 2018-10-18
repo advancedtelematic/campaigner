@@ -179,4 +179,6 @@ object DataType {
     type MetadataType = Value
     val DESCRIPTION, ESTIMATED_INSTALLATION_DURATION, ESTIMATED_PREPARATION_DURATION = Value
   }
+
+  case class CampaignErrors(campaign: CampaignId, errorCount: Int, lastError: String)
 }

@@ -18,6 +18,7 @@ object GroupScheduler {
   object NextBatch extends GroupSchedulerMsg
   case class BatchComplete(group: GroupId, offset: Long) extends GroupSchedulerMsg
   case class GroupComplete(group: GroupId) extends GroupSchedulerMsg
+  case class GroupSchedulerError(cause: Throwable) extends GroupSchedulerMsg
 
   def props(registry: DeviceRegistryClient,
             director: DirectorClient,
@@ -91,9 +92,10 @@ class GroupScheduler(registry: DeviceRegistryClient,
 
     case msg: GroupComplete =>
       parent ! msg
-      context.stop(self)
 
-    case msg: Status.Failure =>
-      parent ! msg
+    case Status.Failure(cause) =>
+      log.error(cause, "Could not schedule group batch")
+      parent ! GroupSchedulerError(cause)
+      throw cause
   }
 }
