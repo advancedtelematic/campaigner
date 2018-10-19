@@ -8,20 +8,20 @@ import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.ExecutionContext
 import akka.http.scaladsl.server.Directives._
+import com.advancedtelematic.campaigner.client.{ResolverClient, UserProfileClient}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-import com.advancedtelematic.campaigner.data.Codecs._
 
-class DeviceResource(extractNamespace: Directive1[Namespace])
+class DeviceResource(userProfileClient: UserProfileClient, resolverClient: ResolverClient, extractNamespace: Directive1[Namespace])
                     (implicit val db: Database, val ec: ExecutionContext) {
 
-  val deviceCampaigns = new DeviceCampaigns()
+  val deviceCampaigns = new DeviceCampaigns(userProfileClient, resolverClient)
 
   val route =
-    extractNamespace { _ =>
+    extractNamespace { ns =>
       pathPrefix("device" / DeviceId.Path) { deviceId =>
         path("campaigns") {
           get {
-            complete(deviceCampaigns.findScheduledCampaigns(deviceId))
+            complete(deviceCampaigns.findScheduledCampaigns(ns, deviceId))
           }
         }
       }

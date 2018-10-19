@@ -10,20 +10,43 @@ import com.advancedtelematic.libats.http.HttpOps.HttpRequestOps
 import com.advancedtelematic.libats.http.ServiceHttpClient
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import io.circe.Decoder
 
 import scala.concurrent.Future
 
 trait ResolverClient {
   def availableUpdatesFor(resolverUri: Uri, ns: Namespace, devices: Set[DeviceId]): Future[Seq[ExternalUpdateId]]
+
+  def updatesForDevice(resolverUri: Uri, ns: Namespace, deviceId: DeviceId): Future[List[ExternalUpdate]]
 }
 
-class ResolverHttpClient(httpClient: HttpRequest => Future[HttpResponse])
-                        (implicit system: ActorSystem, mat: Materializer)
-  extends ServiceHttpClient(httpClient) with ResolverClient {
+final case class ExternalUpdate(deviceId: DeviceId, updateId: ExternalUpdateId, size: Long)
 
-  override def availableUpdatesFor(resolverUri: Uri, ns: Namespace, devices: Set[DeviceId]): Future[Seq[ExternalUpdateId]] = {
-    val query = Uri.Query(Map("ids" -> devices.map(_.uuid).mkString(",")))
+object ExternalUpdate {
+
+  implicit val EncoderInstance: Decoder[ExternalUpdate] =
+    Decoder.forProduct3("device", "updateId", "size")(ExternalUpdate.apply)
+
+}
+
+class ResolverHttpClient(httpClient: HttpRequest => Future[HttpResponse])(implicit system: ActorSystem,
+                                                                          mat: Materializer)
+    extends ServiceHttpClient(httpClient)
+    with ResolverClient {
+
+  import akka.http.scaladsl.client.RequestBuilding._
+
+  override def availableUpdatesFor(resolverUri: Uri,
+                                   ns: Namespace,
+                                   devices: Set[DeviceId]): Future[Seq[ExternalUpdateId]] = {
+    val query   = Uri.Query(Map("ids" -> devices.map(_.uuid).mkString(",")))
     val request = HttpRequest(HttpMethods.GET, resolverUri.withQuery(query)).withNs(ns)
     execHttp[Seq[ExternalUpdateId]](request)()
+  }
+
+  override def updatesForDevice(resolverUri: Uri, ns: Namespace, deviceId: DeviceId): Future[List[ExternalUpdate]] = {
+    val uri =
+      resolverUri.withQuery(Uri.Query("device" -> deviceId.uuid.toString))
+    execHttp[List[ExternalUpdate]](Get(uri).withNs(ns))()
   }
 }
