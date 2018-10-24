@@ -4,7 +4,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.util.FastFuture
-import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, DirectorClient, ResolverClient, UserProfileClient}
+import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, DirectorClient, ExternalUpdate, ResolverClient, UserProfileClient}
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
@@ -106,6 +106,8 @@ class FakeResolverClient extends ResolverClient {
 
     set.toSeq
   }
+
+  override def updatesForDevice(resolverUri: Uri, ns: Namespace, deviceId: DeviceId): Future[List[ExternalUpdate]] = ???
 }
 
 class FakeUserProfileClient extends UserProfileClient {

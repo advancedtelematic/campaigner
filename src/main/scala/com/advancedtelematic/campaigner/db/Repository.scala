@@ -2,6 +2,7 @@ package com.advancedtelematic.campaigner.db
 
 import akka.NotUsed
 import akka.stream.scaladsl.Source
+import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus._
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus._
@@ -287,6 +288,10 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
   def findById(id: UpdateId): Future[Update] = db.run {
     Schema.updates.filter(_.uuid === id).result.failIfNotSingle(Errors.MissingUpdate(id))
   }
+
+  def findByIds(ns: Namespace, ids: NonEmptyList[UpdateId]): Future[List[Update]] = db.run(
+    Schema.updates.filter(xs => xs.namespace === ns && xs.uuid.inSet(ids.toList)).to[List].result
+  )
 
   private def findByExternalIdsAction(ns: Namespace, ids: Seq[ExternalUpdateId]): DBIO[Seq[Update]] =
     Schema.updates.filter(_.namespace === ns).filter(_.updateId.inSet(ids)).result

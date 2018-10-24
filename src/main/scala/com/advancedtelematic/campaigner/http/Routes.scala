@@ -28,7 +28,7 @@ class Routes(director: DirectorClient, deviceRegistry: DeviceRegistryClient, res
       ErrorHandler.handleErrors {
         pathPrefix("api" / "v2") {
           new CampaignResource(extractAuth, director).route ~
-          new DeviceResource(defaultNamespaceExtractor).route ~
+          new DeviceResource(userProfile, resolver, defaultNamespaceExtractor).route ~
             new UpdateResource(defaultNamespaceExtractor, deviceRegistry, resolver, userProfile).route
         } ~ DbHealthResource(versionMap).route
       }

@@ -2,7 +2,7 @@ package com.advancedtelematic.campaigner.http
 
 import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.campaigner.data.Codecs._
-import com.advancedtelematic.campaigner.data.DataType.{CreateCampaign, GetDeviceCampaigns}
+import com.advancedtelematic.campaigner.data.DataType.CreateCampaign
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec, UpdateResourceSpecUtil}

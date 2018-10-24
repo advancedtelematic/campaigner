@@ -81,9 +81,6 @@ object DataType {
       metadata.toList.flatten.map(_.toCampaignMetadata(campaignId))
   }
 
-  case class GetDeviceCampaigns(deviceId: DeviceId, campaigns: Seq[DeviceCampaign])
-
-  case class DeviceCampaign(id: CampaignId, name: String, metadata: Seq[CreateCampaignMetadata])
 
   final case class GetCampaign(
     namespace: Namespace,

@@ -11,11 +11,6 @@ object Codecs {
   import DataType.CampaignStatus.CampaignStatus
   import io.circe.generic.semiauto._
 
-  implicit val deviceCampaignsEncoder: Encoder[GetDeviceCampaigns] = deriveEncoder
-  implicit val deviceCampaignsDecoder: Decoder[GetDeviceCampaigns] = deriveDecoder
-
-  implicit val clientCampaignEncoder: Encoder[DeviceCampaign] = deriveEncoder
-  implicit val clientCampaignDecoder: Decoder[DeviceCampaign] = deriveDecoder
 
   implicit val createCampaignMetadataEncoder: Encoder[CreateCampaignMetadata] = deriveEncoder
   implicit val createCampaignMetadataDecoder: Decoder[CreateCampaignMetadata] = deriveDecoder
