@@ -30,7 +30,7 @@ object DaemonBoot extends BootApp
 
   implicit val _db = db
 
-  log.info("Starting campaigner daemon")
+  log.info(s"Starting campaigner daemon $version")
 
   val deviceRegistry = new DeviceRegistryHttpClient(deviceRegistryUri, defaultHttpClient)
   val director = new DirectorHttpClient(directorUri, defaultHttpClient)
