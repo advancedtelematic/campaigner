@@ -88,6 +88,7 @@ class GroupScheduler(registry: DeviceRegistryClient,
 
     case msg: BatchComplete =>
       parent ! msg
+
       scheduler.scheduleOnce(delay, self, NextBatch)
 
     case msg: GroupComplete =>

@@ -1,6 +1,7 @@
 package com.advancedtelematic.campaigner.actor
 
-import akka.actor.{PoisonPill, Terminated}
+import cats.syntax.option._
+import akka.actor.{ActorRef, PoisonPill}
 import akka.testkit.TestProbe
 import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.actor.CampaignScheduler.CampaignSchedulingComplete
@@ -22,10 +23,27 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with BeforeAn
 
   val campaigns = Campaigns()
 
-  def buildCampaignWithUpdate: Campaign = {
-    val update = genMultiTargetUpdate.sample.get
+  private def buildCampaignWithUpdate: Campaign = {
+    val update = genMultiTargetUpdate.generate
     val updateId = updateRepo.persist(update).futureValue
-    arbitrary[Campaign].sample.get.copy(updateId = updateId)
+    arbitrary[Campaign].generate.copy(updateId = updateId)
+  }
+
+  private def startCampaignSupervisor(parent: TestProbe,
+                                      childName: Option[String] = None,
+                                      pollingTimeout: FiniteDuration = 1.second,
+                                      groupBatchDelay: FiniteDuration = 1.second): ActorRef = {
+    val props = CampaignSupervisor.props(
+      deviceRegistry,
+      director,
+      pollingTimeout,
+      groupBatchDelay,
+      schedulerBatchSize)
+
+    childName match {
+      case Some(n) => parent.childActorOf(props, n)
+      case None => parent.childActorOf(props)
+    }
   }
 
   "campaign supervisor" should "pick up unfinished and fresh campaigns" in {
@@ -38,13 +56,7 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with BeforeAn
     campaigns.create(campaign2, group, Seq.empty).futureValue
     campaigns.scheduleGroups(campaign1.id, group).futureValue
 
-    val child = parent.childActorOf(CampaignSupervisor.props(
-      deviceRegistry,
-      director,
-      schedulerPollingTimeout,
-      schedulerDelay,
-      schedulerBatchSize
-    ))
+    val child = startCampaignSupervisor(parent)
 
     parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign1.id)))
     parent.expectMsg(3.seconds, CampaignSchedulingComplete(campaign1.id))
@@ -53,6 +65,25 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with BeforeAn
 
     parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign2.id)))
     parent.expectMsg(3.seconds, CampaignSchedulingComplete(campaign2.id))
+
+    child ! PoisonPill
+  }
+
+  it should "pick up campaigns if there are no campaigns when starting" in {
+    val campaign = buildCampaignWithUpdate
+    val group    = NonEmptyList.one(GroupId.generate)
+    val parent   = TestProbe()
+    val devs     = List(genDeviceId.generate)
+
+    deviceRegistry.setGroup(group.head, devs)
+
+    val child = startCampaignSupervisor(parent)
+
+    campaigns.create(campaign, group, Seq.empty).futureValue
+    campaigns.scheduleGroups(campaign.id, group).futureValue
+
+    parent.expectMsg(5.seconds, CampaignsScheduled(Set(campaign.id)))
+    parent.expectMsg(5.seconds, CampaignSchedulingComplete(campaign.id))
 
     child ! PoisonPill
   }
@@ -69,13 +100,7 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with BeforeAn
       await(Future.sequence(errorsF))
     }.futureValue
 
-    val child = parent.childActorOf(CampaignSupervisor.props(
-      deviceRegistry,
-      director,
-      schedulerPollingTimeout,
-      10.seconds,
-      schedulerBatchSize
-    ), "CampaignSupervisorIgnoreErrors")
+    val child = startCampaignSupervisor(parent, "CampaignSupervisorIgnoreErrors".some)
 
     parent.expectNoMessage(3.seconds)
 
@@ -86,21 +111,15 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with BeforeAn
     val campaign = buildCampaignWithUpdate
     val group    = NonEmptyList.one(GroupId.generate)
     val parent   = TestProbe()
-    val n        = Gen.choose(batch, batch * 2).sample.get
-    val devs     = Gen.listOfN(n, genDeviceId).sample.get
+    val n        = Gen.choose(batch, batch * 2).generate
+    val devs     = Gen.listOfN(n, genDeviceId).generate
 
     deviceRegistry.setGroup(group.head, devs)
 
     campaigns.create(campaign, group, Seq.empty).futureValue
     campaigns.scheduleGroups(campaign.id, group).futureValue
 
-    val child = parent.childActorOf(CampaignSupervisor.props(
-      deviceRegistry,
-      director,
-      schedulerPollingTimeout,
-      10.seconds,
-      schedulerBatchSize
-    ), "CampaignSupervisorCancel")
+    val child = startCampaignSupervisor(parent, "CampaignSupervisorCancel".some)
 
     parent.expectMsg(5.seconds, CampaignsScheduled(Set(campaign.id)))
 
