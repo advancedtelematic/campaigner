@@ -314,5 +314,5 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
   }
 
   def allPaginated(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, nameContains: Option[String]): Future[PaginationResult[Update]] =
-    all(ns, sortBy, nameContains).map(r => PaginationResult(r.size.toLong, limit, offset, r))
+    all(ns, sortBy, nameContains).map(r => PaginationResult(r, limit, offset, r.size.toLong))
 }
