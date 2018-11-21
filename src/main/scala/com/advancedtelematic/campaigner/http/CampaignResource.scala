@@ -14,7 +14,7 @@ import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.auth.AuthedNamespaceScope
-import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, CampaignId => CampaignCorrelationId, MultiTargetUpdateId, Namespace}
 import com.advancedtelematic.libats.http.UUIDKeyAkka._
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
@@ -33,15 +33,20 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: 
     campaigns.create(campaign, request.groups, metadata)
   }
 
-  def cancelDeviceUpdate(ns: Namespace, update: UpdateId, device: DeviceId)
+  def cancelDeviceUpdate(ns: Namespace, correlationId: CorrelationId, device: DeviceId)
                         (implicit log: LoggingAdapter): Future[Unit] =
     director.cancelUpdate(ns, device).flatMap { _ =>
-      campaigns.findCampaignsByUpdate(update).flatMap {
-        case cs if cs.isEmpty =>
-          log.info(s"No campaign exists for $device.")
-          FastFuture.successful(())
-        case _ =>
-          campaigns.finishDevice(update, device, DeviceStatus.cancelled)
+      correlationId match {
+        case CampaignCorrelationId(uuid) =>
+          campaigns.finishDevices(CampaignId(uuid), Seq(device), DeviceStatus.cancelled)
+        case MultiTargetUpdateId(uuid) =>
+          campaigns.findCampaignsByUpdate(UpdateId(uuid)).flatMap {
+            case cs if cs.isEmpty =>
+              log.info(s"No campaign exists for $device.")
+              FastFuture.successful(())
+            case _ =>
+              campaigns.finishDevice(UpdateId(uuid), device, DeviceStatus.cancelled)
+          }
       }
     }
 
@@ -84,13 +89,13 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: 
       } ~
       extractLog { implicit log =>
         (post & path("cancel_device_update_campaign") & entity(as[CancelDeviceUpdateCampaign])) { cancelDevice =>
-              complete(cancelDeviceUpdate(ns, cancelDevice.update, cancelDevice.device))
+              complete(cancelDeviceUpdate(ns, cancelDevice.correlationId, cancelDevice.device))
         }
       }
     }
 }
 
-final case class CancelDeviceUpdateCampaign(update: UpdateId, device: DeviceId)
+final case class CancelDeviceUpdateCampaign(correlationId: CorrelationId, device: DeviceId)
 
 object CancelDeviceUpdateCampaign {
   import io.circe.{Decoder, Encoder}

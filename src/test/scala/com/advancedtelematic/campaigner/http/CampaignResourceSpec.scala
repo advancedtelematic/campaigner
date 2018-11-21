@@ -12,6 +12,7 @@ import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec, UpdateResourceSpecUtil}
 import com.advancedtelematic.libats.data.ErrorCodes.InvalidEntity
 import com.advancedtelematic.libats.data.ErrorRepresentation
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, CampaignId => CampaignCorrelationId, MultiTargetUpdateId}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
@@ -155,13 +156,34 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
 
     campaigns.scheduleDevices(campaignId, updateId, device).futureValue
 
-    val entity = Json.obj("update" -> updateId.asJson, "device" -> device.asJson)
+    val correlationId: CorrelationId = MultiTargetUpdateId(updateId.uuid)
+    val entity = Json.obj("correlationId" -> correlationId.asJson, "device" -> device.asJson)
     Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
       fakeDirector.cancelled.contains(device) shouldBe true
     }
 
     checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toList.toMap, 0, Set.empty, 1)
+  }
+
+  it should "cancel a single device by campaign correlation id" in {
+    val (campaignId, campaign) = createCampaignWithUpdateOk()
+    val device = DeviceId.generate()
+
+    Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+    }
+
+    checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toList.toMap)
+
+    val correlationId: CorrelationId = CampaignCorrelationId(campaignId.uuid)
+    val entity = Json.obj("correlationId" -> correlationId.asJson, "device" -> device.asJson)
+    Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
+      status shouldBe PreconditionFailed
+      fakeDirector.cancelled.contains(device) shouldBe true
+    }
+
+    checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toList.toMap)
   }
 
   it should "fail if device has not been scheduled" in {
@@ -175,7 +197,8 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
 
     checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toList.toMap)
 
-    val entity = Json.obj("update" -> updateId.asJson, "device" -> device.asJson)
+    val correlationId: CorrelationId = MultiTargetUpdateId(updateId.uuid)
+    val entity = Json.obj("correlationId" -> correlationId.asJson, "device" -> device.asJson)
     Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe PreconditionFailed
       fakeDirector.cancelled.contains(device) shouldBe true
@@ -188,7 +211,8 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
     val update = UpdateId.generate()
     val device = DeviceId.generate()
 
-    val entity = Json.obj("update" -> update.asJson, "device" -> device.asJson)
+    val correlationId: CorrelationId = MultiTargetUpdateId(update.uuid)
+    val entity = Json.obj("correlationId" -> correlationId.asJson, "device" -> device.asJson)
     Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
       fakeDirector.cancelled.contains(device) shouldBe true

@@ -92,7 +92,7 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
         case Some(uri) => new GroupUpdateResolver(deviceRegistry, resolver, uri).groupUpdates(ns, groups)
         case None => updateRepo.all(ns, updateType = Some(UpdateType.multi_target)) // TODO use the internal resolver from director once it's implemented
       }
-      .map(updates => PaginationResult(updates.size.toLong, updates.size.toLong, 0, updates).map(linkToSelf))
+      .map(updates => PaginationResult(updates, updates.size.toLong, 0, updates.size.toLong).map(linkToSelf))
 
   val route: Route =
     extractNamespace { ns =>
