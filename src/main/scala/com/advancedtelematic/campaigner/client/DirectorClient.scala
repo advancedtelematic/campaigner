@@ -5,16 +5,40 @@ import akka.http.scaladsl.model._
 import akka.stream.Materializer
 import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.DataType.ExternalUpdateId
-import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId, Namespace}
 import com.advancedtelematic.libats.http.HttpOps.HttpRequestOps
 import com.advancedtelematic.libats.http.ServiceHttpClient
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
+import com.advancedtelematic.libats.codecs.CirceAnyVal._
+
+import java.util.UUID
+import io.circe._
+import io.circe.generic.semiauto._
 
 import scala.concurrent.Future
 
+final case class AssignUpdateRequest(
+  correlationId: CorrelationId,
+  devices: Seq[DeviceId],
+  mtuId: ExternalUpdateId,
+  dryRun: Boolean = false)
+
+object AssignUpdateRequest {
+  def apply(devices: Seq[DeviceId], updateId: ExternalUpdateId, dryRun: Boolean): AssignUpdateRequest =
+    AssignUpdateRequest(
+      MultiTargetUpdateId(UUID.fromString(updateId.value)),
+      devices, updateId, dryRun)
+
+  implicit val assignUpdateRequestEncoder: Encoder[AssignUpdateRequest] = deriveEncoder
+}
+
 trait DirectorClient {
 
-  def setMultiUpdateTarget(ns: Namespace, updateId: ExternalUpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]]
+  def setMultiUpdateTarget(
+    ns: Namespace,
+    updateId: ExternalUpdateId,
+    devices: Seq[DeviceId],
+    correlationId: CorrelationId): Future[Seq[DeviceId]]
 
   def findAffected(ns: Namespace, updateId: ExternalUpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]]
 
@@ -37,10 +61,16 @@ class DirectorHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespons
   override def setMultiUpdateTarget(
     ns: Namespace,
     updateId: ExternalUpdateId,
-    devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
-    val path   = uri.path / "api" / "v1" / "admin" / "multi_target_updates" / updateId.value
-    val entity = HttpEntity(ContentTypes.`application/json`, devices.asJson.noSpaces)
-    val req = HttpRequest(HttpMethods.PUT, uri.withPath(path), entity = entity).withNs(ns)
+    devices: Seq[DeviceId],
+    correlationId: CorrelationId): Future[Seq[DeviceId]] = {
+    val path   = uri.path / "api" / "v1" / "assignments"
+    val entity = HttpEntity(
+      ContentTypes.`application/json`,
+      AssignUpdateRequest(correlationId, devices, updateId).asJson.noSpaces)
+    val req = HttpRequest(
+      HttpMethods.POST,
+      uri.withPath(path),
+      entity = entity).withNs(ns)
     execHttp[Seq[DeviceId]](req)()
   }
 
@@ -48,9 +78,9 @@ class DirectorHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespons
     ns: Namespace,
     devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
 
-    val path   = uri.path / "api" / "v1" / "admin" / "devices" / "queue" / "cancel"
+    val path   = uri.path / "api" / "v1" / "assignments"
     val entity = HttpEntity(ContentTypes.`application/json`, devices.asJson.noSpaces)
-    val req = HttpRequest(HttpMethods.PUT, uri.withPath(path), entity = entity).withNs(ns)
+    val req = HttpRequest(HttpMethods.PATCH, uri.withPath(path), entity = entity).withNs(ns)
     execHttp[Seq[DeviceId]](req)()
   }
 
@@ -58,14 +88,16 @@ class DirectorHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespons
     ns: Namespace,
     device: DeviceId): Future[Unit] = {
 
-    val path = uri.path / "api" / "v1" / "admin" / "devices" / device.show / "queue" / "cancel"
-    val req = HttpRequest(HttpMethods.PUT, uri.withPath(path)).withNs(ns)
+    val path = uri.path / "api" / "v1" / "assignments" / device.show
+    val req = HttpRequest(HttpMethods.DELETE, uri.withPath(path)).withNs(ns)
     execHttp[Unit](req)()
   }
 
   override def findAffected(ns: Namespace, updateId: ExternalUpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
-    val path   = uri.path / "api" / "v1" / "admin" / "multi_target_updates" / updateId.value / "affected"
-    val entity = HttpEntity(ContentTypes.`application/json`, devices.asJson.noSpaces)
+    val path   = uri.path / "api" / "v1" / "assignments"
+    val entity = HttpEntity(
+      ContentTypes.`application/json`,
+      AssignUpdateRequest(devices, updateId, true).asJson.noSpaces)
     val req = HttpRequest(HttpMethods.GET, uri.withPath(path), entity = entity).withNs(ns)
     execHttp[Seq[DeviceId]](req)()
   }

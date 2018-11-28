@@ -3,7 +3,7 @@ package com.advancedtelematic.campaigner.db
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.client.DirectorClient
 import com.advancedtelematic.campaigner.data.DataType.{Campaign, CampaignId, DeviceStatus, UpdateType}
-import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId, Namespace}
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
@@ -20,7 +20,10 @@ class DeviceUpdateProcess(director: DirectorClient)(implicit db: Database, ec: E
     updateRepo.findById(campaign.updateId).flatMap { update =>
       if (campaign.autoAccept)
         for {
-          affected <- director.setMultiUpdateTarget(campaign.namespace, update.source.id, devices)
+          affected <- director.setMultiUpdateTarget(campaign.namespace,
+                                                    update.source.id,
+                                                    devices,
+                                                    CampaignCorrelationId(campaign.id.uuid))
           _ <- campaigns.markDevicesAccepted(campaign.id, campaign.updateId, affected: _*)
         } yield affected
       else {
@@ -37,7 +40,7 @@ class DeviceUpdateProcess(director: DirectorClient)(implicit db: Database, ec: E
     for {
       campaign <- campaigns.findClientCampaign(campaignId)
       update <- updateRepo.findById(campaign.update)
-      affected <- director.setMultiUpdateTarget(ns, update.source.id, Seq(deviceId))
+      affected <- director.setMultiUpdateTarget(ns, update.source.id, Seq(deviceId), CampaignCorrelationId(campaignId.uuid))
       _ <- affected.find(_ == deviceId) match {
         case Some(_) =>
           campaigns.markDevicesAccepted(campaignId, campaign.update, deviceId)
