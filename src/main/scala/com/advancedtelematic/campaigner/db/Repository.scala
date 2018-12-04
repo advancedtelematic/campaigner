@@ -45,7 +45,7 @@ trait UpdateSupport {
 }
 
 trait CampaignMetadataSupport {
-  def campaignMetadataRepo(implicit db: Database, ec: ExecutionContext) = new CampaignMetadataRepository()
+  def campaignMetadataRepo(implicit db: Database) = new CampaignMetadataRepository()
 }
 
 protected [db] class CampaignMetadataRepository()(implicit db: Database) {
@@ -280,6 +280,7 @@ protected class CancelTaskRepository()(implicit db: Database, ec: ExecutionConte
 }
 
 protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) {
+  import com.advancedtelematic.libats.slick.db.SlickPagination._
 
   def persist(update: Update): Future[UpdateId] = db.run {
     (Schema.updates += update).map(_ => update.uuid).handleIntegrityErrors(Errors.ConflictingUpdate)
@@ -313,6 +314,10 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
       .result
   }
 
-  def allPaginated(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, nameContains: Option[String]): Future[PaginationResult[Update]] =
-    all(ns, sortBy, nameContains).map(r => PaginationResult(r, limit, offset, r.size.toLong))
+  def allPaginated(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, nameContains: Option[String]): Future[PaginationResult[Update]] = db.run {
+    Schema.updates
+      .filter(_.namespace === ns)
+      .maybeContains(_.name, nameContains)
+      .paginateAndSortResult(sortBy, offset, limit)
+  }
 }
