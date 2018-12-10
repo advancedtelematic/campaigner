@@ -59,6 +59,9 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: 
     extractAuth { auth =>
       val ns = auth.namespace
       pathPrefix("campaigns") {
+        path("count") {
+          complete(campaigns.countByStatus)
+        } ~
         pathEnd {
           (get & parameters(('status.as[CampaignStatus].?, 'nameContains.as[String].?, 'sortBy.as[SortBy].?, 'offset.as[Long] ? 0L, 'limit.as[Long] ? 50L))) {
             (status, nameContains, sortBy, offset, limit) => complete(campaigns.allCampaigns(ns, sortBy.getOrElse(SortBy.Name), offset, limit, status, nameContains))
