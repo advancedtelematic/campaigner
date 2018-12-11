@@ -228,6 +228,13 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
       }.map(_ => ())
     }
 
+  def countByStatus: DBIO[Map[CampaignStatus, Int]] =
+    Schema.campaigns
+    .groupBy(_.status)
+    .map { case (status, campaigns) => status -> campaigns.length }
+    .result
+    .map(_.toMap)
+
   def countDevices(campaign: CampaignId)(filterExpr: Rep[DeviceStatus] => Rep[Boolean]): Future[Long] = db.run {
     Schema.campaigns
       .filter(_.id === campaign)

@@ -2,6 +2,7 @@ package com.advancedtelematic.campaigner.db
 
 import akka.http.scaladsl.util.FastFuture
 import cats.data.NonEmptyList
+import com.advancedtelematic.campaigner.data.DataType.CampaignStatus._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.http.Errors._
@@ -12,6 +13,8 @@ import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{AsyncFlatSpec, Matchers}
+
+import scala.concurrent.Future
 
 class CampaignsSpec extends AsyncFlatSpec
   with DatabaseSpec
@@ -25,6 +28,15 @@ class CampaignsSpec extends AsyncFlatSpec
   import Arbitrary._
 
   val campaigns = Campaigns()
+
+  "count campaigns" should "return a list of how many campaigns there are for each status" in {
+    val statuses = Seq(launched, finished, finished, cancelled, cancelled, cancelled)
+    val cs = statuses.map(s => genCampaign.sample.get.copy(status = s))
+    for {
+      _ <- Future.sequence(cs.map(c => createDbCampaignWithUpdate(Some(c))))
+      res <- campaigns.countByStatus
+    } yield res shouldBe Map(prepared -> 0, launched -> 1, finished -> 2, cancelled -> 3)
+  }
 
   "complete batch" should "fail if the campaign does not exist" in {
     recoverToSucceededIf[CampaignMissing.type] {

@@ -84,6 +84,13 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       .andThen(campaignStatusTransition.devicesFinished(campaign))
   }
 
+  def countByStatus: Future[Map[CampaignStatus, Int]] =
+    db
+      .run(campaignRepo.countByStatus)
+      .map { counts =>
+        CampaignStatus.values.map(s => s -> counts.getOrElse(s, 0)).toMap
+      }
+
   def countFinished(campaignId: CampaignId): Future[Long] =
     campaignRepo.countDevices(campaignId) { status =>
       status === DeviceStatus.successful || status === DeviceStatus.failed
