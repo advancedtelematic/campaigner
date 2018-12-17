@@ -98,7 +98,7 @@ class DirectorHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespons
     val entity = HttpEntity(
       ContentTypes.`application/json`,
       AssignUpdateRequest(devices, updateId, true).asJson.noSpaces)
-    val req = HttpRequest(HttpMethods.GET, uri.withPath(path), entity = entity).withNs(ns)
+    val req = HttpRequest(HttpMethods.POST, uri.withPath(path), entity = entity).withNs(ns)
     execHttp[Seq[DeviceId]](req)()
   }
 }
