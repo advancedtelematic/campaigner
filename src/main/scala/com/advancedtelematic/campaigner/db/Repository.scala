@@ -293,8 +293,39 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
     (Schema.updates += update).map(_ => update.uuid).handleIntegrityErrors(Errors.ConflictingUpdate)
   }
 
-  def findById(id: UpdateId): Future[Update] = db.run {
+  def findByIdUnsafe(id: UpdateId): Future[Update] = db.run {
     Schema.updates.filter(_.uuid === id).result.failIfNotSingle(Errors.MissingUpdate(id))
+  }
+
+  def findById(ns: Namespace, id: UpdateId): Future[Update] = db.run(findByIdAction(ns, id))
+
+  private def findByIdAction(ns: Namespace, id: UpdateId) =
+    Schema.updates
+      .filter(_.namespace === ns)
+      .filter(_.uuid === id)
+      .result
+      .failIfNotSingle(Errors.MissingUpdate(id))
+
+  private def patchNameAction(id: UpdateId, newName: String) =
+    Schema.updates
+      .filter(_.uuid === id)
+      .map(_.name)
+      .update(newName)
+
+  private def patchDescriptionAction(id: UpdateId, newDescription: String) =
+    Schema.updates
+      .filter(_.uuid === id)
+      .map(_.description)
+      .update(Some(newDescription))
+
+  def patchUpdate(ns: Namespace, id: UpdateId, patch: PatchUpdate): Future[Unit] = {
+    val actions = Seq(
+      patch.name.map(patchNameAction(id, _)),
+      patch.description.map(patchDescriptionAction(id, _))
+    ).filter(_.isDefined).map(_.get)
+    db.run {
+      findByIdAction(ns, id).andThen(DBIO.seq(actions: _*)).transactionally
+    }
   }
 
   def findByIds(ns: Namespace, ids: NonEmptyList[UpdateId]): Future[List[Update]] = db.run(

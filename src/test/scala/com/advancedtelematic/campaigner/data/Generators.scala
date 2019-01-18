@@ -69,6 +69,11 @@ object Generators {
     d <- Gen.option(arbitrary[String])
   } yield CreateUpdate(us, n, d)
 
+  val genPatchUpdate: Gen[PatchUpdate] = for {
+    n <- Gen.option(Gen.alphaNumStr)
+    d <- Gen.option(Gen.alphaNumStr)
+  } yield PatchUpdate(n, d)
+
   val genStats: Gen[Stats] = for {
     p <- Gen.posNum[Long]
     a <- Gen.posNum[Long]

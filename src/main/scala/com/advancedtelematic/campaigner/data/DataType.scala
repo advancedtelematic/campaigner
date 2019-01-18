@@ -144,6 +144,8 @@ object DataType {
     status: CancelTaskStatus
   )
 
+  final case class PatchUpdate(name: Option[String], description: Option[String])
+
   object SortBy {
     sealed trait SortBy
     case object Name      extends SortBy

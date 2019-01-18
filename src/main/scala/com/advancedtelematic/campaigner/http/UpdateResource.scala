@@ -97,8 +97,13 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
   val route: Route =
     extractNamespace { ns =>
       pathPrefix("updates") {
-        (path(UpdateId.Path) & pathEnd) { updateUuid =>
-          complete(updateRepo.findById(updateUuid))
+        path(UpdateId.Path) { updateUuid =>
+          get {
+            complete(updateRepo.findByIdUnsafe(updateUuid))
+          } ~
+          (patch & entity(as[PatchUpdate])) { patchUpdate =>
+            complete(updateRepo.patchUpdate(ns, updateUuid, patchUpdate))
+          }
         } ~
         pathEnd {
           (post & entity(as[CreateUpdate])) { request =>

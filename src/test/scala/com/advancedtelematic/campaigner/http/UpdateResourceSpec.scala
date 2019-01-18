@@ -8,6 +8,7 @@ import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.Uri.Query
 import akka.http.scaladsl.model.headers.Location
 import akka.http.scaladsl.testkit.RouteTestTimeout
+import cats.syntax.option._
 import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.GroupId._
@@ -59,8 +60,11 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     Get(apiUri("updates").withQuery(Query("sortBy" -> sortBy.toString))).withHeaders(header)
 
   private def getUpdateResult(id: UpdateId): RouteTestResult = {
-    Get(apiUri(s"updates/${id.uuid.toString}")).withHeaders(header) ~> routes
+    Get(apiUri(s"updates/${id.show}")).withHeaders(header) ~> routes
   }
+
+  private def patchUpdate(id: UpdateId, patch: PatchUpdate): RouteTestResult =
+    Patch(apiUri(s"updates/${id.show}"), patch).withHeaders(header) ~> routes
 
   "GET to /updates with group id" should "get only MTU updates if no external resolver is set" in {
     val mtuRequests = Gen.listOfN(2, genCreateUpdate(genType = Gen.const(UpdateType.multi_target))).sample.get
@@ -240,6 +244,36 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     getUpdateResult(updateId) ~> check {
       status shouldBe NotFound
       responseAs[ErrorRepresentation].code shouldBe ErrorCodes.MissingUpdate
+    }
+  }
+
+  "PATCH to /updates/:updateId" should "return 404 Not Found if the update does not exists" in {
+    val updateId = genUpdateId.sample.get
+    val patch = genPatchUpdate.generate
+    patchUpdate(updateId, patch) ~> check {
+      status shouldBe NotFound
+      responseAs[ErrorRepresentation].code shouldBe ErrorCodes.MissingUpdate
+    }
+  }
+
+  "PATCH to /updates/:updateId" should "should (maybe) patch the name and (maybe) patch the description" in {
+    val updateId = createUpdateOk(genCreateUpdate().generate)
+    val update = getUpdateOk(updateId)
+    val patch = genPatchUpdate.generate
+    val patched = patch match {
+      case PatchUpdate(Some(n), d@Some(_)) => update.copy(name = n, description = d)
+      case PatchUpdate(Some(n), None) => update.copy(name = n)
+      case PatchUpdate(None, d@Some(_)) => update.copy(description = d)
+      case _ => update
+    }
+
+    patchUpdate(updateId, patch) ~> check {
+      status shouldBe OK
+      val afterPatch = getUpdateOk(updateId)
+      afterPatch.source shouldBe patched.source
+      afterPatch.namespace shouldBe patched.namespace
+      afterPatch.name shouldBe patched.name
+      afterPatch.description shouldBe patched.description
     }
   }
 

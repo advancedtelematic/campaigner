@@ -34,7 +34,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
 
   "group scheduler" should "trigger updates for each device in batch" in {
     val campaign = buildCampaignWithUpdate
-    val update = updateRepo.findById(campaign.updateId).futureValue
+    val update = updateRepo.findByIdUnsafe(campaign.updateId).futureValue
     val group    = GroupId.generate()
     val parent = TestProbe()
 
@@ -56,7 +56,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
 
   "group scheduler" should "respect groups with processed devices > batch size" in {
     val campaign = buildCampaignWithUpdate
-    val update = updateRepo.findById(campaign.updateId).futureValue
+    val update = updateRepo.findByIdUnsafe(campaign.updateId).futureValue
     val group    = GroupId.generate()
     val n        = Gen.choose(batch, batch * 10).sample.get
     val devs     = Gen.listOfN(n, genDeviceId).sample.get
@@ -81,7 +81,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
 
   "group scheduler" should "set devices to `scheduled` when campaign is not set to auto-accept" in {
     val campaign = buildCampaignWithUpdate.copy(autoAccept = false)
-    val update = updateRepo.findById(campaign.updateId).futureValue
+    val update = updateRepo.findByIdUnsafe(campaign.updateId).futureValue
     val group    = GroupId.generate()
     val n        = Gen.choose(1, batch-1).sample.get
     val devs     = Gen.listOfN(n, genDeviceId).sample.get
@@ -108,7 +108,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
 
   "PRO-3745: group scheduler" should "properly set devices to `accepted` when affected devices < batch size" in {
     val campaign = buildCampaignWithUpdate
-    val update = updateRepo.findById(campaign.updateId).futureValue
+    val update = updateRepo.findByIdUnsafe(campaign.updateId).futureValue
     val group    = GroupId.generate()
     val n        = Gen.choose(1, batch-1).sample.get
     val devs     = Gen.listOfN(n, genDeviceId).sample.get

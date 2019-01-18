@@ -17,7 +17,7 @@ class DeviceUpdateProcess(director: DirectorClient)(implicit db: Database, ec: E
   val campaigns = Campaigns()
 
   def startUpdateFor(devices: Seq[DeviceId], campaign: Campaign): Future[Seq[DeviceId]] = {
-    updateRepo.findById(campaign.updateId).flatMap { update =>
+    updateRepo.findByIdUnsafe(campaign.updateId).flatMap { update =>
       if (campaign.autoAccept)
         for {
           affected <- director.setMultiUpdateTarget(campaign.namespace,
@@ -39,7 +39,7 @@ class DeviceUpdateProcess(director: DirectorClient)(implicit db: Database, ec: E
   def processDeviceAcceptedUpdate(ns: Namespace, campaignId: CampaignId, deviceId: DeviceId): Future[Unit] = {
     for {
       campaign <- campaigns.findClientCampaign(campaignId)
-      update <- updateRepo.findById(campaign.update)
+      update <- updateRepo.findByIdUnsafe(campaign.update)
       affected <- director.setMultiUpdateTarget(ns, update.source.id, Seq(deviceId), CampaignCorrelationId(campaignId.uuid))
       _ <- affected.find(_ == deviceId) match {
         case Some(_) =>

@@ -1,6 +1,5 @@
 package com.advancedtelematic.campaigner.http
 
-import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.util.FastFuture
 import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.client.{ExternalUpdate, ResolverClient, UserProfileClient}
