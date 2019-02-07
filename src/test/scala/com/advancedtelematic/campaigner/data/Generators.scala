@@ -34,14 +34,16 @@ object Generators {
     update <- arbitrary[UpdateId]
     ca      = Instant.now()
     ua      = Instant.now()
-  } yield Campaign(ns, id, n, update, CampaignStatus.prepared, ca, ua)
+    parent  = None
+  } yield Campaign(ns, id, n, update, CampaignStatus.prepared, ca, ua, parent)
 
   def genCreateCampaign(genName: Gen[String] = arbitrary[String]): Gen[CreateCampaign] = for {
     n   <- genName
     update <- arbitrary[UpdateId]
     gs <- arbitrary[NonEmptyList[GroupId]]
     meta   <- Gen.option(genCampaignMetadata.map(List(_)))
-  } yield CreateCampaign(n, update, gs, meta)
+    parent = None
+  } yield CreateCampaign(n, update, gs, parent, meta)
 
   val genUpdateCampaign: Gen[UpdateCampaign] = for {
     n   <- arbitrary[String].suchThat(!_.isEmpty)

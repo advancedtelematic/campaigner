@@ -30,9 +30,10 @@ object DataType {
     status: CampaignStatus,
     createdAt: Instant,
     updatedAt: Instant,
+    parentCampaignId: Option[CampaignId],
     autoAccept: Boolean = true
   )
-  
+
   final case class ExternalUpdateId(value: String) extends AnyVal
 
   final case class UpdateSource(id: ExternalUpdateId, sourceType: UpdateType)
@@ -61,6 +62,7 @@ object DataType {
   final case class CreateCampaign(name: String,
                                   update: UpdateId,
                                   groups: NonEmptyList[GroupId],
+                                  parentCampaignId: Option[CampaignId],
                                   metadata: Option[Seq[CreateCampaignMetadata]] = None,
                                   approvalNeeded: Option[Boolean] = Some(false))
   {
@@ -73,6 +75,7 @@ object DataType {
         CampaignStatus.prepared,
         Instant.now(),
         Instant.now(),
+        parentCampaignId,
         !approvalNeeded.getOrElse(false)
       )
     }
@@ -90,6 +93,7 @@ object DataType {
     status: CampaignStatus,
     createdAt: Instant,
     updatedAt: Instant,
+    parentCampaignId: Option[CampaignId],
     groups: Set[GroupId],
     metadata: Seq[CreateCampaignMetadata],
     autoAccept: Boolean
@@ -105,6 +109,7 @@ object DataType {
         c.status,
         c.createdAt,
         c.updatedAt,
+        c.parentCampaignId,
         groups,
         metadata.map(m => CreateCampaignMetadata(m.`type`, m.value)),
         c.autoAccept
