@@ -25,9 +25,9 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
   }
 
   def buildCampaignWithUpdate: Campaign = {
-    val update = genMultiTargetUpdate.sample.get
+    val update = genMultiTargetUpdate.generate
     val updateId = updateRepo.persist(update).futureValue
-    arbitrary[Campaign].sample.get.copy(updateId = updateId)
+    arbitrary[Campaign].generate.copy(updateId = updateId)
   }
 
   val campaigns = Campaigns()
@@ -41,7 +41,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     val props  = GroupScheduler.props(deviceRegistry, director, 10.minutes, schedulerBatchSize, campaign, group)
 
     clearClientState()
-    deviceRegistry.setGroup(group, arbitrary[Seq[DeviceId]].sample.get)
+    deviceRegistry.setGroup(group, arbitrary[Seq[DeviceId]].generate)
     campaigns.create(campaign, NonEmptyList.one(group), Seq.empty).futureValue
 
     parent.childActorOf(props)
@@ -58,8 +58,8 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     val campaign = buildCampaignWithUpdate
     val update = updateRepo.findById(campaign.updateId).futureValue
     val group    = GroupId.generate()
-    val n        = Gen.choose(batch, batch * 10).sample.get
-    val devs     = Gen.listOfN(n, genDeviceId).sample.get
+    val n        = Gen.choose(batch, batch * 10).generate
+    val devs     = Gen.listOfN(n, genDeviceId).generate
 
     campaigns.create(campaign, NonEmptyList.one(group), Seq.empty).futureValue
 
@@ -83,8 +83,8 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     val campaign = buildCampaignWithUpdate.copy(autoAccept = false)
     val update = updateRepo.findById(campaign.updateId).futureValue
     val group    = GroupId.generate()
-    val n        = Gen.choose(1, batch-1).sample.get
-    val devs     = Gen.listOfN(n, genDeviceId).sample.get
+    val n        = Gen.choose(1, batch-1).generate
+    val devs     = Gen.listOfN(n, genDeviceId).generate
 
     clearClientState()
 
@@ -110,8 +110,8 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     val campaign = buildCampaignWithUpdate
     val update = updateRepo.findById(campaign.updateId).futureValue
     val group    = GroupId.generate()
-    val n        = Gen.choose(1, batch-1).sample.get
-    val devs     = Gen.listOfN(n, genDeviceId).sample.get
+    val n        = Gen.choose(1, batch-1).generate
+    val devs     = Gen.listOfN(n, genDeviceId).generate
 
     campaigns.create(campaign, NonEmptyList.one(group), Seq.empty).futureValue
 

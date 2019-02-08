@@ -29,7 +29,7 @@ trait UpdateResourceSpecUtil {
   }
 
   def createCampaignWithUpdateOk(gen: Gen[CreateCampaign] = genCreateCampaign()) = {
-    val createUpdate = genCreateUpdate().map(cu => cu.copy(updateSource = UpdateSource(cu.updateSource.id, UpdateType.multi_target))).sample.get
+    val createUpdate = genCreateUpdate().map(cu => cu.copy(updateSource = UpdateSource(cu.updateSource.id, UpdateType.multi_target))).generate
     val updateId = createUpdateOk(createUpdate)
     val createCampaign = gen.map(_.copy(update = updateId)).gen
     createCampaignOk(createCampaign) -> createCampaign
@@ -44,7 +44,7 @@ trait DatabaseUpdateSpecUtil {
   private val campaigns = Campaigns()
 
   def createDbUpdate(updateId: UpdateId): Future[UpdateId] = {
-    val update = genMultiTargetUpdate.sample.get.copy(uuid = updateId)
+    val update = genMultiTargetUpdate.generate.copy(uuid = updateId)
     updateRepo.persist(update)
   }
 

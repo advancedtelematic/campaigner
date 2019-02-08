@@ -28,13 +28,13 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
   }
 
   "campaign scheduler" should "trigger updates for each group" in {
-    val groups   = arbitrary[NonEmptyList[GroupId]].sample.get
+    val groups   = arbitrary[NonEmptyList[GroupId]].generate
     val campaign = createDbCampaignWithUpdate(maybeGroups = Some(groups)).futureValue
 
     val parent   = TestProbe()
 
     campaigns.scheduleGroups(campaign.id, groups).futureValue
-    groups.map{ g => deviceRegistry.setGroup(g, arbitrary[Seq[DeviceId]].sample.get) }
+    groups.map{ g => deviceRegistry.setGroup(g, arbitrary[Seq[DeviceId]].generate) }
 
     parent.childActorOf(CampaignScheduler.props(
       deviceRegistry,
@@ -49,7 +49,7 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
   }
 
   "PRO-3672: campaign with 0 affected devices" should "yield a `finished` status" in {
-    val groups   = arbitrary[NonEmptyList[GroupId]].sample.get
+    val groups   = arbitrary[NonEmptyList[GroupId]].generate
     val campaign = createDbCampaignWithUpdate(maybeGroups = Some(groups)).futureValue
     val parent   = TestProbe()
 
