@@ -250,6 +250,16 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
   def setStatusAction(campaignId: CampaignId, status: CampaignStatus): DBIO[CampaignId] =
     Schema.campaigns
       .filter(_.id === campaignId).map(_.status).update(status).map(_ => campaignId)
+
+  def findChildIdsOf(parentId: CampaignId): Future[Set[CampaignId]] = {
+    db.run {
+      Schema.campaigns
+        .filter(_.parentCampaignId === parentId)
+        .map(_.id)
+        .result
+        .map(_.toSet)
+    }
+  }
 }
 
 

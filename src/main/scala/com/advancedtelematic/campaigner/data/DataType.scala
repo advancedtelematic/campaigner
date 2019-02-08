@@ -94,13 +94,14 @@ object DataType {
     createdAt: Instant,
     updatedAt: Instant,
     parentCampaignId: Option[CampaignId],
+    childCampaignIds: Set[CampaignId],
     groups: Set[GroupId],
     metadata: Seq[CreateCampaignMetadata],
     autoAccept: Boolean
   )
 
   object GetCampaign {
-    def apply(c: Campaign, groups: Set[GroupId], metadata: Seq[CampaignMetadata]): GetCampaign =
+    def apply(c: Campaign, childCampaignIds: Set[CampaignId], groups: Set[GroupId], metadata: Seq[CampaignMetadata]): GetCampaign =
       GetCampaign(
         c.namespace,
         c.id,
@@ -110,6 +111,7 @@ object DataType {
         c.createdAt,
         c.updatedAt,
         c.parentCampaignId,
+        childCampaignIds,
         groups,
         metadata.map(m => CreateCampaignMetadata(m.`type`, m.value)),
         c.autoAccept

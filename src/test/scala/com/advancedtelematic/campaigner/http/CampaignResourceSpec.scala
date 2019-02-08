@@ -21,8 +21,14 @@ import io.circe.syntax._
 import org.scalacheck.Arbitrary._
 import org.scalacheck.Gen
 import org.scalactic.source
+import org.scalatest._
 
-class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with CampaignSupport with UpdateResourceSpecUtil {
+class CampaignResourceSpec
+    extends CampaignerSpec
+    with ResourceSpec
+    with CampaignSupport
+    with UpdateResourceSpecUtil
+    with GivenWhenThen {
 
   val campaigns = Campaigns()
 
@@ -49,6 +55,7 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
       campaign.createdAt,
       campaign.updatedAt,
       request.parentCampaignId,
+      Set.empty,
       request.groups.toList.toSet,
       request.metadata.toList.flatten,
       autoAccept = true
@@ -62,30 +69,41 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
   }
 
   "POST /campaigns" should "set parent_campaign_id if a valid one is given" in {
+    Given("a valid parent ID")
     val (parentId, _) = createCampaignWithUpdateOk()
+
+    When("a child campaign is created")
     val (childId, request) = createCampaignWithUpdateOk(
       genCreateCampaign().map(_.copy(parentCampaignId = Some(parentId))))
 
-    val campaign = getCampaignOk(childId)
-    campaign shouldBe GetCampaign(
+    Then("the child campaign should have the parent campaign ID and other properties")
+    val childCampaign = getCampaignOk(childId)
+    childCampaign shouldBe GetCampaign(
       testNs,
       childId,
       request.name,
       request.update,
       CampaignStatus.prepared,
-      campaign.createdAt,
-      campaign.updatedAt,
+      childCampaign.createdAt,
+      childCampaign.updatedAt,
       Some(parentId),
+      Set.empty,
       request.groups.toList.toSet,
       request.metadata.toList.flatten,
       autoAccept = true
     )
-    campaign.createdAt shouldBe campaign.updatedAt
+    childCampaign.createdAt shouldBe childCampaign.updatedAt
 
+    And("the list of all campaings should list the child campaign")
     val campaigns = getCampaignsOk()
     campaigns.values should contain (childId)
 
+    And("the child campaign should have `prepared` status")
     checkStats(childId, CampaignStatus.prepared)
+
+    And("the parent campaign should have the child campaing in child campaings list")
+    val parentCampaign = getCampaignOk(parentId)
+    parentCampaign.childCampaignIds should (contain(childId))
   }
 
   "POST /campaigns" should "fail if parent_campaign_id does not refer to an existing campaign" in {
@@ -125,6 +143,7 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
       campaign.createdAt,
       campaign.updatedAt,
       request.parentCampaignId,
+      Set.empty,
       request.groups.toList.toSet,
       request.metadata.toList.flatten,
       autoAccept = true
