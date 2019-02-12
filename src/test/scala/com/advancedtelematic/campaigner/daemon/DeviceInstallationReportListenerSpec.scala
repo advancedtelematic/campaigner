@@ -8,7 +8,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil}
-import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId, MultiTargetUpdateId}
+import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId, MultiTargetUpdateId, CorrelationId}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, InstallationResult}
 import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceInstallationReport
 import com.advancedtelematic.libats.test.DatabaseSpec
@@ -27,54 +27,87 @@ class DeviceInstallationReportListenerSpec extends CampaignerSpec
   val campaigns = Campaigns()
 
   "Listener" should "mark a device as successful using external update id" in {
-    val updateSource = UpdateSource(ExternalUpdateId(UUID.randomUUID().toString), UpdateType.multi_target)
-    val update = arbitrary[Update].gen.copy(source = updateSource)
-    val campaign = arbitrary[Campaign].gen.copy(namespace = update.namespace, updateId = update.uuid)
-    val group = NonEmptyList.one(GroupId.generate())
-
-    updateRepo.persist(update).futureValue
-    campaigns.create(campaign, group, Seq.empty).futureValue
-
-    val deviceUpdate = DeviceUpdate(campaign.id, update.uuid, DeviceId.generate(), DeviceStatus.accepted)
-
-    deviceUpdateRepo.persistMany(Seq(deviceUpdate)).futureValue
-
-    val report = DeviceInstallationReport(campaign.namespace,
-      deviceUpdate.device,
+    val (updateSource, campaign, deviceUpdate) = prepareTest()
+    val report = makeReport(
+      campaign,
+      deviceUpdate,
       MultiTargetUpdateId(UUID.fromString(updateSource.id.value)),
-      InstallationResult(true, "SUCCESS", "Successful update"),
-      Map.empty,
-      None,
-      Instant.now)
+      isSuccessful = true)
 
     listener.apply(report).futureValue shouldBe (())
-
     deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.successful).futureValue should contain(deviceUpdate.device)
   }
 
   "Listener" should "mark a device as successful using campaign CorrelationId" in {
+    val (updateSource, campaign, deviceUpdate) = prepareTest()
+    val report = makeReport(
+      campaign,
+      deviceUpdate,
+      CampaignCorrelationId(campaign.id.uuid),
+      isSuccessful = true)
+
+    listener.apply(report).futureValue shouldBe (())
+    deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.successful).futureValue should contain(deviceUpdate.device)
+  }
+
+  "Listener" should "mark a device as failed using external update id" in {
+    val (updateSource, campaign, deviceUpdate) = prepareTest()
+    val report = makeReport(
+      campaign,
+      deviceUpdate,
+      MultiTargetUpdateId(UUID.fromString(updateSource.id.value)),
+      isSuccessful = false)
+
+    listener.apply(report).futureValue shouldBe (())
+    deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.failed).futureValue should contain(deviceUpdate.device)
+  }
+
+  "Listener" should "mark a device as failed using campaign CorrelationId" in {
+    val (updateSource, campaign, deviceUpdate) = prepareTest()
+    val report = makeReport(
+      campaign,
+      deviceUpdate,
+      CampaignCorrelationId(campaign.id.uuid),
+      isSuccessful = false)
+
+    listener.apply(report).futureValue shouldBe (())
+    deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.failed).futureValue should contain(deviceUpdate.device)
+  }
+
+  private def prepareTest(): (UpdateSource, Campaign, DeviceUpdate) = {
     val updateSource = UpdateSource(ExternalUpdateId(UUID.randomUUID().toString), UpdateType.multi_target)
     val update = arbitrary[Update].gen.copy(source = updateSource)
+    updateRepo.persist(update).futureValue
+
     val campaign = arbitrary[Campaign].gen.copy(namespace = update.namespace, updateId = update.uuid)
     val group = NonEmptyList.one(GroupId.generate())
-
-    updateRepo.persist(update).futureValue
     campaigns.create(campaign, group, Seq.empty).futureValue
 
     val deviceUpdate = DeviceUpdate(campaign.id, update.uuid, DeviceId.generate(), DeviceStatus.accepted)
-
     deviceUpdateRepo.persistMany(Seq(deviceUpdate)).futureValue
 
-    val report = DeviceInstallationReport(campaign.namespace,
+    (updateSource, campaign, deviceUpdate)
+  }
+
+  private def makeReport(
+      campaign: Campaign,
+      deviceUpdate: DeviceUpdate,
+      correlationId: CorrelationId,
+      isSuccessful: Boolean): DeviceInstallationReport = {
+
+    val installationResult =
+      if (isSuccessful) {
+        InstallationResult(true, "SUCCESS", "Successful update")
+      } else {
+        InstallationResult(false, "FAILURE", "Failed update")
+      }
+
+    DeviceInstallationReport(campaign.namespace,
       deviceUpdate.device,
-      CampaignCorrelationId(campaign.id.uuid),
-      InstallationResult(true, "SUCCESS", "Successful update"),
+      correlationId,
+      installationResult,
       Map.empty,
       None,
       Instant.now)
-
-    listener.apply(report).futureValue shouldBe (())
-
-    deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.successful).futureValue should contain(deviceUpdate.device)
   }
 }
