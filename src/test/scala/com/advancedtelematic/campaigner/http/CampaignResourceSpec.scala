@@ -103,7 +103,7 @@ class CampaignResourceSpec
 
     And("the parent campaign should have the child campaing in child campaings list")
     val parentCampaign = getCampaignOk(parentId)
-    parentCampaign.childCampaignIds should (contain(childId))
+    parentCampaign.childCampaignIds should contain(childId)
   }
 
   "POST /campaigns" should "fail if parent_campaign_id does not refer to an existing campaign" in {
@@ -123,9 +123,8 @@ class CampaignResourceSpec
       When("a child campaign is created")
       Then("a PreconditionFailed error is raised")
       createCampaign(createCampaignWithInvalidParentId) ~> routes ~> check {
-        // TODO: write a more proper check once
-        // https://github.com/advancedtelematic/libats/pull/91 is merged
         status shouldBe PreconditionFailed
+        responseAs[ErrorRepresentation].code shouldBe Errors.MissingParentCampaign.code
       }
   }
 

@@ -10,10 +10,11 @@ import com.advancedtelematic.campaigner.data.DataType.GroupStatus._
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.campaigner.data.DataType._
+import com.advancedtelematic.campaigner.db.Errors.{CampaignFKViolation, UpdateFKViolation}
 import com.advancedtelematic.campaigner.db.Schema.GroupStatsTable
 import com.advancedtelematic.campaigner.db.SlickMapping._
 import com.advancedtelematic.campaigner.db.SlickUtil.{sortBySlickOrderedCampaignConversion, sortBySlickOrderedUpdateConversion}
-import com.advancedtelematic.campaigner.http.Errors
+import com.advancedtelematic.campaigner.http.Errors._
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
@@ -23,6 +24,7 @@ import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Failure
 
 trait CampaignSupport {
   def campaignRepo(implicit db: Database, ec: ExecutionContext) = new CampaignRepository()
@@ -97,7 +99,7 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
       .map(_.status)
       .update(status)
       .flatMap {
-        case 0 => DBIO.failed(Errors.DeviceNotScheduled)
+        case 0 => DBIO.failed(DeviceNotScheduled)
         case _ => DBIO.successful(())
       }.map(_ => ())
 
@@ -109,7 +111,7 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
       .update(status)
       .flatMap {
         case n if devices.length == n => DBIO.successful(())
-        case _ => DBIO.failed(Errors.DeviceNotScheduled)
+        case _ => DBIO.failed(DeviceNotScheduled)
       }.map(_ => ())
 
   def persistMany(updates: Seq[DeviceUpdate]): Future[Unit] = db.run {
@@ -122,7 +124,7 @@ protected [db] class GroupStatsRepository()(implicit db: Database, ec: Execution
     Schema.groupStats
       .insertOrUpdate(GroupStats(campaign, group, status, stats.processed, stats.affected))
       .map(_ => ())
-      .handleIntegrityErrors(Errors.CampaignMissing)
+      .handleIntegrityErrors(CampaignMissing)
 
   protected [db] def findByCampaignAction(campaign: CampaignId): DBIO[Seq[GroupStats]] =
     Schema.groupStats
@@ -170,9 +172,12 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
 
   def persist(campaign: Campaign, groups: Set[GroupId], metadata: Seq[CampaignMetadata]): Future[CampaignId] = db.run {
     val f = for {
-      _ <- (Schema.campaigns += campaign).handleForeignKeyError(Errors.MissingUpdateSource).handleIntegrityErrors(Errors.ConflictingCampaign)
-      _ <- Schema.campaignGroups ++= groups.map(g => (campaign.id, g))
-      _ <- (Schema.campaignMetadata ++= metadata).handleIntegrityErrors(Errors.ConflictingMetadata)
+      _ <- (Schema.campaigns += campaign).recover {
+        case Failure(UpdateFKViolation()) => DBIO.failed(MissingUpdateSource)
+        case Failure(CampaignFKViolation()) => DBIO.failed(MissingParentCampaign)
+      }.handleIntegrityErrors(ConflictingCampaign)
+      _ <- Schema.campaignGroups ++= groups.map(campaign.id -> _)
+      _ <- (Schema.campaignMetadata ++= metadata).handleIntegrityErrors(ConflictingMetadata)
     } yield campaign.id
 
     f.transactionally
@@ -183,7 +188,7 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
       .maybeFilter(_.namespace === ns)
       .filter(_.id === campaign)
       .result
-      .failIfNotSingle(Errors.CampaignMissing)
+      .failIfNotSingle(CampaignMissing)
 
   protected[db] def findByUpdateAction(update: UpdateId): DBIO[Seq[Campaign]] =
     Schema.campaigns.filter(_.update === update).result
@@ -220,11 +225,11 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
           .filter(_.id === campaign)
           .map(_.name)
           .update(name)
-          .handleIntegrityErrors(Errors.ConflictingCampaign)
+          .handleIntegrityErrors(ConflictingCampaign)
       }.andThen {
         Schema.campaignMetadata.filter(_.campaignId === campaign).delete
       }.andThen {
-        (Schema.campaignMetadata ++= metadata).handleIntegrityErrors(Errors.ConflictingMetadata)
+        (Schema.campaignMetadata ++= metadata).handleIntegrityErrors(ConflictingMetadata)
       }.map(_ => ())
     }
 
@@ -300,11 +305,11 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
   import com.advancedtelematic.libats.slick.db.SlickPagination._
 
   def persist(update: Update): Future[UpdateId] = db.run {
-    (Schema.updates += update).map(_ => update.uuid).handleIntegrityErrors(Errors.ConflictingUpdate)
+    (Schema.updates += update).map(_ => update.uuid).handleIntegrityErrors(ConflictingUpdate)
   }
 
   def findById(id: UpdateId): Future[Update] = db.run {
-    Schema.updates.filter(_.uuid === id).result.failIfNotSingle(Errors.MissingUpdate(id))
+    Schema.updates.filter(_.uuid === id).result.failIfNotSingle(MissingUpdate(id))
   }
 
   def findByIds(ns: Namespace, ids: NonEmptyList[UpdateId]): Future[List[Update]] = db.run(
@@ -319,7 +324,7 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
   }
 
   def findByExternalId(ns: Namespace, id: ExternalUpdateId): Future[Update] = db.run {
-    findByExternalIdsAction(ns, Seq(id)).failIfNotSingle(Errors.MissingExternalUpdate(id))
+    findByExternalIdsAction(ns, Seq(id)).failIfNotSingle(MissingExternalUpdate(id))
   }
 
   def all(ns: Namespace, sortBy: SortBy = SortBy.Name, nameContains: Option[String] = None, updateType: Option[UpdateType] = None): Future[Seq[Update]] = db.run {
