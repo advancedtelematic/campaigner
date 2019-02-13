@@ -184,7 +184,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     }
   }
 
-  "GET to /updates" should "get all updates sorted by name" in {
+  "GET to /updates" should "get all updates sorted by name ascending" in {
     val requests = Gen.listOfN(10, genCreateUpdate(Gen.alphaNumStr.retryUntil(_.nonEmpty))).sample.get
     val sortedNames = requests.map(_.name).sortBy(_.toLowerCase)
     requests.map(createUpdateOk)
@@ -204,6 +204,24 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
       status shouldBe OK
       val updates = responseAs[PaginationResult[Update]]
       updates.values.reverse.map(_.createdAt) shouldBe sorted
+    }
+  }
+
+  "GET to /updates?sortBy=name" should "get all updates sorted by name ascending" in {
+    val requests = Gen.listOfN(10, genCreateUpdate(Gen.alphaNumStr.retryUntil(_.nonEmpty))).sample.get
+    val sortedNames = requests.map(_.name).sortBy(_.toLowerCase)
+    requests.map(createUpdateOk)
+
+    getUpdatesSorted(SortBy.Name) ~> routes ~> check {
+      status shouldBe OK
+      val updates = responseAs[PaginationResult[Update]]
+      updates.values.map(_.name).filter(sortedNames.contains) shouldBe sortedNames
+    }
+  }
+
+  "GET to /updates?sortBy=whatever" should "return an error" in {
+    Get(apiUri("updates").withQuery(Query("sortBy" -> "whatever"))).withHeaders(header) ~> routes ~> check {
+      status shouldBe BadRequest
     }
   }
 
