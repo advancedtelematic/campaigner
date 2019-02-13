@@ -31,7 +31,7 @@ trait UpdateResourceSpecUtil {
   def createCampaignWithUpdateOk(gen: Gen[CreateCampaign] = genCreateCampaign()) = {
     val createUpdate = genCreateUpdate().map(cu => cu.copy(updateSource = UpdateSource(cu.updateSource.id, UpdateType.multi_target))).generate
     val updateId = createUpdateOk(createUpdate)
-    val createCampaign = gen.map(_.copy(update = updateId)).gen
+    val createCampaign = gen.map(_.copy(update = updateId)).generate
     createCampaignOk(createCampaign) -> createCampaign
   }
 }
@@ -49,12 +49,12 @@ trait DatabaseUpdateSpecUtil {
   }
 
   def createDbCampaign(namespace: Namespace, updateId: UpdateId, groups: NonEmptyList[GroupId]): Future[Campaign] = {
-    val campaign = arbitrary[Campaign].gen.copy(updateId = updateId, namespace = namespace)
+    val campaign = arbitrary[Campaign].generate.copy(updateId = updateId, namespace = namespace)
     campaigns.create(campaign, groups, Seq.empty).map(_ => campaign)
   }
 
   def createDbCampaignWithUpdate(maybeCampaign: Option[Campaign] = None, maybeGroups: Option[NonEmptyList[GroupId]] = None): Future[Campaign] = {
-    val campaign = maybeCampaign.getOrElse(arbitrary[Campaign].gen)
+    val campaign = maybeCampaign.getOrElse(arbitrary[Campaign].generate)
     val groups = maybeGroups.getOrElse(NonEmptyList.one(GroupId.generate()))
     for {
       _ <- createDbUpdate(campaign.updateId)

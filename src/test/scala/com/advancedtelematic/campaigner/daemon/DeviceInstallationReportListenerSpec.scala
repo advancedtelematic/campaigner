@@ -76,10 +76,10 @@ class DeviceInstallationReportListenerSpec extends CampaignerSpec
 
   private def prepareTest(): (UpdateSource, Campaign, DeviceUpdate) = {
     val updateSource = UpdateSource(ExternalUpdateId(UUID.randomUUID().toString), UpdateType.multi_target)
-    val update = arbitrary[Update].gen.copy(source = updateSource)
+    val update = arbitrary[Update].generate.copy(source = updateSource)
     updateRepo.persist(update).futureValue
 
-    val campaign = arbitrary[Campaign].gen.copy(namespace = update.namespace, updateId = update.uuid)
+    val campaign = arbitrary[Campaign].generate.copy(namespace = update.namespace, updateId = update.uuid)
     val group = NonEmptyList.one(GroupId.generate())
     campaigns.create(campaign, group, Seq.empty).futureValue
 

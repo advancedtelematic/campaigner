@@ -227,9 +227,9 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
   }
 
   it should "return error when metadata is duplicated in request" in {
-    val updateId = createUpdateOk(arbitrary[CreateUpdate].gen)
+    val updateId = createUpdateOk(arbitrary[CreateUpdate].generate)
     val metadata = Seq(CreateCampaignMetadata(MetadataType.DESCRIPTION, "desc"), CreateCampaignMetadata(MetadataType.DESCRIPTION, "desc 2"))
-    val createRequest = arbitrary[CreateCampaign].map(_.copy(update = updateId, metadata = Some(metadata))).gen
+    val createRequest = arbitrary[CreateCampaign].map(_.copy(update = updateId, metadata = Some(metadata))).generate
 
     Post(apiUri("campaigns"), createRequest).withHeaders(header) ~> routes ~> check {
       status shouldBe Conflict

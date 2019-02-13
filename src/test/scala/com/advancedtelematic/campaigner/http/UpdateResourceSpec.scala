@@ -2,7 +2,6 @@ package com.advancedtelematic.campaigner.http
 
 import java.util.UUID
 
-import akka.actor.ActorSystem
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.Uri.Query
@@ -25,7 +24,7 @@ import org.scalacheck.Gen
 class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSupport {
 
   import scala.concurrent.duration._
-  implicit def default(implicit system: ActorSystem): RouteTestTimeout = RouteTestTimeout(15.seconds)
+  implicit def default(): RouteTestTimeout = RouteTestTimeout(15.seconds)
 
   private def createUpdate(request: CreateUpdate): HttpRequest =
     Post(apiUri("updates"), request).withHeaders(header)

@@ -9,8 +9,6 @@ import org.scalatest.{FlatSpecLike, Matchers}
 trait CampaignerSpecUtil {
   implicit class GenerateOps[T](value: Gen[T]) {
     def generate: T = value.pureApply(Gen.Parameters.default, Seed.random(), retries = 100)
-
-    def gen = generate
   }
 }
 

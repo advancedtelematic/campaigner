@@ -1,7 +1,6 @@
 package com.advancedtelematic.campaigner.http
 
 import akka.http.scaladsl.model.StatusCodes
-import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.CreateCampaign
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns}
