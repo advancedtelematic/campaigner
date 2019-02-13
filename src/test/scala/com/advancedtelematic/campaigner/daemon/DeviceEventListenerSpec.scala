@@ -8,10 +8,12 @@ import com.advancedtelematic.campaigner.data.DataType.{Campaign, DeviceStatus, D
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil, FakeDirectorClient}
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, Event}
+import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, Event, EventType}
 import com.advancedtelematic.libats.messaging_datatype.Messages
 import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceEventMessage
 import com.advancedtelematic.libats.test.DatabaseSpec
+import io.circe.Json
 import io.circe.syntax._
 import org.scalacheck.Arbitrary._
 
@@ -24,17 +26,23 @@ class DeviceEventListenerSpec extends CampaignerSpec with DatabaseSpec with Devi
 
   val campaigns = Campaigns()
 
-  def genDeviceEvent(campaign: Campaign, deviceId: DeviceId): DeviceEventMessage = {
+  private def mkDeviceEvent(campaign: Campaign, deviceId: DeviceId): DeviceEventMessage = {
     val payload = AcceptedCampaign(campaign.id)
     val event = Event(deviceId, "", DeviceEventListener.CampaignAcceptedEventType, Instant.now, Instant.now, payload.asJson)
     Messages.DeviceEventMessage(campaign.namespace, event)
+  }
+
+  private def mkEventOfType(eventType: EventType): DeviceEventMessage = {
+    val deviceId = arbitrary[DeviceId].generate
+    val event = Event(deviceId, "", eventType, Instant.now, Instant.now, Json.Null)
+    Messages.DeviceEventMessage(Namespace("whatever"), event)
   }
 
   "listener" should "schedule update in director" in {
     val campaign = createDbCampaignWithUpdate().futureValue
     val update = updateRepo.findById(campaign.updateId).futureValue
     val device = arbitrary[DeviceId].generate
-    val msg = genDeviceEvent(campaign, device)
+    val msg = mkDeviceEvent(campaign, device)
 
     listener.apply(msg).futureValue shouldBe Done
 
@@ -47,7 +55,7 @@ class DeviceEventListenerSpec extends CampaignerSpec with DatabaseSpec with Devi
 
     deviceUpdateRepo.persistMany(Seq(DeviceUpdate(campaign.id, campaign.updateId, device, DeviceStatus.scheduled))).futureValue
 
-    val msg = genDeviceEvent(campaign, device)
+    val msg = mkDeviceEvent(campaign, device)
 
     listener.apply(msg).futureValue shouldBe Done
 
@@ -57,12 +65,22 @@ class DeviceEventListenerSpec extends CampaignerSpec with DatabaseSpec with Devi
   it should "set device to failed if device is no longer affected" in {
     val campaign = createDbCampaignWithUpdate().futureValue
     val device = arbitrary[DeviceId].generate
-    val msg = genDeviceEvent(campaign, device)
+    val msg = mkDeviceEvent(campaign, device)
 
     director.cancelled.add(device)
 
     listener.apply(msg).futureValue shouldBe Done
 
     deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.failed).futureValue shouldBe Set(device)
+  }
+
+  it should "raise IllegalArgumentException if the message is of non-acceptable type" in {
+    val msg = mkEventOfType(EventType("campaign_accepted", 42))
+    listener.apply(msg).failed.futureValue shouldBe a[IllegalArgumentException]
+  }
+
+  it should "ignore events with unknown type" in {
+    val msg = mkEventOfType(EventType("whatever", 42))
+    listener.apply(msg).futureValue shouldBe Done
   }
 }
