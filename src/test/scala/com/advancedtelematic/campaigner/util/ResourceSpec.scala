@@ -48,8 +48,17 @@ trait ResourceSpec extends ScalatestRouteTest
   def createCampaign(request: CreateCampaign): HttpRequest =
     Post(apiUri("campaigns"), request).withHeaders(header)
 
+  def createRetryCampaign(parentCampaignId: CampaignId, request: CreateRetryCampaign): HttpRequest =
+    Post(apiUri(s"campaigns/${parentCampaignId.show}/campaigns"), request).withHeaders(header)
+
   def createCampaignOk(request: CreateCampaign): CampaignId =
     createCampaign(request) ~> routes ~> check {
+      status shouldBe Created
+      responseAs[CampaignId]
+    }
+
+  def createRetryCampaignOk(parentCampaignId: CampaignId, request: CreateRetryCampaign): CampaignId =
+    createRetryCampaign(parentCampaignId, request) ~> routes ~> check {
       status shouldBe Created
       responseAs[CampaignId]
     }

@@ -12,7 +12,7 @@ import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec, UpdateResourceSpecUtil}
 import com.advancedtelematic.libats.data.ErrorCodes.InvalidEntity
 import com.advancedtelematic.libats.data.ErrorRepresentation
-import com.advancedtelematic.libats.data.DataType.{CorrelationId, CampaignId => CampaignCorrelationId, MultiTargetUpdateId}
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId, CampaignId => CampaignCorrelationId}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
@@ -92,6 +92,14 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
     }
   }
 
+  "POST /campaigns with a non-existing update" should "fail with MissingUpdateSource" in {
+    val request = genCreateCampaign().generate
+    createCampaign(request) ~> routes ~> check {
+      status shouldBe PreconditionFailed
+      responseAs[ErrorRepresentation].code shouldBe Errors.MissingUpdateSource.code
+    }
+  }
+
   "PUT /campaigns/:campaign_id" should "update a campaign" in {
     val (id, request) = createCampaignWithUpdateOk()
     val update  = arbitrary[UpdateCampaign].sample.get
@@ -108,6 +116,25 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
     updated.metadata shouldBe update.metadata.get
 
     checkStats(id, CampaignStatus.prepared)
+  }
+
+  "POST /campaigns/:campaign_id/campaigns" should "create a retry-campaign" in {
+    val (campaignId, campaign) = createCampaignWithUpdateOk()
+    val request = CreateRetryCampaign(campaign.groups.head)
+
+    createRetryCampaign(campaignId, request) ~> routes ~> check {
+      status shouldBe Created
+    }
+  }
+
+  "POST /campaigns/:campaign_id/campaigns" should "fail if there is no parent campaign with id :campaign_id " in {
+    val (_, campaign) = createCampaignWithUpdateOk()
+    val request = CreateRetryCampaign(campaign.groups.head)
+
+    createRetryCampaign(CampaignId.generate(), request) ~> routes ~> check {
+      status shouldBe NotFound
+      responseAs[ErrorRepresentation].code shouldBe Errors.CampaignMissing.code
+    }
   }
 
   "POST /campaigns/:campaign_id/launch" should "trigger an update" in {
@@ -238,12 +265,21 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
   }
 
   "GET all campaigns" should "return only campaigns matching campaign filter" in {
-    val request = arbitrary[CreateCampaign].sample.get
-    val (id, _) = createCampaignWithUpdateOk(request)
+    val (id, _) = createCampaignWithUpdateOk()
 
     getCampaignsOk(CampaignStatus.prepared.some).values should contain(id)
 
     getCampaignsOk(CampaignStatus.launched.some).values shouldNot contain(id)
+  }
+
+  "GET all campaigns" should "not return retry-campaigns" in {
+    val (campaignId, campaign) = createCampaignWithUpdateOk()
+    val request = CreateRetryCampaign(campaign.groups.head)
+    val retryCampaignId = createRetryCampaignOk(campaignId, request)
+
+    val campaigns = getCampaignsOk().values
+    campaigns should contain(campaignId)
+    campaigns should not contain retryCampaignId
   }
 
   "GET all campaigns" should "get all campaigns sorted by name when no sorting is given" in {

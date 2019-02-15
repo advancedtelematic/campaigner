@@ -30,6 +30,7 @@ object DataType {
     status: CampaignStatus,
     createdAt: Instant,
     updatedAt: Instant,
+    parentCampaignId: Option[CampaignId],
     autoAccept: Boolean = true
   )
   
@@ -62,7 +63,8 @@ object DataType {
                                   update: UpdateId,
                                   groups: NonEmptyList[GroupId],
                                   metadata: Option[Seq[CreateCampaignMetadata]] = None,
-                                  approvalNeeded: Option[Boolean] = Some(false))
+                                  approvalNeeded: Option[Boolean] = Some(false),
+                                  parentCampaignId: Option[CampaignId] = None)
   {
     def mkCampaign(ns: Namespace): Campaign = {
       Campaign(
@@ -73,6 +75,7 @@ object DataType {
         CampaignStatus.prepared,
         Instant.now(),
         Instant.now(),
+        parentCampaignId,
         !approvalNeeded.getOrElse(false)
       )
     }
@@ -81,6 +84,7 @@ object DataType {
       metadata.toList.flatten.map(_.toCampaignMetadata(campaignId))
   }
 
+  final case class CreateRetryCampaign(groupId: GroupId)
 
   final case class GetCampaign(
     namespace: Namespace,

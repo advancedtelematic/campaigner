@@ -10,6 +10,7 @@ import com.advancedtelematic.campaigner.data.DataType.GroupStatus._
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.campaigner.data.DataType._
+import com.advancedtelematic.campaigner.db.DBErrors.{CampaignCampaignFKViolation, CampaignUpdateFKViolation}
 import com.advancedtelematic.campaigner.db.Schema.GroupStatsTable
 import com.advancedtelematic.campaigner.db.SlickMapping._
 import com.advancedtelematic.campaigner.db.SlickUtil.{sortBySlickOrderedCampaignConversion, sortBySlickOrderedUpdateConversion}
@@ -23,6 +24,7 @@ import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Failure
 
 trait CampaignSupport {
   def campaignRepo(implicit db: Database, ec: ExecutionContext) = new CampaignRepository()
@@ -170,8 +172,11 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
 
   def persist(campaign: Campaign, groups: Set[GroupId], metadata: Seq[CampaignMetadata]): Future[CampaignId] = db.run {
     val f = for {
-      _ <- (Schema.campaigns += campaign).handleForeignKeyError(Errors.MissingUpdateSource).handleIntegrityErrors(Errors.ConflictingCampaign)
-      _ <- Schema.campaignGroups ++= groups.map(g => (campaign.id, g))
+      _ <- (Schema.campaigns += campaign).recover {
+        case Failure(CampaignUpdateFKViolation()) => DBIO.failed(Errors.MissingUpdateSource)
+        case Failure(CampaignCampaignFKViolation()) => DBIO.failed(Errors.MissingParentCampaign)
+      }.handleIntegrityErrors(Errors.ConflictingCampaign)
+      _ <- Schema.campaignGroups ++= groups.map(campaign.id -> _)
       _ <- (Schema.campaignMetadata ++= metadata).handleIntegrityErrors(Errors.ConflictingMetadata)
     } yield campaign.id
 
@@ -195,6 +200,7 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
     db.run {
       Schema.campaigns
         .filter(_.namespace === ns)
+        .filter(_.parentCampaignId.isEmpty)
         .maybeFilter(_.status === status)
         .maybeContains(_.name, nameContains)
         .sortBy(sortBy)

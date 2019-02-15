@@ -34,7 +34,7 @@ object Generators {
     update <- arbitrary[UpdateId]
     ca      = Instant.now()
     ua      = Instant.now()
-  } yield Campaign(ns, id, n, update, CampaignStatus.prepared, ca, ua)
+  } yield Campaign(ns, id, n, update, CampaignStatus.prepared, ca, ua, None)
 
   def genCreateCampaign(genName: Gen[String] = arbitrary[String]): Gen[CreateCampaign] = for {
     n   <- genName
