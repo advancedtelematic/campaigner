@@ -196,7 +196,7 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
   def find(campaign: CampaignId, ns: Option[Namespace] = None): Future[Campaign] =
     db.run(findAction(campaign, ns))
 
-  def all(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, status: Option[CampaignStatus], nameContains: Option[String]): Future[PaginationResult[CampaignId]] = {
+  def all(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, status: Option[CampaignStatus], nameContains: Option[String]): Future[PaginationResult[Campaign]] = {
     db.run {
       Schema.campaigns
         .filter(_.namespace === ns)
@@ -204,7 +204,6 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
         .maybeFilter(_.status === status)
         .maybeContains(_.name, nameContains)
         .sortBy(sortBy)
-        .map(_.id)
         .paginateResult(offset, limit)
     }
   }

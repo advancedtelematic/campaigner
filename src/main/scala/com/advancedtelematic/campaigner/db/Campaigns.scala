@@ -101,7 +101,8 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       status === DeviceStatus.cancelled
     }
 
-  def allCampaigns(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, status: Option[CampaignStatus], nameContains: Option[String]): Future[PaginationResult[CampaignId]] =
+  def allCampaigns(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, status: Option[CampaignStatus],
+                   nameContains: Option[String]): Future[PaginationResult[Campaign]] =
     campaignRepo.all(ns, sortBy, offset, limit, status, nameContains)
 
   def findNamespaceCampaign(ns: Namespace, campaignId: CampaignId): Future[Campaign] =

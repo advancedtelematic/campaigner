@@ -33,6 +33,17 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: 
     campaigns.create(campaign, request.groups, metadata)
   }
 
+  def searchCampaigns(ns: Namespace): Route =
+    parameters((
+      'status.as[CampaignStatus].?,
+      'nameContains.as[String].?,
+      'sortBy.as[SortBy].?,
+      'offset.as[Long] ? 0L,
+      'limit.as[Long] ? 50L)) {
+      (status, nameContains, sortBy, offset, limit) =>
+        complete(campaigns.allCampaigns(ns, sortBy.getOrElse(SortBy.CreatedAt), offset, limit, status, nameContains))
+    }
+
   def cancelDeviceUpdate(ns: Namespace, correlationId: CorrelationId, device: DeviceId)
                         (implicit log: LoggingAdapter): Future[Unit] =
     director.cancelUpdate(ns, device).flatMap { _ =>
@@ -63,8 +74,8 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: 
           complete(campaigns.countByStatus)
         } ~
         pathEnd {
-          (get & parameters(('status.as[CampaignStatus].?, 'nameContains.as[String].?, 'sortBy.as[SortBy].?, 'offset.as[Long] ? 0L, 'limit.as[Long] ? 50L))) {
-            (status, nameContains, sortBy, offset, limit) => complete(campaigns.allCampaigns(ns, sortBy.getOrElse(SortBy.Name), offset, limit, status, nameContains))
+          get {
+            searchCampaigns(ns)
           } ~
           (post & entity(as[CreateCampaign])) { request =>
             complete(StatusCodes.Created -> createCampaign(ns, request))
