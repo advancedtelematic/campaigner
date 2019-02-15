@@ -40,6 +40,17 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
     } yield campaignId
   }
 
+  def searchCampaigns(ns: Namespace): Route =
+    parameters((
+      'status.as[CampaignStatus].?,
+      'nameContains.as[String].?,
+      'sortBy.as[SortBy].?,
+      'offset.as[Long] ? 0L,
+      'limit.as[Long] ? 50L)) {
+      (status, nameContains, sortBy, offset, limit) =>
+        complete(campaigns.allCampaigns(ns, sortBy.getOrElse(SortBy.CreatedAt), offset, limit, status, nameContains))
+    }
+
   /**
     * Create and immediately launch a retry-campaign for all the devices that were processed by `mainCampaign` and
     * failed with the code given in `request`.
@@ -93,8 +104,8 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
           complete(campaigns.countByStatus)
         } ~
         pathEnd {
-          (get & parameters(('status.as[CampaignStatus].?, 'nameContains.as[String].?, 'sortBy.as[SortBy].?, 'offset.as[Long] ? 0L, 'limit.as[Long] ? 50L))) {
-            (status, nameContains, sortBy, offset, limit) => complete(campaigns.allCampaigns(ns, sortBy.getOrElse(SortBy.Name), offset, limit, status, nameContains))
+          get {
+            searchCampaigns(ns)
           } ~
           (post & entity(as[CreateCampaign])) { request =>
             complete(StatusCodes.Created -> createCampaign(ns, request))
