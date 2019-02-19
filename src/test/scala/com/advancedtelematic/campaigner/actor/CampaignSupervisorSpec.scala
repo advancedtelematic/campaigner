@@ -24,9 +24,9 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
   val campaigns = Campaigns()
 
   def buildCampaignWithUpdate: Campaign = {
-    val update = genMultiTargetUpdate.sample.get
+    val update = genMultiTargetUpdate.generate
     val updateId = updateRepo.persist(update).futureValue
-    arbitrary[Campaign].sample.get.copy(updateId = updateId)
+    arbitrary[Campaign].generate.copy(updateId = updateId)
   }
 
   "campaign supervisor" should "pick up unfinished and fresh campaigns" in {
@@ -66,17 +66,17 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
   val campaigns = Campaigns()
 
   def buildCampaignWithUpdate: Campaign = {
-    val update = genMultiTargetUpdate.sample.get
+    val update = genMultiTargetUpdate.generate
     val updateId = updateRepo.persist(update).futureValue
-    arbitrary[Campaign].sample.get.copy(updateId = updateId)
+    arbitrary[Campaign].generate.copy(updateId = updateId)
   }
 
   "campaign supervisor" should "clean out campaigns that are marked to be cancelled" in {
     val campaign = buildCampaignWithUpdate
     val group    = NonEmptyList.one(GroupId.generate)
     val parent   = TestProbe()
-    val n        = Gen.choose(batch, batch * 2).sample.get
-    val devs     = Gen.listOfN(n, genDeviceId).sample.get
+    val n        = Gen.choose(batch, batch * 2).generate
+    val devs     = Gen.listOfN(n, genDeviceId).generate
     val registry = new DeviceRegistryClient {
       override def devicesInGroup(_ns: Namespace,
                                   _grp: GroupId,

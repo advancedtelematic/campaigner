@@ -2,7 +2,6 @@ package com.advancedtelematic.campaigner.http
 
 import java.util.UUID
 
-import akka.actor.ActorSystem
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.Uri.Query
@@ -25,7 +24,7 @@ import org.scalacheck.Gen
 class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSupport {
 
   import scala.concurrent.duration._
-  implicit def default(implicit system: ActorSystem): RouteTestTimeout = RouteTestTimeout(15.seconds)
+  implicit def default(): RouteTestTimeout = RouteTestTimeout(15.seconds)
 
   private def createUpdate(request: CreateUpdate): HttpRequest =
     Post(apiUri("updates"), request).withHeaders(header)
@@ -63,13 +62,13 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates with group id" should "get only MTU updates if no external resolver is set" in {
-    val mtuRequests = Gen.listOfN(2, genCreateUpdate(genType = Gen.const(UpdateType.multi_target))).sample.get
-    val externalUpdateRequests = Gen.listOfN(2, genCreateUpdate(genType = Gen.const(UpdateType.external))).sample.get
+    val mtuRequests = Gen.listOfN(2, genCreateUpdate(genType = Gen.const(UpdateType.multi_target))).generate
+    val externalUpdateRequests = Gen.listOfN(2, genCreateUpdate(genType = Gen.const(UpdateType.external))).generate
     val mtuIds = mtuRequests.map(createUpdateOk)
     externalUpdateRequests.foreach(createUpdateOk)
 
     val groupId = GroupId.generate()
-    val devices = Gen.listOfN(100, genDeviceId).sample.get
+    val devices = Gen.listOfN(100, genDeviceId).generate
     fakeRegistry.setGroup(groupId, devices)
 
     getUpdates(Seq(groupId)) ~> routes ~> check {
@@ -83,12 +82,12 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates with group id" should "forward to external resolver" in {
-    val request = genCreateUpdate().sample.get
+    val request = genCreateUpdate().generate
     val updateId = createUpdateOk(request)
 
     val groupId = GroupId.generate()
 
-    val devices = Gen.listOfN(1024, genDeviceId).sample.get
+    val devices = Gen.listOfN(1024, genDeviceId).generate
 
     fakeRegistry.setGroup(groupId, devices)
     fakeUserProfile.setNamespaceSetting(testNs, testResolverUri)
@@ -104,12 +103,12 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates with group id for many devices" should "return updates for all devices" in {
-    val requests = Gen.listOfN(10, genCreateUpdate()).sample.get
+    val requests = Gen.listOfN(10, genCreateUpdate()).generate
     val updateIds = requests.map(createUpdateOk)
 
     val groupId = GroupId.generate()
 
-    val devices = Gen.listOfN(10, genDeviceId).sample.get
+    val devices = Gen.listOfN(10, genDeviceId).generate
 
     fakeRegistry.setGroup(groupId, devices)
     fakeUserProfile.setNamespaceSetting(testNs, testResolverUri)
@@ -128,12 +127,12 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates with group id" should "return all updates for a device" in {
-    val requests = Gen.listOfN(10, genCreateUpdate()).sample.get
+    val requests = Gen.listOfN(10, genCreateUpdate()).generate
     val updateIds = requests.map(createUpdateOk)
 
     val groupId = GroupId.generate()
 
-    val device = genDeviceId.sample.get
+    val device = genDeviceId.generate
 
     fakeRegistry.setGroup(groupId, Seq(device))
     fakeUserProfile.setNamespaceSetting(testNs, testResolverUri)
@@ -149,14 +148,14 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates with more than one group id" should "return all updates for the devices in the groups" in {
-    val requests = Gen.listOfN(10, genCreateUpdate()).sample.get
+    val requests = Gen.listOfN(10, genCreateUpdate()).generate
     val updateIds = requests.map(createUpdateOk)
 
     val group1 = GroupId.generate()
     val group2 = GroupId.generate()
 
-    val device1 = genDeviceId.sample.get
-    val device2 = genDeviceId.sample.get
+    val device1 = genDeviceId.generate
+    val device2 = genDeviceId.generate
 
     fakeRegistry.setGroup(group1, Seq(device1))
     fakeRegistry.setGroup(group2, Seq(device2))
@@ -174,7 +173,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates" should "get all existing updates" in {
-    val requests = Gen.listOfN(2, genCreateUpdate()).sample.get
+    val requests = Gen.listOfN(2, genCreateUpdate()).generate
     val updateIds = requests.map(createUpdateOk)
 
     getUpdates() ~> routes ~> check {
@@ -185,7 +184,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates" should "get all updates sorted by name ascending" in {
-    val requests = Gen.listOfN(10, genCreateUpdate(Gen.alphaNumStr.retryUntil(_.nonEmpty))).sample.get
+    val requests = Gen.listOfN(10, genCreateUpdate(Gen.alphaNumStr.retryUntil(_.nonEmpty))).generate
     val sortedNames = requests.map(_.name).sortBy(_.toLowerCase)
     requests.map(createUpdateOk)
 
@@ -197,7 +196,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates?sortBy=createdAt" should "get all updates sorted from newest to oldest" in {
-    val requests = Gen.listOfN(10, genCreateUpdate(Gen.alphaNumStr.retryUntil(_.nonEmpty))).sample.get
+    val requests = Gen.listOfN(10, genCreateUpdate(Gen.alphaNumStr.retryUntil(_.nonEmpty))).generate
     requests.map(createUpdateOk)
 
     getUpdatesSorted(SortBy.CreatedAt) ~> routes ~> check {
@@ -229,7 +228,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     val names = Seq("aabb", "baaxbc", "a123ba", "cba3b")
     val updatesIdNames = names
       .map(Gen.const)
-      .map(genCreateUpdate(_).sample.get)
+      .map(genCreateUpdate(_).generate)
       .map(createUpdateOk)
       .map(getUpdateOk)
       .map(u => u.uuid -> u.name)
@@ -247,14 +246,14 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
 
   "GET to /updates filtered by groupId and name" should "fail with BadRequest" in {
     val groupId = GroupId.generate()
-    val nameContains = arbitrary[String].sample.get
+    val nameContains = arbitrary[String].generate
     getUpdates(Seq(groupId), Some(nameContains)) ~> routes ~> check {
       status shouldBe BadRequest
     }
   }
 
   "GET to /updates/:updateId" should "return 404 Not Found if update does not exists" in {
-    val updateId = genUpdateId.sample.get
+    val updateId = genUpdateId.generate
     getUpdateResult(updateId) ~> check {
       status shouldBe NotFound
       responseAs[ErrorRepresentation].code shouldBe ErrorCodes.MissingUpdate
@@ -262,7 +261,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "POST to /updates" should "create a new update" in {
-    val request = genCreateUpdate().sample.get
+    val request = genCreateUpdate().generate
     val updateId = createUpdateOk(request)
     val update = getUpdateResult(updateId) ~> check {
       status shouldBe OK
@@ -275,8 +274,8 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "Creating two updates with the same updateId" should "fail with Conflict error" in {
-    val request1 = genCreateUpdate().sample.get
-    val request2 = genCreateUpdate().sample.get.copy(updateSource = request1.updateSource)
+    val request1 = genCreateUpdate().generate
+    val request2 = genCreateUpdate().generate.copy(updateSource = request1.updateSource)
     val updateId = createUpdateOk(request1)
     createUpdate(request2) ~> routes ~> check {
       status shouldBe Conflict
@@ -286,11 +285,11 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
   }
 
   "GET to /updates when device registry is too slow" should "fail with TimeoutFetchingUpdates" in {
-    val request = genCreateUpdate().sample.get
+    val request = genCreateUpdate().generate
     createUpdateOk(request)
 
     val groupId = GroupId.generate()
-    val devices = Gen.listOfN(10, genDeviceId).sample.get
+    val devices = Gen.listOfN(10, genDeviceId).generate
 
     val slowRegistry = new SlowFakeDeviceRegistry
     slowRegistry.setGroup(groupId, devices)

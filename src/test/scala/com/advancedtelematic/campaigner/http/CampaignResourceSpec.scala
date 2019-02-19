@@ -94,7 +94,7 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
 
   "PUT /campaigns/:campaign_id" should "update a campaign" in {
     val (id, request) = createCampaignWithUpdateOk()
-    val update  = arbitrary[UpdateCampaign].sample.get
+    val update  = arbitrary[UpdateCampaign].generate
     val createdAt = getCampaignOk(id).createdAt
 
     Put(apiUri("campaigns/" + id.show), update).withHeaders(header) ~> routes ~> check {
@@ -227,9 +227,9 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
   }
 
   it should "return error when metadata is duplicated in request" in {
-    val updateId = createUpdateOk(arbitrary[CreateUpdate].gen)
+    val updateId = createUpdateOk(arbitrary[CreateUpdate].generate)
     val metadata = Seq(CreateCampaignMetadata(MetadataType.DESCRIPTION, "desc"), CreateCampaignMetadata(MetadataType.DESCRIPTION, "desc 2"))
-    val createRequest = arbitrary[CreateCampaign].map(_.copy(update = updateId, metadata = Some(metadata))).gen
+    val createRequest = arbitrary[CreateCampaign].map(_.copy(update = updateId, metadata = Some(metadata))).generate
 
     Post(apiUri("campaigns"), createRequest).withHeaders(header) ~> routes ~> check {
       status shouldBe Conflict
@@ -238,7 +238,7 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
   }
 
   "GET all campaigns" should "return only campaigns matching campaign filter" in {
-    val request = arbitrary[CreateCampaign].sample.get
+    val request = arbitrary[CreateCampaign].generate
     val (id, _) = createCampaignWithUpdateOk(request)
 
     getCampaignsOk(CampaignStatus.prepared.some).values should contain(id)
@@ -247,7 +247,7 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
   }
 
   "GET all campaigns" should "get all campaigns sorted by name when no sorting is given" in {
-    val requests = Gen.listOfN(10, genCreateCampaign(Gen.alphaNumStr.retryUntil(_.nonEmpty))).sample.get
+    val requests = Gen.listOfN(10, genCreateCampaign(Gen.alphaNumStr.retryUntil(_.nonEmpty))).generate
     val sortedNames = requests.map(_.name).sortBy(_.toLowerCase)
     requests.map(createCampaignWithUpdateOk(_))
 
@@ -256,7 +256,7 @@ class CampaignResourceSpec extends CampaignerSpec with ResourceSpec with Campaig
   }
 
   "GET all campaigns sorted by creation time" should "sort the campaigns from newest to oldest" in {
-    val requests = Gen.listOfN(10, genCreateCampaign()).sample.get
+    val requests = Gen.listOfN(10, genCreateCampaign()).generate
     requests.map(createCampaignWithUpdateOk(_))
 
     val campaignsNewestToOldest = getCampaignsOk(sortBy = Some(SortBy.CreatedAt)).values.map(getCampaignOk)

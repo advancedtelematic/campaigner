@@ -20,7 +20,7 @@ object Generators {
   val genNamespace: Gen[Namespace] = arbitrary[String].map(Namespace)
   val genUpdateType: Gen[UpdateType] = Gen.oneOf(UpdateType.values.toSeq)
   val genMetadataType: Gen[MetadataType] = Gen.oneOf(MetadataType.values.toSeq)
-  val genNonEmptyGroupIdList: Gen[NonEmptyList[GroupId]] = Gen.const(NonEmptyList.fromListUnsafe(Gen.nonEmptyListOf(genGroupId).sample.get))
+  val genNonEmptyGroupIdList: Gen[NonEmptyList[GroupId]] = Gen.nonEmptyListOf(genGroupId).map(NonEmptyList.fromListUnsafe)
 
   val genCampaignMetadata: Gen[CreateCampaignMetadata] = for {
     t <- arbitrary[MetadataType]

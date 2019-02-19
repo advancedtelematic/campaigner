@@ -13,7 +13,7 @@ import org.scalacheck.Gen
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
 
-class FakeDirectorClient extends DirectorClient {
+class FakeDirectorClient extends DirectorClient with CampaignerSpecUtil {
 
   val updates = new ConcurrentHashMap[ExternalUpdateId, Set[DeviceId]]()
   val affected = new ConcurrentHashMap[ExternalUpdateId, Set[DeviceId]]()
@@ -38,7 +38,7 @@ class FakeDirectorClient extends DirectorClient {
   override def cancelUpdate(
     ns: Namespace,
     devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
-    val devs = Gen.someOf(devices).sample.get
+    val devs = Gen.someOf(devices).generate
     cancelled.addAll(devs.asJava)
     FastFuture.successful(devs)
   }
