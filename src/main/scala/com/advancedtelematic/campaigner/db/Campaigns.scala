@@ -8,7 +8,7 @@ import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.SlickMapping._
-import com.advancedtelematic.campaigner.http.Errors
+import com.advancedtelematic.campaigner.http.Errors._
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
@@ -109,9 +109,10 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 
   def findClientCampaign(campaignId: CampaignId): Future[GetCampaign] = for {
     c <- campaignRepo.find(campaignId)
+    childIds <- campaignRepo.findChildIdsOf(campaignId)
     groups <- db.run(findGroupsAction(c.id))
     metadata <- campaignMetadataRepo.findFor(campaignId)
-  } yield GetCampaign(c, groups, metadata)
+  } yield GetCampaign(c, childIds, groups, metadata)
 
   def findCampaignsByUpdate(update: UpdateId): Future[Seq[Campaign]] =
     db.run(campaignRepo.findByUpdateAction(update))
@@ -149,7 +150,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       .findAction(campaignId)
       .andThen(groupStatsRepo.persistManyAction(campaignId, groups))
       .transactionally
-      .handleIntegrityErrors(Errors.CampaignAlreadyLaunched)
+      .handleIntegrityErrors(CampaignAlreadyLaunched)
 
   def scheduleGroups(campaign: CampaignId, groups: NonEmptyList[GroupId]): Future[Unit] =
     db.run(scheduleGroupsAction(campaign, groups.toList.toSet))
@@ -207,7 +208,7 @@ protected [db] class CampaignStatusTransition(implicit db: Database, ec: Executi
 
   private def progressGroupAction(campaignId: CampaignId, group: GroupId, status: GroupStatus, stats: Stats): DBIO[Unit] =
     if (stats.affected > stats.processed)
-      DBIO.failed(Errors.InvalidCounts)
+      DBIO.failed(InvalidCounts)
     else
       groupStatsRepo.updateGroupStatsAction(campaignId, group, status, stats)
 
