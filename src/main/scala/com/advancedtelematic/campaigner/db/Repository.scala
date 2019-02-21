@@ -200,6 +200,7 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
     db.run {
       Schema.campaigns
         .filter(_.namespace === ns)
+        .filter(_.parentCampaignId.isEmpty)
         .maybeFilter(_.status === status)
         .maybeContains(_.name, nameContains)
         .sortBy(sortBy)

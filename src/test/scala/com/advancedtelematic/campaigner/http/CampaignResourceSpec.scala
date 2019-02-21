@@ -94,9 +94,9 @@ class CampaignResourceSpec
     )
     childCampaign.createdAt shouldBe childCampaign.updatedAt
 
-    And("the list of all campaings should list the child campaign")
+    And("the list of all campaings should NOT list the child campaign")
     val campaigns = getCampaignsOk()
-    campaigns.values should contain (childId)
+    campaigns.values should not (contain(childId))
 
     And("the child campaign should have `prepared` status")
     checkStats(childId, CampaignStatus.prepared)
