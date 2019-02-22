@@ -84,6 +84,7 @@ object DataType {
       metadata.toList.flatten.map(_.toCampaignMetadata(campaignId))
   }
 
+  final case class RetryFailedDevices(failureCode: String)
 
   final case class GetCampaign(
     namespace: Namespace,

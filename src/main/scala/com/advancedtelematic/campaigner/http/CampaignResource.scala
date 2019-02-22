@@ -5,6 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.{Directive1, Route}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.util.FastFuture
+import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.client.DirectorClient
 import com.advancedtelematic.campaigner.data.AkkaSupport._
@@ -14,7 +15,7 @@ import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.auth.AuthedNamespaceScope
-import com.advancedtelematic.libats.data.DataType.{CorrelationId, CampaignId => CampaignCorrelationId, MultiTargetUpdateId, Namespace}
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId, Namespace, CampaignId => CampaignCorrelationId}
 import com.advancedtelematic.libats.http.UUIDKeyAkka._
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
@@ -31,6 +32,22 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: 
     val campaign = request.mkCampaign(ns)
     val metadata = request.mkCampaignMetadata(campaign.id)
     campaigns.create(campaign, request.groups, metadata)
+  }
+
+  def retryFailedDevices(ns: Namespace, mainCampaign: Campaign, request: RetryFailedDevices): Future[CampaignId] = {
+    campaigns.fetchFailedGroupId(mainCampaign.id, request.failureCode).flatMap {
+      case None =>
+        Future.failed(Errors.MissingFailedGroup)
+      case Some(gid) =>
+        val retryGroup = NonEmptyList.one(gid)
+        val retryCampaign = CreateCampaign(
+          s"retryCampaignWith-mainCampaign-${mainCampaign.id.uuid}-failureCode-${request.failureCode}",
+          mainCampaign.updateId,
+          retryGroup,
+          Some(mainCampaign.id)
+        ).mkCampaign(ns)
+        campaigns.create(retryCampaign, retryGroup, Nil)
+    }
   }
 
   def cancelDeviceUpdate(ns: Namespace, correlationId: CorrelationId, device: DeviceId)
@@ -79,14 +96,19 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: 
               complete(campaigns.update(campaign.id, updated.name, updated.metadata.toList.flatten.map(_.toCampaignMetadata(campaign.id))))
             }
           } ~
-          (post & path("launch")) {
-            complete(campaigns.launch(campaign.id))
+          post {
+            path("launch") {
+              complete(campaigns.launch(campaign.id))
+            } ~
+            path("cancel") {
+              complete(campaigns.cancel(campaign.id))
+            } ~
+            (path("retry-failed") & entity(as[RetryFailedDevices])) { request =>
+              complete(StatusCodes.Created -> retryFailedDevices(ns, campaign, request))
+            }
           } ~
           (get & path("stats")) {
             complete(campaigns.campaignStats(campaign.id))
-          } ~
-          (post & path("cancel")) {
-            complete(campaigns.cancel(campaign.id))
           }
         }
       } ~
