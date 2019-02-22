@@ -43,7 +43,7 @@ object DaemonBoot extends BootApp
     "campaign-supervisor"
   )
 
-  startListener[DeviceInstallationReport](new DeviceInstallationReportListener())
+  startListener[DeviceInstallationReport](new DeviceInstallationReportListener(deviceRegistry))
   startListener[DeviceEventMessage](new DeviceEventListener(director))
 
   val routes: Route = (versionHeaders(version) & logResponseMetrics(projectName)) {

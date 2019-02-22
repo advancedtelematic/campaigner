@@ -6,9 +6,9 @@ import java.util.UUID
 import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, UpdateSupport}
-import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil}
-import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId, MultiTargetUpdateId, CorrelationId}
+import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, FailedGroupSupport, UpdateSupport}
+import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil, FakeDeviceRegistry}
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId, Namespace, CampaignId => CampaignCorrelationId}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, InstallationResult}
 import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceInstallationReport
 import com.advancedtelematic.libats.test.DatabaseSpec
@@ -20,9 +20,11 @@ class DeviceInstallationReportListenerSpec extends CampaignerSpec
   with DatabaseSpec
   with DeviceUpdateSupport
   with UpdateSupport
+  with FailedGroupSupport
   with DatabaseUpdateSpecUtil {
 
-  val listener = new DeviceInstallationReportListener()
+  private val registry = new FakeDeviceRegistry
+  val listener = new DeviceInstallationReportListener(registry)
 
   val campaigns = Campaigns()
 
@@ -72,6 +74,40 @@ class DeviceInstallationReportListenerSpec extends CampaignerSpec
 
     listener.apply(report).futureValue shouldBe (())
     deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.failed).futureValue should contain(deviceUpdate.device)
+  }
+
+  "Listener" should "create a failure group in device-registry and add a failed device to that group" in {
+    val (_, campaign, deviceUpdate) = prepareTest()
+    val report = makeReport(
+      campaign,
+      deviceUpdate,
+      CampaignCorrelationId(campaign.id.uuid),
+      isSuccessful = false)
+
+    listener(report).futureValue
+    val groupId = failedGroupRepo.fetchGroup(campaign.id, report.result.code).futureValue
+    registry.devicesInGroup(Namespace("default"), groupId, 0, 10).futureValue should contain only report.device
+  }
+
+  "Listener" should "add a failed device to a failure group that already exists" in {
+    val (_, campaign, deviceUpdate1) = prepareTest()
+    val deviceUpdate2 = deviceUpdate1.copy(device = DeviceId.generate())
+    val report1 = makeReport(
+      campaign,
+      deviceUpdate1,
+      CampaignCorrelationId(campaign.id.uuid),
+      isSuccessful = false)
+    val report2 = makeReport(
+      campaign,
+      deviceUpdate2,
+      CampaignCorrelationId(campaign.id.uuid),
+      isSuccessful = false)
+
+    listener(report1).futureValue
+    listener(report2).futureValue
+    val groupId = failedGroupRepo.fetchGroup(campaign.id, report2.result.code).futureValue
+    registry.devicesInGroup(Namespace("default"), groupId, 0, 10).futureValue should contain only (report1.device, report2.device)
+
   }
 
   private def prepareTest(): (UpdateSource, Campaign, DeviceUpdate) = {

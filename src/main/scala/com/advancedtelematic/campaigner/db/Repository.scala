@@ -50,6 +50,10 @@ trait CampaignMetadataSupport {
   def campaignMetadataRepo(implicit db: Database) = new CampaignMetadataRepository()
 }
 
+trait FailedGroupSupport {
+  def failedGroupRepo(implicit db: Database, ec: ExecutionContext) = new FailedGroupRepository()
+}
+
 protected [db] class CampaignMetadataRepository()(implicit db: Database) {
   def findFor(campaign: CampaignId): Future[Seq[CampaignMetadata]] = db.run {
     Schema.campaignMetadata.filter(_.campaignId === campaign).result
@@ -342,5 +346,21 @@ protected class UpdateRepository()(implicit db: Database, ec: ExecutionContext) 
       .filter(_.namespace === ns)
       .maybeContains(_.name, nameContains)
       .paginateAndSortResult(sortBy, offset, limit)
+  }
+}
+
+protected class FailedGroupRepository()(implicit db: Database, ec: ExecutionContext) {
+
+  def persist(campaignId: CampaignId, groupId: GroupId, failureCode: String): Future[Int] = db.run {
+    Schema.failedGroups += FailedGroup(campaignId, groupId, failureCode)
+  }
+
+  def fetchGroup(campaignId: CampaignId, failureCode: String): Future[GroupId] = db.run {
+    Schema.failedGroups
+      .filter(_.campaignId === campaignId)
+      .filter(_.failureCode === failureCode)
+      .map(_.groupId)
+      .result
+      .failIfNotSingle(MissingFailedGroup)
   }
 }

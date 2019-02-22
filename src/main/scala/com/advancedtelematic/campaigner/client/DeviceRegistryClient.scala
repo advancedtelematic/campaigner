@@ -10,6 +10,8 @@ import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.http.HttpOps.HttpRequestOps
 import com.advancedtelematic.libats.http.ServiceHttpClient
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
+import io.circe.Json
+import io.circe.syntax._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -18,6 +20,10 @@ trait DeviceRegistryClient {
                      groupId: GroupId,
                      offset: Long,
                      limit: Long): Future[Seq[DeviceId]]
+
+  def createGroup(ns: Namespace, name: String): Future[GroupId]
+
+  def addDeviceToGroup(ns: Namespace, groupId: GroupId, deviceId: DeviceId): Future[Unit]
 }
 
 class DeviceRegistryHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResponse])
@@ -26,11 +32,25 @@ class DeviceRegistryHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpR
 
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
+  private val basePath = uri.path / "api" / "v1"
+
   override def devicesInGroup(ns: Namespace, groupId: GroupId, offset: Long, limit: Long): Future[Seq[DeviceId]] = {
-    val path  = uri.path / "api" / "v1" / "device_groups" / groupId.show / "devices"
+    val path  = basePath / "device_groups" / groupId.show / "devices"
     val query = Uri.Query(Map("offset" -> offset.toString, "limit" -> limit.toString))
     val req = HttpRequest(HttpMethods.GET, uri.withPath(path).withQuery(query)).withNs(ns)
     execHttp[PaginationResult[DeviceId]](req)().map(_.values)
   }
 
+  override def createGroup(ns: Namespace, name: String): Future[GroupId] = {
+    val path = basePath / "device_groups"
+    val body = Json.obj("name" -> name.asJson, "groupType" -> "static".asJson)
+    val req = HttpRequest(HttpMethods.POST, uri.withPath(path)).withEntity(body.asString.get)
+    execHttp[GroupId](req)()
+  }
+
+  override def addDeviceToGroup(ns: Namespace, groupId: GroupId, deviceId: DeviceId): Future[Unit] = {
+    val path = basePath / "device_groups" / groupId.show / "devices" / deviceId.show
+    val req = HttpRequest(HttpMethods.POST, uri.withPath(path)).withNs(ns)
+    execHttp[Unit](req)()
+  }
 }

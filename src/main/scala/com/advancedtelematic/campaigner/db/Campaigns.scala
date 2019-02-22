@@ -27,6 +27,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     with CampaignSupport
     with CampaignMetadataSupport
     with DeviceUpdateSupport
+    with FailedGroupSupport
     with CancelTaskSupport {
 
   val campaignStatusTransition = new CampaignStatusTransition()
@@ -174,6 +175,18 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
           .result
           .map(_.toSet)
     }
+
+  def fetchFailedGroupId(campaignId: CampaignId, failureCode: String): Future[Option[GroupId]] = db.run {
+    Schema.failedGroups
+      .filter(_.campaignId === campaignId)
+      .filter(_.failureCode === failureCode)
+      .map(_.groupId)
+      .result
+      .map(_.headOption)
+  }
+
+  def persistFailedGroup(campaignId: CampaignId, groupId: GroupId, failureCode: String): Future[GroupId] =
+    failedGroupRepo.persist(campaignId, groupId, failureCode).map(_ => groupId)
 }
 
 protected [db] class CampaignStatusTransition(implicit db: Database, ec: ExecutionContext) extends CampaignSupport
