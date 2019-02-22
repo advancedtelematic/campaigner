@@ -11,6 +11,7 @@ object ErrorCodes {
   val MissingUpdateSource = ErrorCode("missing_update_source")
   val MissingParentCampaign = ErrorCode("missing_parent_campaign")
   val MissingUpdate = ErrorCode("missing_update")
+  val MissingFailedGroup = ErrorCode("missing_failed_group")
   val ConflictingMetadata = ErrorCode("campaign_metadata_already_exists")
   val CampaignAlreadyLaunched = ErrorCode("campaign_already_launched")
   val InvalidCounts = ErrorCode("invalid_stats_count")
@@ -37,6 +38,12 @@ object Errors {
     ErrorCodes.MissingParentCampaign,
     StatusCodes.PreconditionFailed,
     "The parent campaign for this retry campaign is invalid or does not exist."
+  )
+
+  val MissingFailedGroup = RawError(
+    ErrorCodes.MissingFailedGroup,
+    StatusCodes.PreconditionFailed,
+    "There is no failed device group for the given campaign and failure code."
   )
 
   val ConflictingCampaign = RawError(ErrorCodes.ConflictingCampaign, StatusCodes.Conflict, "campaign already exists")

@@ -151,6 +151,8 @@ object DataType {
     status: CancelTaskStatus
   )
 
+  final case class FailedGroup(campaignId: CampaignId, groupId: GroupId, failureCode: String)
+
   object SortBy {
     sealed trait SortBy
     case object Name      extends SortBy

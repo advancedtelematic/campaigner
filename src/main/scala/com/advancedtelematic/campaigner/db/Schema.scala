@@ -130,4 +130,16 @@ object Schema {
   }
   protected [db] val updates = TableQuery[UpdatesTable]
 
+  class FailedGroupsTable(tag: Tag) extends Table[FailedGroup](tag, "failed_groups") {
+    def campaignId = column[CampaignId]("campaign_id")
+    def groupId = column[GroupId]("group_id")
+    def failureCode = column[String]("failure_code")
+
+    def * = (campaignId, groupId, failureCode) <> ((FailedGroup.apply _).tupled, FailedGroup.unapply)
+
+    def pk = primaryKey("pk_failed_groups", (campaignId, failureCode))
+  }
+
+  protected[db] val failedGroups = TableQuery[FailedGroupsTable]
+
 }
