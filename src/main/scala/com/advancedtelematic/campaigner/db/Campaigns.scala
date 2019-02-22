@@ -233,7 +233,7 @@ protected [db] class CampaignStatusTransition(implicit db: Database, ec: Executi
     val countFinishedDevices =
       Schema.deviceUpdates
         .filter(_.campaignId === campaign).map(_.status)
-        .filter(status => status === DeviceStatus.successful || status === DeviceStatus.failed)
+        .filter(status => status === DeviceStatus.successful || status === DeviceStatus.failed || status === DeviceStatus.cancelled)
         .length.result
 
     for {
