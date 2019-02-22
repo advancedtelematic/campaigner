@@ -74,6 +74,16 @@ class FakeDeviceRegistry extends DeviceRegistryClient {
   override def devicesInGroup(namespace: Namespace, groupId: GroupId, offset: Long, limit: Long): Future[Seq[DeviceId]] = Future.successful {
     allGroupDevices(groupId).slice(offset.toInt, (offset + limit).toInt)
   }
+
+  override def createGroup(ns: Namespace, name: String): Future[GroupId] = {
+    val groupId = GroupId.generate()
+    groups.put(groupId, Set())
+    Future.successful(groupId)
+  }
+
+  override def addDeviceToGroup(ns: Namespace, groupId: GroupId, deviceId: DeviceId): Future[Unit] = Future.successful {
+    groups.put(groupId, groups.get(groupId) + deviceId)
+  }
 }
 
 class SlowFakeDeviceRegistry extends FakeDeviceRegistry {
