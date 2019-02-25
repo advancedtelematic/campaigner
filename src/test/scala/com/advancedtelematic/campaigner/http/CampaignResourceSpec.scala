@@ -24,6 +24,7 @@ import org.scalacheck.Gen
 import org.scalactic.source
 import org.scalatest._
 import org.scalatest.prop.PropertyChecks
+import scala.concurrent.Future
 
 class CampaignResourceSpec
     extends CampaignerSpec
@@ -35,14 +36,14 @@ class CampaignResourceSpec
 
   val campaigns = Campaigns()
 
-  def checkStats(id: CampaignId, campaignStatus: CampaignStatus, stats: Map[GroupId, Stats] = Map.empty,
+  def checkStats(id: CampaignId, campaignStatus: CampaignStatus, stats: Stats = Stats(0, 0),
                  finished: Long = 0, failed: Set[DeviceId] = Set.empty, cancelled: Long = 0)
                 (implicit pos: source.Position): Unit =
     Get(apiUri(s"campaigns/${id.show}/stats")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
       val campaignStats = responseAs[CampaignStats]
       campaignStats.status shouldBe campaignStatus
-      campaignStats shouldBe CampaignStats(id, campaignStatus, finished, failed, cancelled, stats)
+      campaignStats shouldBe CampaignStats(id, campaignStatus, finished, failed, cancelled, stats.processed, stats.affected)
     }
 
   "POST and GET /campaigns" should "create a campaign, return the created campaign" in {
@@ -191,7 +192,7 @@ class CampaignResourceSpec
       status shouldBe OK
     }
 
-    checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toList.toMap)
+    checkStats(campaignId, CampaignStatus.launched)
 
     request ~> routes ~> check {
       status shouldBe Conflict
@@ -207,13 +208,13 @@ class CampaignResourceSpec
       status shouldBe OK
     }
 
-    checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toList.toMap)
+    checkStats(campaignId, CampaignStatus.launched)
 
     Post(apiUri(s"campaigns/${campaignId.show}/cancel")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
     }
 
-    checkStats(campaignId, CampaignStatus.cancelled, campaign.groups.map(_ -> Stats(0, 0)).toList.toMap)
+    checkStats(campaignId, CampaignStatus.cancelled)
   }
 
   "POST /cancel_device_update_campaign" should "cancel a single device update" in {
@@ -225,7 +226,7 @@ class CampaignResourceSpec
       status shouldBe OK
     }
 
-    checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toList.toMap)
+    checkStats(campaignId, CampaignStatus.launched)
 
     campaigns.scheduleDevices(campaignId, updateId, device).futureValue
 
@@ -236,7 +237,7 @@ class CampaignResourceSpec
       fakeDirector.cancelled.contains(device) shouldBe true
     }
 
-    checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toList.toMap, 0, Set.empty, 1)
+    checkStats(campaignId, CampaignStatus.launched, finished = 0, failed = Set.empty, cancelled = 1)
   }
 
   it should "cancel a single device by campaign correlation id" in {
@@ -247,7 +248,7 @@ class CampaignResourceSpec
       status shouldBe OK
     }
 
-    checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toList.toMap)
+    checkStats(campaignId, CampaignStatus.launched)
 
     val correlationId: CorrelationId = CampaignCorrelationId(campaignId.uuid)
     val entity = Json.obj("correlationId" -> correlationId.asJson, "device" -> device.asJson)
@@ -256,7 +257,7 @@ class CampaignResourceSpec
       fakeDirector.cancelled.contains(device) shouldBe true
     }
 
-    checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toList.toMap)
+    checkStats(campaignId, CampaignStatus.launched)
   }
 
   it should "fail if device has not been scheduled" in {
@@ -268,7 +269,7 @@ class CampaignResourceSpec
       status shouldBe OK
     }
 
-    checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toList.toMap)
+    checkStats(campaignId, CampaignStatus.launched)
 
     val correlationId: CorrelationId = MultiTargetUpdateId(updateId.uuid)
     val entity = Json.obj("correlationId" -> correlationId.asJson, "device" -> device.asJson)
@@ -277,7 +278,7 @@ class CampaignResourceSpec
       fakeDirector.cancelled.contains(device) shouldBe true
     }
 
-    checkStats(campaignId, CampaignStatus.launched, campaign.groups.map(_ -> Stats(0, 0)).toList.toMap)
+    checkStats(campaignId, CampaignStatus.launched)
   }
 
   it should "accept request to cancel device if no campaign is associated" in {
@@ -358,36 +359,53 @@ class CampaignResourceSpec
   }
 
   "GET /campaigns/:id/stats" should "return correct statistics" in {
-    forAll (Gen.listOf(genDeviceId), Gen.listOf(genDeviceId), Gen.listOf(genDeviceId), Gen.choose(0, 5)) {
-      (successDevices, failedDevices, cancelledDevices, notAffectedCount) => {
-        val campaigns = Campaigns()
-        val groupId = genGroupId.generate
+    val campaigns = Campaigns()
 
-        val affectedDevices = successDevices ++ failedDevices ++ cancelledDevices
-        val affectedCount = affectedDevices.size
-        val processedCount = affectedCount + notAffectedCount
-
-        val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk(
-          genCreateCampaign().map(_.copy(groups = NonEmptyList.one(groupId)))
-        )
-        campaigns.launch(mainCampaignId).futureValue
-        campaigns.completeGroup(mainCampaignId, groupId, Stats(processedCount, affectedCount)).futureValue
-        campaigns.scheduleDevices(mainCampaignId, mainCampaign.update, affectedDevices:_*).futureValue
-        campaigns.finishDevices(mainCampaignId, cancelledDevices, DeviceStatus.cancelled).futureValue
-        campaigns.finishDevices(mainCampaignId, failedDevices, DeviceStatus.failed).futureValue
-        campaigns.finishDevices(mainCampaignId, successDevices, DeviceStatus.successful).futureValue
-
-        Get(apiUri(s"campaigns/${mainCampaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
-          status shouldBe OK
-
-          val campaignStats = responseAs[CampaignStats]
-          campaignStats.status shouldBe CampaignStatus.finished
-          campaignStats.finished shouldBe (successDevices.size + failedDevices.size)
-          campaignStats.failed should contain theSameElementsAs(failedDevices)
-          campaignStats.cancelled shouldBe cancelledDevices.size
-          campaignStats.stats(groupId) shouldBe Stats(processedCount, affectedCount)
-        }
-      }
+    case class CampaignCase(
+        successfulDevices: Seq[DeviceId],
+        failedDevices: Seq[DeviceId],
+        cancelledDevices: Seq[DeviceId],
+        notAffectedCount: Long) {
+      val groupId = genGroupId.generate
+      val affectedDevices = successfulDevices ++ failedDevices ++ cancelledDevices
+      val affectedCount = affectedDevices.size.toLong
+      val processedCount = affectedCount + notAffectedCount
+      val groupStats = Stats(processedCount, affectedCount)
     }
+
+    def genCampaignCase: Gen[CampaignCase] = for {
+      successfulDevices <- Gen.listOf(genDeviceId)
+      failedDevices <- Gen.listOf(genDeviceId)
+      cancelledDevices <- Gen.listOf(genDeviceId)
+      notAffectedCount <- Gen.choose(0, 5)
+    } yield CampaignCase(successfulDevices, failedDevices, cancelledDevices, notAffectedCount)
+
+    def conductCampaign(campaignId: CampaignId, campaign: CreateCampaign, campaignCase: CampaignCase): Future[Unit] = for {
+      _ <- campaigns.launch(campaignId)
+      _ <- campaigns.completeGroup(campaignId, campaignCase.groupId, campaignCase.groupStats)
+      _ <- campaigns.scheduleDevices(campaignId, campaign.update, campaignCase.affectedDevices:_*)
+      _ <- campaigns.finishDevices(campaignId, campaignCase.cancelledDevices, DeviceStatus.cancelled)
+      _ <- campaigns.finishDevices(campaignId, campaignCase.failedDevices, DeviceStatus.failed)
+      _ <- campaigns.finishDevices(campaignId, campaignCase.successfulDevices, DeviceStatus.successful)
+    } yield ()
+
+    forAll (genCampaignCase) ((mainCase) => {
+      val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk(
+        genCreateCampaign().map(_.copy(groups = NonEmptyList.one(mainCase.groupId)))
+      )
+      conductCampaign(mainCampaignId, mainCampaign, mainCase).futureValue
+
+      Get(apiUri(s"campaigns/${mainCampaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
+        status shouldBe OK
+
+        val campaignStats = responseAs[CampaignStats]
+        campaignStats.status shouldBe CampaignStatus.finished
+        campaignStats.finished shouldBe (mainCase.successfulDevices.size + mainCase.failedDevices.size)
+        campaignStats.failed should contain theSameElementsAs(mainCase.failedDevices)
+        campaignStats.cancelled shouldBe mainCase.cancelledDevices.size
+        campaignStats.processed shouldBe mainCase.processedCount
+        campaignStats.affected shouldBe mainCase.affectedCount
+      }
+    })
   }
 }

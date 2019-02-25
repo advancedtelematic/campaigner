@@ -66,7 +66,7 @@ class CampaignsSpec extends AsyncFlatSpec
       stats <- campaigns.campaignStatsFor(campaign.id)
     } yield {
       status shouldBe Some(GroupStatus.scheduled)
-      stats  shouldBe Map(group -> Stats(processed, affected))
+      stats  shouldBe Stats(processed, affected)
     }
   }
 
@@ -97,7 +97,7 @@ class CampaignsSpec extends AsyncFlatSpec
       stats  <- campaigns.campaignStatsFor(campaign.id)
     } yield {
       status shouldBe Some(GroupStatus.launched)
-      stats  shouldBe Map(group -> Stats(processed, affected))
+      stats  shouldBe Stats(processed, affected)
     }
   }
 

@@ -122,8 +122,8 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     finished  <- countFinished(campaignId)
     cancelled <- countCancelled(campaignId)
     failed    <- failedDevices(campaignId)
-    stats     <- campaignStatsFor(campaignId)
-  } yield CampaignStats(campaignId, status, finished, failed, cancelled, stats)
+    Stats(processed, affected) <- campaignStatsFor(campaignId)
+  } yield CampaignStats(campaignId, status, finished, failed, cancelled, processed, affected)
 
   def cancel(campaignId: CampaignId): Future[Unit] = db.run {
     campaignStatusTransition.cancel(campaignId)
@@ -155,16 +155,14 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def scheduleGroups(campaign: CampaignId, groups: NonEmptyList[GroupId]): Future[Unit] =
     db.run(scheduleGroupsAction(campaign, groups.toList.toSet))
 
-  def campaignStatsFor(campaign: CampaignId): Future[Map[GroupId, Stats]] =
-    db.run {
-      campaignRepo.findAction(campaign).flatMap { _ =>
-        groupStatsRepo.findByCampaignAction(campaign)
-      }
-    }.map {
-      _.groupBy(_.group).map {
-        case (group, stats +: _) => (group, Stats(stats.processed, stats.affected))
-      }
-    }
+  def campaignStatsFor(campaignId: CampaignId): Future[Stats] =
+    db.run(groupStatsRepo.findByCampaignAction(campaignId))
+      .map(_.foldLeft(Stats(0, 0)) { case (acc, group) =>
+        acc.copy(
+          processed = acc.processed + group.processed,
+          affected = acc.affected + group.affected
+        )
+    })
 
   private def findGroupsAction(campaignId: CampaignId): DBIO[Set[GroupId]] =
     campaignRepo.findAction(campaignId).flatMap { _ =>
