@@ -31,8 +31,9 @@ class DeviceInstallationReportListener(deviceRegistryClient: DeviceRegistryClien
         val addDeviceToFailedDeviceGroupFuture =
           addDeviceToFailedDeviceGroup(msg.namespace, campaignId, msg.result.code, msg.device)
         for {
-          _ <- if (success) Future.unit else addDeviceToFailedDeviceGroupFuture
           _ <- campaigns.finishDevices(CampaignId(uuid), Seq(msg.device), resultStatus)
+          isMainCampaign <- campaigns.findClientCampaign(campaignId).map(_.parentCampaignId.isEmpty)
+          _ <- if (isMainCampaign && !success) addDeviceToFailedDeviceGroupFuture else Future.unit
         } yield ()
       case MultiTargetUpdateId(uuid) => for {
         update <- updateRepo.findByExternalId(msg.namespace, ExternalUpdateId(uuid.toString))
