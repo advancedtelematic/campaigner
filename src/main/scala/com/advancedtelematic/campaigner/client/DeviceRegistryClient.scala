@@ -1,6 +1,7 @@
 package com.advancedtelematic.campaigner.client
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.Uri.Query
 import akka.http.scaladsl.model._
 import akka.stream.Materializer
 import cats.syntax.show._
@@ -24,6 +25,8 @@ trait DeviceRegistryClient {
   def createGroup(ns: Namespace, name: String): Future[GroupId]
 
   def addDeviceToGroup(ns: Namespace, groupId: GroupId, deviceId: DeviceId): Future[Unit]
+
+  def countDevicesInGroups(ns: Namespace, groupIds: Set[GroupId]): Future[Map[GroupId, Int]]
 }
 
 class DeviceRegistryHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResponse])
@@ -36,7 +39,7 @@ class DeviceRegistryHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpR
 
   override def devicesInGroup(ns: Namespace, groupId: GroupId, offset: Long, limit: Long): Future[Seq[DeviceId]] = {
     val path  = basePath / "device_groups" / groupId.show / "devices"
-    val query = Uri.Query(Map("offset" -> offset.toString, "limit" -> limit.toString))
+    val query = Query(Map("offset" -> offset.toString, "limit" -> limit.toString))
     val req = HttpRequest(HttpMethods.GET, uri.withPath(path).withQuery(query)).withNs(ns)
     execHttp[PaginationResult[DeviceId]](req)().map(_.values)
   }
@@ -52,5 +55,12 @@ class DeviceRegistryHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpR
     val path = basePath / "device_groups" / groupId.show / "devices" / deviceId.show
     val req = HttpRequest(HttpMethods.POST, uri.withPath(path)).withNs(ns)
     execHttp[Unit](req)()
+  }
+
+  override def countDevicesInGroups(ns: Namespace, groupIds: Set[GroupId]): Future[Map[GroupId, Int]] = {
+    val path = basePath / "device_groups" / "device-count"
+    val query = Query(groupIds.map("groupId" -> _.show).toMap)
+    val req = HttpRequest(HttpMethods.GET, uri.withPath(path).withQuery(query))
+    execHttp[Map[GroupId, Int]](req)()
   }
 }

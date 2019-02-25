@@ -85,8 +85,8 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
         FastFuture.successful(devs.drop(offset.toInt).take(limit.toInt))
 
       override def createGroup(ns: Namespace, name: String): Future[GroupId] = ???
-
       override def addDeviceToGroup(ns: Namespace, groupId: GroupId, deviceId: DeviceId): Future[Unit] = ???
+      override def countDevicesInGroups(ns: Namespace, groupIds: Set[GroupId]): Future[Map[GroupId, Int]] = ???
     }
 
     campaigns.create(campaign, group, Seq.empty).futureValue

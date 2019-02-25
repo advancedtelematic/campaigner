@@ -2,11 +2,11 @@ package com.advancedtelematic.campaigner.http
 
 import akka.event.LoggingAdapter
 import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.server.{Directive1, Route}
 import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.{Directive1, Route}
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.Settings
-import com.advancedtelematic.campaigner.client.DirectorClient
+import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, DirectorClient}
 import com.advancedtelematic.campaigner.data.AkkaSupport._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
@@ -14,7 +14,7 @@ import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.auth.AuthedNamespaceScope
-import com.advancedtelematic.libats.data.DataType.{CorrelationId, CampaignId => CampaignCorrelationId, MultiTargetUpdateId, Namespace}
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId, Namespace, CampaignId => CampaignCorrelationId}
 import com.advancedtelematic.libats.http.UUIDKeyAkka._
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
@@ -22,7 +22,7 @@ import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: DirectorClient)
+class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: DirectorClient, deviceRegistry: DeviceRegistryClient)
                       (implicit db: Database, ec: ExecutionContext) extends Settings {
 
   val campaigns = Campaigns()
@@ -48,6 +48,20 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: 
               campaigns.finishDevice(UpdateId(uuid), device, DeviceStatus.cancelled)
           }
       }
+    }
+
+  private def calculateFailureCountsPerFailureGroup(ns: Namespace, campaignId: CampaignId): Future[Map[String, Int]] =
+    for {
+      failedGroups <- campaigns.fetchFailedGroups(campaignId)
+      retriedGroups <- campaigns.fetchRetriedGroups(campaignId)
+      failedGroupsCounts <- deviceRegistry.countDevicesInGroups(ns, failedGroups.map(_.groupId))
+      retriedGroupsCounts <- Future.traverse(retriedGroups) { case (gid, cid) =>
+        campaigns.campaignStats(cid).map(_.failed.size).map(gid -> _)
+      }.map(_.toMap)
+    } yield failedGroupsCounts.map { case (gid, count) =>
+      val failureCode = failedGroups.filter(_.groupId == gid).map(_.failureCode).head
+      val failedCount = count - retriedGroupsCounts.getOrElse(gid, 0) // WRONG? Should be count - successful in retry
+      failureCode -> failedCount
     }
 
   private def UserCampaignPathPrefix(namespace: Namespace): Directive1[Campaign] =
@@ -82,8 +96,13 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: 
           (post & path("launch")) {
             complete(campaigns.launch(campaign.id))
           } ~
-          (get & path("stats")) {
-            complete(campaigns.campaignStats(campaign.id))
+            get {
+              path("stats") {
+                complete(campaigns.campaignStats(campaign.id))
+              } ~
+                path("failure-counts") {
+                  complete(calculateFailureCountsPerFailureGroup(ns, campaign.id))
+                }
           } ~
           (post & path("cancel")) {
             complete(campaigns.cancel(campaign.id))

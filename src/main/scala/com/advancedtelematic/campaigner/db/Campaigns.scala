@@ -187,6 +187,12 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 
   def persistFailedGroup(campaignId: CampaignId, groupId: GroupId, failureCode: String): Future[GroupId] =
     failedGroupRepo.persist(campaignId, groupId, failureCode).map(_ => groupId)
+
+  def fetchFailedGroups(campaignId: CampaignId): Future[Set[FailedGroup]] =
+    failedGroupRepo.fetchGroups(campaignId)
+
+  def fetchRetriedGroups(campaignId: CampaignId): Future[Map[GroupId, CampaignId]] =
+    campaignRepo.fetchRetriedGroups(campaignId)
 }
 
 protected [db] class CampaignStatusTransition(implicit db: Database, ec: ExecutionContext) extends CampaignSupport

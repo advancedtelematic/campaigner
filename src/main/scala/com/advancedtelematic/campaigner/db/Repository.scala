@@ -270,6 +270,16 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
         .map(_.toSet)
     }
   }
+
+  def fetchRetriedGroups(campaignId: CampaignId): Future[Map[GroupId, CampaignId]] = db.run {
+    Schema.campaigns
+      .filter(_.parentCampaignId === campaignId)
+      .join(Schema.campaignGroups)
+      .on(_.id === _.campaignId)
+      .map { case (c, g) => g.groupId -> c.id }
+      .result
+      .map(_.toMap)
+  }
 }
 
 
@@ -362,5 +372,12 @@ protected class FailedGroupRepository()(implicit db: Database, ec: ExecutionCont
       .map(_.groupId)
       .result
       .failIfNotSingle(MissingFailedGroup)
+  }
+
+  def fetchGroups(campaignId: CampaignId): Future[Set[FailedGroup]] = db.run {
+    Schema.failedGroups
+      .filter(_.campaignId === campaignId)
+      .result
+      .map(_.toSet)
   }
 }

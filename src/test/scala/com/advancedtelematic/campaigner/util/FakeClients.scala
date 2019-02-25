@@ -84,6 +84,10 @@ class FakeDeviceRegistry extends DeviceRegistryClient {
   override def addDeviceToGroup(ns: Namespace, groupId: GroupId, deviceId: DeviceId): Future[Unit] = Future.successful {
     groups.put(groupId, groups.get(groupId) + deviceId)
   }
+
+  override def countDevicesInGroups(ns: Namespace, groupIds: Set[GroupId]): Future[Map[GroupId, Int]] = Future.successful {
+    groups.asScala.mapValues(_.size).asInstanceOf[Map[GroupId, Int]]
+  }
 }
 
 class SlowFakeDeviceRegistry extends FakeDeviceRegistry {
