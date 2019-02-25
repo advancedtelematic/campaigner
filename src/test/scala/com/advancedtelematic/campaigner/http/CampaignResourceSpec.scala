@@ -371,6 +371,9 @@ class CampaignResourceSpec
       val affectedCount = affectedDevices.size.toLong
       val processedCount = affectedCount + notAffectedCount
       val groupStats = Stats(processedCount, affectedCount)
+
+      override def toString: String =
+        s"CampaignCase(s=${successfulDevices.size}, f=${failedDevices.size}, c=${cancelledDevices.size}, a=$affectedCount, n=$notAffectedCount, p=$processedCount)"
     }
 
     def genCampaignCase: Gen[CampaignCase] = for {
@@ -389,6 +392,7 @@ class CampaignResourceSpec
       _ <- campaigns.finishDevices(campaignId, campaignCase.successfulDevices, DeviceStatus.successful)
     } yield ()
 
+<<<<<<< HEAD
     forAll (genCampaignCase) ((mainCase) => {
       val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk(
         genCreateCampaign().map(_.copy(groups = NonEmptyList.one(mainCase.groupId)))
@@ -406,6 +410,43 @@ class CampaignResourceSpec
         campaignStats.processed shouldBe mainCase.processedCount
         campaignStats.affected shouldBe mainCase.affectedCount
       }
+
+      val Seq(retriedS, retriedF, retriedC, notRetriedDevices, notAffectedDevices) =
+        splitIntoGroupsRandomly(mainCase.failedDevices, 5)
+      val retryCase = CampaignCase(
+        successfulDevices = retriedS,
+        failedDevices = retriedF,
+        cancelledDevices = retriedC,
+        notAffectedCount = notAffectedDevices.size.toLong
+      )
+      val (retryCampaignId, retryCampaign) = createCampaignWithUpdateOk(
+        genCreateCampaign().map(_.copy(
+          groups = NonEmptyList.one(retryCase.groupId),
+          parentCampaignId = Some(mainCampaignId)
+        )))
+      conductCampaign(retryCampaignId, retryCampaign, retryCase).futureValue
+
+      Get(apiUri(s"campaigns/${mainCampaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
+        status shouldBe OK
+
+        val campaignStats = responseAs[CampaignStats]
+        campaignStats.status shouldBe CampaignStatus.finished
+        campaignStats.finished shouldBe (
+          mainCase.successfulDevices.size + mainCase.failedDevices.size -
+          (retryCase.processedCount - retryCase.affectedCount + retryCase.cancelledDevices.size)
+        )
+        campaignStats.cancelled shouldBe (mainCase.cancelledDevices.size + retryCase.cancelledDevices.size)
+        campaignStats.processed shouldBe mainCase.processedCount
+        campaignStats.affected shouldBe (
+          mainCase.affectedCount -
+          (retryCase.processedCount - retryCase.affectedCount)
+        )
+      }
     })
+  }
+
+  private def splitIntoGroupsRandomly[T](seq: Seq[T], n: Int): Seq[Seq[T]] = {
+    val elemsWithGroupNumAssigned = seq.groupBy(_ => Gen.choose(0, n - 1).generate)
+    0.until(n).map(groupNum => elemsWithGroupNumAssigned.getOrElse(groupNum, Seq.empty))
   }
 }

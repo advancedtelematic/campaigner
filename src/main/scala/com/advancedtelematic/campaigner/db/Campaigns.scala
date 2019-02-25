@@ -91,13 +91,21 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
         CampaignStatus.values.map(s => s -> counts.getOrElse(s, 0)).toMap
       }
 
-  def countFinished(campaignId: CampaignId): Future[Long] =
-    campaignRepo.countDevices(campaignId) { status =>
+  /**
+   * Returns the number of devices that took part in the given campaigns and
+   * finished, either successfully or with a failure.
+   */
+  def countFinished(campaignIds: Set[CampaignId]): Future[Long] =
+    campaignRepo.countDevices(campaignIds) { status =>
       status === DeviceStatus.successful || status === DeviceStatus.failed
     }
 
-  def countCancelled(campaignId: CampaignId): Future[Long] =
-    campaignRepo.countDevices(campaignId) { status =>
+  /**
+   * Returns the number of devices that took part in the given campaigns, but
+   * were cancelled without being affected
+   */
+  def countCancelled(campaignIds: Set[CampaignId]): Future[Long] =
+    campaignRepo.countDevices(campaignIds) { status =>
       status === DeviceStatus.cancelled
     }
 
@@ -117,13 +125,29 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def findCampaignsByUpdate(update: UpdateId): Future[Seq[Campaign]] =
     db.run(campaignRepo.findByUpdateAction(update))
 
+  /**
+   * Calculate campaign-wide statistic counters, also taking retry campaings
+   * into account if any exist.
+   */
   def campaignStats(campaignId: CampaignId): Future[CampaignStats] = for {
-    status    <- findClientCampaign(campaignId).map(_.status)
-    finished  <- countFinished(campaignId)
-    cancelled <- countCancelled(campaignId)
-    failed    <- failedDevices(campaignId)
-    Stats(processed, affected) <- campaignStatsFor(campaignId)
-  } yield CampaignStats(campaignId, status, finished, failed, cancelled, processed, affected)
+    mainCampaign <- campaignRepo.find(campaignId)
+    retryCampaignIds <- campaignRepo.findChildIdsOf(campaignId)
+    Stats(mainProcessed, mainAffected) <- campaignStatsFor(campaignId)
+    Stats(retryProcessed, retryAffected) <- campaignStatsForAllOf(retryCampaignIds)
+    mainCancelled <- countCancelled(Set(campaignId))
+    retryCancelled <- countCancelled(retryCampaignIds)
+    mainFinished  <- countFinished(Set(campaignId))
+    // TODO replace with failed devices groups when implemented
+    failed <- failedDevices(campaignId)
+  } yield CampaignStats(
+    campaign = campaignId,
+    status = mainCampaign.status,
+    finished = mainFinished - (retryProcessed - retryAffected + retryCancelled),
+    failed = failed,
+    cancelled = mainCancelled + retryCancelled,
+    processed = mainProcessed,
+    affected  = mainAffected - (retryProcessed - retryAffected)
+  )
 
   def cancel(campaignId: CampaignId): Future[Unit] = db.run {
     campaignStatusTransition.cancel(campaignId)
@@ -155,8 +179,20 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def scheduleGroups(campaign: CampaignId, groups: NonEmptyList[GroupId]): Future[Unit] =
     db.run(scheduleGroupsAction(campaign, groups.toList.toSet))
 
+  /**
+   * Collects `processed` and `affected` counters for each group of the given
+   * campaign, sums the up, and returns campaign-wide numbers
+   */
   def campaignStatsFor(campaignId: CampaignId): Future[Stats] =
-    db.run(groupStatsRepo.findByCampaignAction(campaignId))
+    campaignStatsForAllOf(Set(campaignId))
+
+  /**
+   * Collects `processed` and `affected` counters for each group of each of the
+   * given campaigns, sums the up, and returns total numbers for all the
+   * campaigns
+   */
+  def campaignStatsForAllOf(campaignIds: Set[CampaignId]): Future[Stats] =
+    db.run(groupStatsRepo.findByCampaignsAction(campaignIds))
       .map(_.foldLeft(Stats(0, 0)) { case (acc, group) =>
         acc.copy(
           processed = acc.processed + group.processed,

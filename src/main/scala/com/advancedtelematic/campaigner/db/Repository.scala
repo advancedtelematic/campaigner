@@ -126,9 +126,14 @@ protected [db] class GroupStatsRepository()(implicit db: Database, ec: Execution
       .map(_ => ())
       .handleIntegrityErrors(CampaignMissing)
 
-  protected [db] def findByCampaignAction(campaign: CampaignId): DBIO[Seq[GroupStats]] =
+  protected [db] def findByCampaignAction(campaignId: CampaignId): DBIO[Seq[GroupStats]] =
     Schema.groupStats
-      .filter(_.campaignId === campaign)
+      .filter(_.campaignId === campaignId)
+      .result
+
+  protected [db] def findByCampaignsAction(campaignIds: Set[CampaignId]): DBIO[Seq[GroupStats]] =
+    Schema.groupStats
+      .filter(_.campaignId.inSet(campaignIds))
       .result
 
   protected [db] def persistManyAction(campaign: CampaignId, groups: Set[GroupId]): DBIO[Unit] =
@@ -241,9 +246,13 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
     .result
     .map(_.toMap)
 
-  def countDevices(campaign: CampaignId)(filterExpr: Rep[DeviceStatus] => Rep[Boolean]): Future[Long] = db.run {
+  /**
+   * Returns the number of devices that took part in the given campaigns and
+   * matched the filter expression.
+   */
+  def countDevices(campaignIds: Set[CampaignId])(filterExpr: Rep[DeviceStatus] => Rep[Boolean]): Future[Long] = db.run {
     Schema.campaigns
-      .filter(_.id === campaign)
+      .filter(_.id.inSet(campaignIds))
       .join(Schema.deviceUpdates)
       .on { case (c, u) => c.update === u.updateId && c.id === u.campaignId }
       .filter { case (_, update) => filterExpr(update.status) }
