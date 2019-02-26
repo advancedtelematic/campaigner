@@ -44,8 +44,7 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: 
           s"retryCampaignWith-mainCampaign-${mainCampaign.id.uuid}-failureCode-${request.failureCode}",
           mainCampaign.updateId,
           retryGroup,
-          Some(mainCampaign.id)
-        ).mkCampaign(ns)
+        ).mkRetryCampaign(ns, mainCampaign.id)
         campaigns.create(retryCampaign, retryGroup, Nil)
     }
   }

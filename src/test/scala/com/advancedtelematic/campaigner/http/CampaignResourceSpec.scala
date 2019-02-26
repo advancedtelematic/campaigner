@@ -54,7 +54,7 @@ class CampaignResourceSpec
       CampaignStatus.prepared,
       campaign.createdAt,
       campaign.updatedAt,
-      request.parentCampaignId,
+      None,
       Set.empty,
       request.groups.toList.toSet,
       request.metadata.toList.flatten,
@@ -66,66 +66,6 @@ class CampaignResourceSpec
     campaigns.values should contain (id)
 
     checkStats(id, CampaignStatus.prepared)
-  }
-
-  "POST /campaigns" should "set parent_campaign_id if a valid one is given" in {
-    Given("a valid parent ID")
-    val (parentId, _) = createCampaignWithUpdateOk()
-
-    When("a child campaign is created")
-    val (childId, request) = createCampaignWithUpdateOk(
-      genCreateCampaign().map(_.copy(parentCampaignId = Some(parentId))))
-
-    Then("the child campaign should have the parent campaign ID and other properties")
-    val childCampaign = getCampaignOk(childId)
-    childCampaign shouldBe GetCampaign(
-      testNs,
-      childId,
-      request.name,
-      request.update,
-      CampaignStatus.prepared,
-      childCampaign.createdAt,
-      childCampaign.updatedAt,
-      Some(parentId),
-      Set.empty,
-      request.groups.toList.toSet,
-      request.metadata.toList.flatten,
-      autoAccept = true
-    )
-    childCampaign.createdAt shouldBe childCampaign.updatedAt
-
-    And("the list of all campaings should NOT list the child campaign")
-    val campaigns = getCampaignsOk()
-    campaigns.values should not contain childId
-
-    And("the child campaign should have `prepared` status")
-    checkStats(childId, CampaignStatus.prepared)
-
-    And("the parent campaign should have the child campaing in child campaings list")
-    val parentCampaign = getCampaignOk(parentId)
-    parentCampaign.childCampaignIds should contain(childId)
-  }
-
-  "POST /campaigns" should "fail if parent_campaign_id does not refer to an existing campaign" in {
-      Given("a valid update")
-      val createUpdate = genCreateUpdate().map(cu =>
-          cu.copy(updateSource = UpdateSource(cu.updateSource.id, UpdateType.multi_target))
-      ).sample.get
-      val updateId = createUpdateOk(createUpdate)
-
-      Given("a non-existing parent campaign ID")
-      val genCreateCampaignWithInvalidParentId = for {
-        createCampaign <- genCreateCampaign()
-        parentId <- arbitrary[CampaignId]
-      } yield createCampaign.copy(parentCampaignId = Some(parentId), update = updateId)
-      val createCampaignWithInvalidParentId = genCreateCampaignWithInvalidParentId.sample.get
-
-      When("a child campaign is created")
-      Then("a PreconditionFailed error is raised")
-      createCampaign(createCampaignWithInvalidParentId) ~> routes ~> check {
-        status shouldBe PreconditionFailed
-        responseAs[ErrorRepresentation].code shouldBe Errors.MissingParentCampaign.code
-      }
   }
 
   "POST/GET autoAccept campaign" should "create and return the created campaign" in {
@@ -141,7 +81,7 @@ class CampaignResourceSpec
       CampaignStatus.prepared,
       campaign.createdAt,
       campaign.updatedAt,
-      request.parentCampaignId,
+      None,
       Set.empty,
       request.groups.toList.toSet,
       request.metadata.toList.flatten,

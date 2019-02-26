@@ -30,7 +30,7 @@ object DataType {
     status: CampaignStatus,
     createdAt: Instant,
     updatedAt: Instant,
-    parentCampaignId: Option[CampaignId],
+    mainCampaignId: Option[CampaignId],
     autoAccept: Boolean = true
   )
 
@@ -62,7 +62,6 @@ object DataType {
   final case class CreateCampaign(name: String,
                                   update: UpdateId,
                                   groups: NonEmptyList[GroupId],
-                                  parentCampaignId: Option[CampaignId],
                                   metadata: Option[Seq[CreateCampaignMetadata]] = None,
                                   approvalNeeded: Option[Boolean] = Some(false))
   {
@@ -75,13 +74,16 @@ object DataType {
         CampaignStatus.prepared,
         Instant.now(),
         Instant.now(),
-        parentCampaignId,
+        None,
         !approvalNeeded.getOrElse(false)
       )
     }
 
     def mkCampaignMetadata(campaignId: CampaignId): Seq[CampaignMetadata] =
       metadata.toList.flatten.map(_.toCampaignMetadata(campaignId))
+
+    def mkRetryCampaign(ns:Namespace, mainCampaign: CampaignId): Campaign =
+      mkCampaign(ns).copy(mainCampaignId = Some(mainCampaign))
   }
 
   final case class RetryFailedDevices(failureCode: String)
@@ -111,7 +113,7 @@ object DataType {
         c.status,
         c.createdAt,
         c.updatedAt,
-        c.parentCampaignId,
+        c.mainCampaignId,
         childCampaignIds,
         groups,
         metadata.map(m => CreateCampaignMetadata(m.`type`, m.value)),
