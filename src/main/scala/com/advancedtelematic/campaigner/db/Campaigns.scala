@@ -102,7 +102,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 
   /**
    * Returns the number of devices that took part in the given campaigns, but
-   * were cancelled without being affected
+   * were cancelled before the update could be applied.
    */
   def countCancelled(campaignIds: Set[CampaignId]): Future[Long] =
     campaignRepo.countDevices(campaignIds) { status =>
@@ -181,14 +181,14 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 
   /**
    * Collects `processed` and `affected` counters for each group of the given
-   * campaign, sums the up, and returns campaign-wide numbers
+   * campaign, sums them up, and returns campaign-wide numbers
    */
   def campaignStatsFor(campaignId: CampaignId): Future[Stats] =
     campaignStatsForAllOf(Set(campaignId))
 
   /**
    * Collects `processed` and `affected` counters for each group of each of the
-   * given campaigns, sums the up, and returns total numbers for all the
+   * given campaigns, sums them up, and returns total numbers for all the
    * campaigns
    */
   def campaignStatsForAllOf(campaignIds: Set[CampaignId]): Future[Stats] =

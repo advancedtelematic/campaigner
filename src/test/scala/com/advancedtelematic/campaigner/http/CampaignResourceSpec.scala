@@ -392,7 +392,6 @@ class CampaignResourceSpec
       _ <- campaigns.finishDevices(campaignId, campaignCase.successfulDevices, DeviceStatus.successful)
     } yield ()
 
-<<<<<<< HEAD
     forAll (genCampaignCase) ((mainCase) => {
       val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk(
         genCreateCampaign().map(_.copy(groups = NonEmptyList.one(mainCase.groupId)))
@@ -405,7 +404,7 @@ class CampaignResourceSpec
         val campaignStats = responseAs[CampaignStats]
         campaignStats.status shouldBe CampaignStatus.finished
         campaignStats.finished shouldBe (mainCase.successfulDevices.size + mainCase.failedDevices.size)
-        campaignStats.failed should contain theSameElementsAs(mainCase.failedDevices)
+        campaignStats.failed should contain theSameElementsAs mainCase.failedDevices
         campaignStats.cancelled shouldBe mainCase.cancelledDevices.size
         campaignStats.processed shouldBe mainCase.processedCount
         campaignStats.affected shouldBe mainCase.affectedCount
