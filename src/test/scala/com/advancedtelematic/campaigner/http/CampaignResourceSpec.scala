@@ -23,13 +23,15 @@ import org.scalacheck.Arbitrary._
 import org.scalacheck.Gen
 import org.scalactic.source
 import org.scalatest._
+import org.scalatest.prop.PropertyChecks
 
 class CampaignResourceSpec
     extends CampaignerSpec
     with ResourceSpec
     with CampaignSupport
     with UpdateResourceSpecUtil
-    with GivenWhenThen {
+    with GivenWhenThen
+    with PropertyChecks {
 
   val campaigns = Campaigns()
 
@@ -356,39 +358,36 @@ class CampaignResourceSpec
   }
 
   "GET /campaigns/:id/stats" should "return correct statistics" in {
-    val campaigns = Campaigns()
-    val groupId = genGroupId.generate
+    forAll (Gen.listOf(genDeviceId), Gen.listOf(genDeviceId), Gen.listOf(genDeviceId), Gen.choose(0, 5)) {
+      (successDevices, failedDevices, cancelledDevices, notAffectedCount) => {
+        val campaigns = Campaigns()
+        val groupId = genGroupId.generate
 
-    val successDevices = Gen.listOf(genDeviceId).generate
-    val failedDevices = Gen.listOf(genDeviceId).generate
-    val cancelledDevices = Gen.listOf(genDeviceId).generate
-    val affectedDevices = successDevices ++ failedDevices ++ cancelledDevices
-    val notAffectedCount = Gen.choose(0, 5).generate
-    val affectedCount = affectedDevices.size
-    val processedCount = affectedCount + notAffectedCount
+        val affectedDevices = successDevices ++ failedDevices ++ cancelledDevices
+        val affectedCount = affectedDevices.size
+        val processedCount = affectedCount + notAffectedCount
 
-    Given("a main campaign")
-    val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk(
-      genCreateCampaign().map(_.copy(groups = NonEmptyList.one(groupId)))
-    )
-    campaigns.launch(mainCampaignId).futureValue
-    campaigns.completeGroup(mainCampaignId, groupId, Stats(processedCount, affectedCount)).futureValue
-    campaigns.scheduleDevices(mainCampaignId, mainCampaign.update, affectedDevices:_*).futureValue
-    campaigns.finishDevices(mainCampaignId, cancelledDevices, DeviceStatus.cancelled).futureValue
-    campaigns.finishDevices(mainCampaignId, failedDevices, DeviceStatus.failed).futureValue
-    campaigns.finishDevices(mainCampaignId, successDevices, DeviceStatus.successful).futureValue
+        val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk(
+          genCreateCampaign().map(_.copy(groups = NonEmptyList.one(groupId)))
+        )
+        campaigns.launch(mainCampaignId).futureValue
+        campaigns.completeGroup(mainCampaignId, groupId, Stats(processedCount, affectedCount)).futureValue
+        campaigns.scheduleDevices(mainCampaignId, mainCampaign.update, affectedDevices:_*).futureValue
+        campaigns.finishDevices(mainCampaignId, cancelledDevices, DeviceStatus.cancelled).futureValue
+        campaigns.finishDevices(mainCampaignId, failedDevices, DeviceStatus.failed).futureValue
+        campaigns.finishDevices(mainCampaignId, successDevices, DeviceStatus.successful).futureValue
 
-    When("requesting the stats")
-    Get(apiUri(s"campaigns/${mainCampaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
-      status shouldBe OK
+        Get(apiUri(s"campaigns/${mainCampaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
+          status shouldBe OK
 
-      Then("the stats should be correct")
-      val campaignStats = responseAs[CampaignStats]
-      campaignStats.status shouldBe CampaignStatus.finished
-      campaignStats.finished shouldBe (successDevices.size + failedDevices.size)
-      campaignStats.failed should contain theSameElementsAs(failedDevices)
-      campaignStats.cancelled shouldBe cancelledDevices.size
-      campaignStats.stats(groupId) shouldBe Stats(processedCount, affectedCount)
+          val campaignStats = responseAs[CampaignStats]
+          campaignStats.status shouldBe CampaignStatus.finished
+          campaignStats.finished shouldBe (successDevices.size + failedDevices.size)
+          campaignStats.failed should contain theSameElementsAs(failedDevices)
+          campaignStats.cancelled shouldBe cancelledDevices.size
+          campaignStats.stats(groupId) shouldBe Stats(processedCount, affectedCount)
+        }
+      }
     }
   }
 }
