@@ -36,14 +36,14 @@ class CampaignResourceSpec
 
   val campaigns = Campaigns()
 
-  def checkStats(id: CampaignId, campaignStatus: CampaignStatus, stats: Stats = Stats(0, 0),
+  def checkStats(id: CampaignId, campaignStatus: CampaignStatus, processed: Long = 0, affected: Long = 0,
                  finished: Long = 0, failed: Set[DeviceId] = Set.empty, cancelled: Long = 0)
                 (implicit pos: source.Position): Unit =
     Get(apiUri(s"campaigns/${id.show}/stats")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
       val campaignStats = responseAs[CampaignStats]
       campaignStats.status shouldBe campaignStatus
-      campaignStats shouldBe CampaignStats(id, campaignStatus, finished, failed, cancelled, stats.processed, stats.affected)
+      campaignStats shouldBe CampaignStats(id, campaignStatus, finished, failed, cancelled, processed, affected)
     }
 
   "POST and GET /campaigns" should "create a campaign, return the created campaign" in {
@@ -380,7 +380,7 @@ class CampaignResourceSpec
       successfulDevices <- Gen.listOf(genDeviceId)
       failedDevices <- Gen.listOf(genDeviceId)
       cancelledDevices <- Gen.listOf(genDeviceId)
-      notAffectedCount <- Gen.choose(0, 5)
+      notAffectedCount <- Gen.choose[Long](0, 5)
     } yield CampaignCase(successfulDevices, failedDevices, cancelledDevices, notAffectedCount)
 
     def conductCampaign(campaignId: CampaignId, campaign: CreateCampaign, campaignCase: CampaignCase): Future[Unit] = for {
