@@ -5,20 +5,30 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
 import com.advancedtelematic.campaigner.http.Errors
 import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId, MultiTargetUpdateId}
-import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceInstallationReport
+import com.advancedtelematic.libats.messaging_datatype.Messages.{
+  DeviceUpdateEvent,
+  DeviceUpdateCanceled,
+  DeviceUpdateCompleted}
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class DeviceInstallationReportListener()(implicit db: Database, ec: ExecutionContext)
-  extends (DeviceInstallationReport => Future[Unit]) with UpdateSupport {
+class DeviceUpdateEventListener()(implicit db: Database, ec: ExecutionContext)
+  extends (DeviceUpdateEvent => Future[Unit]) with UpdateSupport {
 
   private lazy val _log = LoggerFactory.getLogger(this.getClass)
 
   val campaigns = Campaigns()
 
-  def apply(msg: DeviceInstallationReport): Future[Unit] = {
+  def apply(event: DeviceUpdateEvent): Future[Unit] = {
+    event match {
+      case msg: DeviceUpdateCompleted => handleUpdateCompleted(msg)
+      case _ => Future.successful(())
+    }
+  }
+
+  def handleUpdateCompleted(msg: DeviceUpdateCompleted): Future[Unit] = {
     val resultStatus = if (msg.result.success)
       DeviceStatus.successful
     else
@@ -26,10 +36,10 @@ class DeviceInstallationReportListener()(implicit db: Database, ec: ExecutionCon
 
     val f = msg.correlationId match {
       case CampaignCorrelationId(uuid) =>
-        campaigns.finishDevices(CampaignId(uuid), Seq(msg.device), resultStatus)
+        campaigns.finishDevices(CampaignId(uuid), Seq(msg.deviceUuid), resultStatus)
       case MultiTargetUpdateId(uuid) => for {
         update <- updateRepo.findByExternalId(msg.namespace, ExternalUpdateId(uuid.toString))
-        _ <- campaigns.finishDevice(update.uuid, msg.device, resultStatus)
+        _ <- campaigns.finishDevice(update.uuid, msg.deviceUuid, resultStatus)
       } yield ()
     }
 
@@ -37,7 +47,7 @@ class DeviceInstallationReportListener()(implicit db: Database, ec: ExecutionCon
       case Errors.MissingExternalUpdate(_) =>
         _log.info(s"Could not find an update with external id ${msg.correlationId}, ignoring message")
       case Errors.DeviceNotScheduled =>
-        _log.info(s"Got DeviceUpdateReport for device ${msg.device.show} which is not scheduled by campaigner, ignoring this message.")
+        _log.info(s"Got DeviceUpdateEvent for device ${msg.deviceUuid.show} which is not scheduled by campaigner, ignoring this message.")
     }
   }
 }

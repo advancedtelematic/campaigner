@@ -10,19 +10,19 @@ import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, Upda
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil}
 import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId, MultiTargetUpdateId, CorrelationId}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, InstallationResult}
-import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceInstallationReport
+import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceUpdateEvent, DeviceUpdateCompleted}
 import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.Arbitrary._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class DeviceInstallationReportListenerSpec extends CampaignerSpec
+class DeviceUpdateEventListenerSpec extends CampaignerSpec
   with DatabaseSpec
   with DeviceUpdateSupport
   with UpdateSupport
   with DatabaseUpdateSpecUtil {
 
-  val listener = new DeviceInstallationReportListener()
+  val listener = new DeviceUpdateEventListener()
 
   val campaigns = Campaigns()
 
@@ -93,7 +93,7 @@ class DeviceInstallationReportListenerSpec extends CampaignerSpec
       campaign: Campaign,
       deviceUpdate: DeviceUpdate,
       correlationId: CorrelationId,
-      isSuccessful: Boolean): DeviceInstallationReport = {
+      isSuccessful: Boolean): DeviceUpdateEvent = {
 
     val installationResult =
       if (isSuccessful) {
@@ -102,12 +102,13 @@ class DeviceInstallationReportListenerSpec extends CampaignerSpec
         InstallationResult(false, "FAILURE", "Failed update")
       }
 
-    DeviceInstallationReport(campaign.namespace,
-      deviceUpdate.device,
+    DeviceUpdateCompleted(
+      campaign.namespace,
+      Instant.now,
       correlationId,
+      deviceUpdate.device,
       installationResult,
       Map.empty,
-      None,
-      Instant.now)
+      None)
   }
 }
