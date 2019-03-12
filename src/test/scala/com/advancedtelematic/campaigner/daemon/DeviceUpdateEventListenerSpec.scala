@@ -10,7 +10,10 @@ import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, Upda
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil}
 import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId, MultiTargetUpdateId, CorrelationId}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, InstallationResult}
-import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceUpdateEvent, DeviceUpdateCompleted}
+import com.advancedtelematic.libats.messaging_datatype.Messages.{
+  DeviceUpdateEvent,
+  DeviceUpdateCanceled,
+  DeviceUpdateCompleted}
 import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.Arbitrary._
 
@@ -72,6 +75,18 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
 
     listener.apply(report).futureValue shouldBe (())
     deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.failed).futureValue should contain(deviceUpdate.device)
+  }
+
+  "Listener" should "mark a device as canceled using campaign CorrelationId" in {
+    val (updateSource, campaign, deviceUpdate) = prepareTest()
+    val event = DeviceUpdateCanceled(
+      campaign.namespace,
+      Instant.now,
+      CampaignCorrelationId(campaign.id.uuid),
+      deviceUpdate.device)
+
+    listener.apply(event).futureValue shouldBe (())
+    deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.cancelled).futureValue should contain(deviceUpdate.device)
   }
 
   private def prepareTest(): (UpdateSource, Campaign, DeviceUpdate) = {

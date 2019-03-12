@@ -226,8 +226,6 @@ class CampaignResourceSpec
       status shouldBe OK
     }
 
-    checkStats(campaignId, CampaignStatus.launched)
-
     campaigns.scheduleDevices(campaignId, updateId, device).futureValue
 
     val correlationId: CorrelationId = MultiTargetUpdateId(updateId.uuid)
@@ -236,49 +234,6 @@ class CampaignResourceSpec
       status shouldBe OK
       fakeDirector.cancelled.contains(device) shouldBe true
     }
-
-    checkStats(campaignId, CampaignStatus.launched, finished = 0, failed = Set.empty, cancelled = 1)
-  }
-
-  it should "cancel a single device by campaign correlation id" in {
-    val (campaignId, campaign) = createCampaignWithUpdateOk()
-    val device = DeviceId.generate()
-
-    Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header) ~> routes ~> check {
-      status shouldBe OK
-    }
-
-    checkStats(campaignId, CampaignStatus.launched)
-
-    val correlationId: CorrelationId = CampaignCorrelationId(campaignId.uuid)
-    val entity = Json.obj("correlationId" -> correlationId.asJson, "device" -> device.asJson)
-    Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
-      status shouldBe PreconditionFailed
-      fakeDirector.cancelled.contains(device) shouldBe true
-    }
-
-    checkStats(campaignId, CampaignStatus.launched)
-  }
-
-  it should "fail if device has not been scheduled" in {
-    val (campaignId, campaign) = createCampaignWithUpdateOk()
-    val updateId = campaign.update
-    val device     = DeviceId.generate()
-
-    Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header) ~> routes ~> check {
-      status shouldBe OK
-    }
-
-    checkStats(campaignId, CampaignStatus.launched)
-
-    val correlationId: CorrelationId = MultiTargetUpdateId(updateId.uuid)
-    val entity = Json.obj("correlationId" -> correlationId.asJson, "device" -> device.asJson)
-    Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
-      status shouldBe PreconditionFailed
-      fakeDirector.cancelled.contains(device) shouldBe true
-    }
-
-    checkStats(campaignId, CampaignStatus.launched)
   }
 
   it should "accept request to cancel device if no campaign is associated" in {
