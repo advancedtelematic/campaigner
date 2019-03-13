@@ -63,10 +63,11 @@ class CampaignsSpec extends AsyncFlatSpec
         Stats(processed, affected)
       )
       status <- groupStatsRepo.groupStatusFor(campaign.id, group)
-      stats <- campaigns.campaignStatsFor(campaign.id)
+      stats <- campaigns.campaignStats(campaign.id)
     } yield {
       status shouldBe Some(GroupStatus.scheduled)
-      stats  shouldBe Map(group -> Stats(processed, affected))
+      stats.affected shouldBe affected
+      stats.processed shouldBe processed
     }
   }
 
@@ -94,10 +95,11 @@ class CampaignsSpec extends AsyncFlatSpec
         Stats(processed, affected)
       )
       status <- groupStatsRepo.groupStatusFor(campaign.id, group)
-      stats  <- campaigns.campaignStatsFor(campaign.id)
+      stats  <- campaigns.campaignStats(campaign.id)
     } yield {
       status shouldBe Some(GroupStatus.launched)
-      stats  shouldBe Map(group -> Stats(processed, affected))
+      stats.affected shouldBe affected
+      stats.processed shouldBe processed
     }
   }
 
@@ -111,8 +113,8 @@ class CampaignsSpec extends AsyncFlatSpec
       newCampaigns <- FastFuture.traverse(arbitrary[Seq[Int]].generate)(_ => createDbCampaign(ns, update, group))
       _ <- FastFuture.traverse(newCampaigns)(c => campaigns.scheduleDevices(c.id, update, device))
       _ <- campaigns.finishDevice(update, device, DeviceStatus.successful)
-      c <- campaigns.countFinished(newCampaigns.head.id)
-    } yield c shouldBe 1
+      stats <- campaigns.campaignStats(newCampaigns.head.id)
+    } yield stats.finished shouldBe 1
   }
 
   "finishing devices" should "work with one campaign" in {
@@ -122,7 +124,7 @@ class CampaignsSpec extends AsyncFlatSpec
       campaign <- createDbCampaignWithUpdate()
       _ <- FastFuture.traverse(devices)(d => campaigns.scheduleDevices(campaign.id, campaign.updateId, d))
       _ <- FastFuture.traverse(devices)(d => campaigns.finishDevice(campaign.updateId, d, DeviceStatus.failed))
-      c <- campaigns.countFinished(campaign.id)
-    } yield c shouldBe devices.length
+      stats <- campaigns.campaignStats(campaign.id)
+    } yield stats.finished shouldBe devices.length
   }
 }

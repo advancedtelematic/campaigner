@@ -51,11 +51,13 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     campaignStatusTransition.completeGroup(campaign, group, stats).transactionally
   }
 
-  def failedDevices(campaign: CampaignId): Future[Set[DeviceId]] = db.run {
+  /**
+   * Given a campaign ID, returns IDs of all devices that are in `failed` state
+   */
+  private def findFailedDevicesAction(campaign: CampaignId): DBIO[Set[DeviceId]] =
     campaignRepo.findAction(campaign).flatMap { _ =>
       deviceUpdateRepo.findByCampaignAction(campaign, DeviceStatus.failed)
     }
-  }
 
   def freshCancelled(): Future[Seq[(Namespace, CampaignId)]] =
     cancelTaskRepo.findPending()
@@ -91,13 +93,21 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
         CampaignStatus.values.map(s => s -> counts.getOrElse(s, 0)).toMap
       }
 
-  def countFinished(campaignId: CampaignId): Future[Long] =
-    campaignRepo.countDevices(campaignId) { status =>
+  /**
+   * Returns the number of devices that took part in the given campaigns and
+   * finished, either successfully or with a failure.
+   */
+  private def countFinishedAction(campaignIds: Set[CampaignId]): DBIO[Long] =
+    campaignRepo.countDevices(campaignIds) { status =>
       status === DeviceStatus.successful || status === DeviceStatus.failed
     }
 
-  def countCancelled(campaignId: CampaignId): Future[Long] =
-    campaignRepo.countDevices(campaignId) { status =>
+  /**
+   * Returns the number of devices that took part in the given campaigns, but
+   * were cancelled before the update could be applied.
+   */
+  private def countCancelledAction(campaignIds: Set[CampaignId]): DBIO[Long] =
+    campaignRepo.countDevices(campaignIds) { status =>
       status === DeviceStatus.cancelled
     }
 
@@ -117,13 +127,33 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def findCampaignsByUpdate(update: UpdateId): Future[Seq[Campaign]] =
     db.run(campaignRepo.findByUpdateAction(update))
 
-  def campaignStats(campaignId: CampaignId): Future[CampaignStats] = for {
-    status    <- findClientCampaign(campaignId).map(_.status)
-    finished  <- countFinished(campaignId)
-    cancelled <- countCancelled(campaignId)
-    failed    <- failedDevices(campaignId)
-    stats     <- campaignStatsFor(campaignId)
-  } yield CampaignStats(campaignId, status, finished, failed, cancelled, stats)
+  /**
+   * Calculates campaign-wide statistic counters, also taking retry campaings
+   * into account if any exist.
+   */
+  def campaignStats(campaignId: CampaignId): Future[CampaignStats] = db.run {
+    val statsAction = for {
+      mainCampaign <- campaignRepo.findAction(campaignId)
+      retryCampaignIds <- campaignRepo.findChildIdsOfAction(campaignId)
+      (mainProcessed, mainAffected) <- countProcessedAndAffectedDevicesForAllOfAction(Set(campaignId))
+      (retryProcessed, retryAffected) <- countProcessedAndAffectedDevicesForAllOfAction(retryCampaignIds)
+      mainCancelled <- countCancelledAction(Set(campaignId))
+      retryCancelled <- countCancelledAction(retryCampaignIds)
+      mainFinished  <- countFinishedAction(Set(campaignId))
+      // TODO replace with failed devices groups when implemented
+      failed <- findFailedDevicesAction(campaignId)
+    } yield CampaignStats(
+      campaign = campaignId,
+      status = mainCampaign.status,
+      finished = mainFinished - (retryProcessed - retryAffected + retryCancelled),
+      failed = failed,
+      cancelled = mainCancelled + retryCancelled,
+      processed = mainProcessed,
+      affected  = mainAffected - (retryProcessed - retryAffected)
+    )
+
+    statsAction.transactionally
+  }
 
   def cancel(campaignId: CampaignId): Future[Unit] = db.run {
     campaignStatusTransition.cancel(campaignId)
@@ -155,16 +185,16 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def scheduleGroups(campaign: CampaignId, groups: NonEmptyList[GroupId]): Future[Unit] =
     db.run(scheduleGroupsAction(campaign, groups.toList.toSet))
 
-  def campaignStatsFor(campaign: CampaignId): Future[Map[GroupId, Stats]] =
-    db.run {
-      campaignRepo.findAction(campaign).flatMap { _ =>
-        groupStatsRepo.findByCampaignAction(campaign)
-      }
-    }.map {
-      _.groupBy(_.group).map {
-        case (group, stats +: _) => (group, Stats(stats.processed, stats.affected))
-      }
-    }
+  /**
+   * Collects `processed` and `affected` counters for each group of each of the
+   * given campaigns, sums them up, and returns total numbers for all the
+   * campaigns
+   */
+  private def countProcessedAndAffectedDevicesForAllOfAction(campaignIds: Set[CampaignId]): DBIO[(Long, Long)] =
+    groupStatsRepo.findByCampaignsAction(campaignIds)
+      .map(_.foldLeft((0L, 0L)) { case ((totalProcessed, totalAffected), group) =>
+        (totalProcessed + group.processed, totalAffected + group.affected)
+      })
 
   private def findGroupsAction(campaignId: CampaignId): DBIO[Set[GroupId]] =
     campaignRepo.findAction(campaignId).flatMap { _ =>

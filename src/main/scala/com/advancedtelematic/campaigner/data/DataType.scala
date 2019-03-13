@@ -136,7 +136,8 @@ object DataType {
     finished: Long,
     failed: Set[DeviceId],
     cancelled: Long,
-    stats: Map[GroupId, Stats]
+    processed: Long,
+    affected: Long
   )
 
   final case class DeviceUpdate(
