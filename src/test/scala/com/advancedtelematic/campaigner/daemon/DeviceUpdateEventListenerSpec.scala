@@ -98,7 +98,7 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
 
     val campaign = arbitrary[Campaign].generate.copy(namespace = update.namespace, updateId = update.uuid)
     val group = NonEmptyList.one(GroupId.generate())
-    campaigns.create(campaign, group, Seq.empty).futureValue
+    campaigns.create(campaign, group, Set.empty, Seq.empty).futureValue
 
     val deviceUpdate = DeviceUpdate(campaign.id, update.uuid, DeviceId.generate(), DeviceStatus.accepted)
     deviceUpdateRepo.persistMany(Seq(deviceUpdate)).futureValue

@@ -187,8 +187,8 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     io.transactionally
   }
 
-  def create(campaign: Campaign, groups: NonEmptyList[GroupId], metadata: Seq[CampaignMetadata]): Future[CampaignId] =
-    campaignRepo.persist(campaign, groups.toList.toSet, metadata)
+  def create(campaign: Campaign, groups: NonEmptyList[GroupId], devices: Set[DeviceId], metadata: Seq[CampaignMetadata]): Future[CampaignId] =
+    campaignRepo.persist(campaign, groups.toList.toSet, devices, metadata)
 
   def update(id: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
     campaignRepo.update(id, name, metadata)

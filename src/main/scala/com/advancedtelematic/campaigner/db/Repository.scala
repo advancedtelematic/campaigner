@@ -188,13 +188,14 @@ protected [db] class GroupStatsRepository()(implicit db: Database, ec: Execution
 protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext) {
   import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 
-  def persist(campaign: Campaign, groups: Set[GroupId], metadata: Seq[CampaignMetadata]): Future[CampaignId] = db.run {
+  def persist(campaign: Campaign, groups: Set[GroupId], devices: Set[DeviceId], metadata: Seq[CampaignMetadata]): Future[CampaignId] = db.run {
     val f = for {
       _ <- (Schema.campaigns += campaign).recover {
         case Failure(UpdateFKViolation()) => DBIO.failed(MissingUpdateSource)
         case Failure(CampaignFKViolation()) => DBIO.failed(MissingMainCampaign)
       }.handleIntegrityErrors(ConflictingCampaign)
       _ <- Schema.campaignGroups ++= groups.map(campaign.id -> _)
+      < <- Schema.deviceUpdates ++= devices.map(did => DeviceUpdate(campaign.id, campaign.updateId, did, DeviceStatus.requested))
       _ <- (Schema.campaignMetadata ++= metadata).handleIntegrityErrors(ConflictingMetadata)
     } yield campaign.id
 

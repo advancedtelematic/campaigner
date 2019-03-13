@@ -41,8 +41,9 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     val props  = GroupScheduler.props(deviceRegistry, director, 10.minutes, schedulerBatchSize, campaign, group)
 
     clearClientState()
-    deviceRegistry.setGroup(group, arbitrary[Seq[DeviceId]].generate)
-    campaigns.create(campaign, NonEmptyList.one(group), Seq.empty).futureValue
+    val devs = arbitrary[Seq[DeviceId]].generate
+    deviceRegistry.setGroup(group, devs)
+    campaigns.create(campaign, NonEmptyList.one(group), devs.toSet, Seq.empty).futureValue
 
     parent.childActorOf(props)
 
@@ -61,7 +62,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     val n        = Gen.choose(batch, batch * 10).generate
     val devs     = Gen.listOfN(n, genDeviceId).generate
 
-    campaigns.create(campaign, NonEmptyList.one(group), Seq.empty).futureValue
+    campaigns.create(campaign, NonEmptyList.one(group), devs.toSet, Seq.empty).futureValue
 
     clearClientState()
     deviceRegistry.setGroup(group, devs)
@@ -89,7 +90,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     clearClientState()
 
     deviceRegistry.setGroup(group, devs)
-    campaigns.create(campaign, NonEmptyList.one(group), Seq.empty).futureValue
+    campaigns.create(campaign, NonEmptyList.one(group), devs.toSet, Seq.empty).futureValue
     director.affected.put(update.source.id, devs.toSet)
 
     val parent = TestProbe()
@@ -113,7 +114,7 @@ class GroupSchedulerSpec extends ActorSpec[GroupScheduler] with CampaignerSpec w
     val n        = Gen.choose(1, batch-1).generate
     val devs     = Gen.listOfN(n, genDeviceId).generate
 
-    campaigns.create(campaign, NonEmptyList.one(group), Seq.empty).futureValue
+    campaigns.create(campaign, NonEmptyList.one(group), devs.toSet, Seq.empty).futureValue
 
     clearClientState()
     deviceRegistry.setGroup(group, devs)

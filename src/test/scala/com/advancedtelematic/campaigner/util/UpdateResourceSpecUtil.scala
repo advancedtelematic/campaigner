@@ -50,7 +50,7 @@ trait DatabaseUpdateSpecUtil {
 
   def createDbCampaign(namespace: Namespace, updateId: UpdateId, groups: NonEmptyList[GroupId]): Future[Campaign] = {
     val campaign = arbitrary[Campaign].generate.copy(updateId = updateId, namespace = namespace)
-    campaigns.create(campaign, groups, Seq.empty).map(_ => campaign)
+    campaigns.create(campaign, groups, Set.empty, Seq.empty).map(_ => campaign)
   }
 
   def createDbCampaignWithUpdate(maybeCampaign: Option[Campaign] = None, maybeGroups: Option[NonEmptyList[GroupId]] = None): Future[Campaign] = {
@@ -58,7 +58,7 @@ trait DatabaseUpdateSpecUtil {
     val groups = maybeGroups.getOrElse(NonEmptyList.one(GroupId.generate()))
     for {
       _ <- createDbUpdate(campaign.updateId)
-      _ <- campaigns.create(campaign, groups, Seq.empty)
+      _ <- campaigns.create(campaign, groups, Set.empty, Seq.empty)
     }  yield campaign
   }
 }
