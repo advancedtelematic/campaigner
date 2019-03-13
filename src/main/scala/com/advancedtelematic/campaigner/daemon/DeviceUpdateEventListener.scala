@@ -8,6 +8,7 @@ import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrela
 import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
 import com.advancedtelematic.libats.messaging_datatype.Messages.{
   DeviceUpdateEvent,
+  DeviceUpdateAssigned,
   DeviceUpdateCanceled,
   DeviceUpdateCompleted}
 import org.slf4j.LoggerFactory
@@ -24,6 +25,7 @@ class DeviceUpdateEventListener()(implicit db: Database, ec: ExecutionContext)
 
   def apply(event: DeviceUpdateEvent): Future[Unit] = {
     event match {
+      case _: DeviceUpdateAssigned => Future.successful(())
       case msg: DeviceUpdateCanceled  => handleUpdateCanceled(msg)
       case msg: DeviceUpdateCompleted => handleUpdateCompleted(msg)
       case _ => Future.successful(())

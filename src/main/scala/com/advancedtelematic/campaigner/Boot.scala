@@ -8,6 +8,7 @@ import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.http.{BootApp, ServiceHttpClientSupport}
+import com.advancedtelematic.libats.messaging.MessageBus
 import com.advancedtelematic.libats.slick.db.DatabaseConfig
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
@@ -58,10 +59,12 @@ object Boot extends BootApp
   val userProfile = new UserProfileHttpClient(userProfileUri, defaultHttpClient)
   val resolver = new ResolverHttpClient(defaultHttpClient)
 
+  lazy val messageBus = MessageBus.publisher(system, config)
+
   val routes: Route =
     (versionHeaders(version) & requestMetrics(metricRegistry) & logResponseMetrics(projectName)) {
       prometheusMetricsRoutes ~
-        new Routes(director, deviceRegistry, resolver, userProfile).routes
+        new Routes(director, deviceRegistry, resolver, userProfile, messageBus).routes
     }
 
   Http().bindAndHandle(routes, host, port)

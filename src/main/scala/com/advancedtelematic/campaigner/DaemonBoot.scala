@@ -7,7 +7,7 @@ import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.daemon._
 import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.http.{BootApp, ServiceHttpClientSupport}
-import com.advancedtelematic.libats.messaging.{BusListenerMetrics, MessageListenerSupport}
+import com.advancedtelematic.libats.messaging.{BusListenerMetrics, MessageBus, MessageListenerSupport}
 import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceEventMessage, DeviceUpdateEvent}
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.slick.monitoring.{DatabaseMetrics, DbHealthResource}
@@ -31,11 +31,13 @@ object DaemonBoot extends BootApp
 
   log.info("Starting campaigner daemon")
 
+  lazy val messageBus = MessageBus.publisher(system, config)
   val deviceRegistry = new DeviceRegistryHttpClient(deviceRegistryUri, defaultHttpClient)
   val director = new DirectorHttpClient(directorUri, defaultHttpClient)
   val supervisor = system.actorOf(CampaignSupervisor.props(
     deviceRegistry,
     director,
+    messageBus,
     schedulerPollingTimeout,
     schedulerDelay,
     schedulerBatchSize

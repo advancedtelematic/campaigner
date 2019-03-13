@@ -14,13 +14,14 @@ import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.auth.AuthedNamespaceScope
 import com.advancedtelematic.libats.data.DataType.{CorrelationId, Namespace}
 import com.advancedtelematic.libats.http.UUIDKeyAkka._
+import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: DirectorClient)
+class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: DirectorClient, messageBus: MessageBusPublisher)
                       (implicit db: Database, ec: ExecutionContext) extends Settings {
 
   val campaigns = Campaigns()

@@ -14,6 +14,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
+import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libats.test.DatabaseSpec
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
@@ -39,8 +40,9 @@ trait ResourceSpec extends ScalatestRouteTest
   val fakeRegistry = new FakeDeviceRegistry
   val fakeUserProfile = new FakeUserProfileClient
   val fakeResolver = new FakeResolverClient
+  val messageBus = MessageBusPublisher.ignore
 
-  lazy val routes: Route = new Routes(fakeDirector, fakeRegistry, fakeResolver, fakeUserProfile).routes
+  lazy val routes: Route = new Routes(fakeDirector, fakeRegistry, fakeResolver, fakeUserProfile, messageBus).routes
 
   def createCampaign(request: Json): HttpRequest =
     Post(apiUri("campaigns"), request).withHeaders(header)

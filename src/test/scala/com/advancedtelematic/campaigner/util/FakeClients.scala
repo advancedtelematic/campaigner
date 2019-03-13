@@ -8,7 +8,6 @@ import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, DirectorCl
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.data.DataType.{CorrelationId, Namespace}
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
-import org.scalacheck.Gen
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
@@ -33,14 +32,6 @@ class FakeDirectorClient extends DirectorClient with CampaignerSpecUtil {
     })
 
     FastFuture.successful(affected)
-  }
-
-  override def cancelUpdate(
-    ns: Namespace,
-    devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
-    val devs = Gen.someOf(devices).generate
-    cancelled.addAll(devs.asJava)
-    FastFuture.successful(devs)
   }
 
   override def cancelUpdate(

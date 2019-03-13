@@ -7,6 +7,7 @@ import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.messaging.MessageBusPublisher
 
 import scala.concurrent.duration._
 import slick.jdbc.MySQLProfile.api._
@@ -25,16 +26,18 @@ object CampaignSupervisor {
 
   def props(registry: DeviceRegistryClient,
             director: DirectorClient,
+            messageBus: MessageBusPublisher,
             pollingTimeout: FiniteDuration,
             delay: FiniteDuration,
             batchSize: Long)
            (implicit db: Database, mat: Materializer): Props =
-    Props(new CampaignSupervisor(registry, director, pollingTimeout, delay, batchSize))
+    Props(new CampaignSupervisor(registry, director, messageBus, pollingTimeout, delay, batchSize))
 
 }
 
 class CampaignSupervisor(registry: DeviceRegistryClient,
                          director: DirectorClient,
+                         messageBus: MessageBusPublisher,
                          pollingTimeout: FiniteDuration,
                          delay: FiniteDuration,
                          batchSize: Long)
@@ -72,7 +75,7 @@ class CampaignSupervisor(registry: DeviceRegistryClient,
 
   def cancelCampaign(ns: Namespace, campaign: CampaignId): ActorRef =
     context.actorOf(CampaignCanceler.props(
-      director,
+      messageBus,
       campaign,
       ns,
       batchSize.toInt

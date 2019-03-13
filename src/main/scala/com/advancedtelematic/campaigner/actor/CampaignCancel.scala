@@ -1,30 +1,34 @@
 package com.advancedtelematic.campaigner.actor
 
+import java.time.Instant
+
 import akka.Done
-import akka.actor.{Actor, ActorLogging, Props}
 import akka.actor.Status.Failure
+import akka.actor.{Actor, ActorLogging, Props}
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Sink}
-import com.advancedtelematic.campaigner.db.{Campaigns, CampaignSupport, CancelTaskSupport, DeviceUpdateSupport, GroupStatsSupport}
-import com.advancedtelematic.campaigner.client.DirectorClient
 import com.advancedtelematic.campaigner.data.DataType.{CampaignId, CancelTaskStatus, DeviceStatus}
-import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.campaigner.db._
+import com.advancedtelematic.libats.data.DataType.{Namespace, CampaignId => CampaignCorrelationId}
+import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
-import scala.concurrent.Future
+import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceUpdateCancelRequested, deviceUpdateEventCancelRequestedType}
 import slick.jdbc.MySQLProfile.api.Database
+
+import scala.concurrent.Future
 
 object CampaignCanceler {
   private object Start
 
-  def props(director: DirectorClient,
+  def props(messageBus: MessageBusPublisher,
             campaign: CampaignId,
             ns: Namespace,
             batchSize: Int)
            (implicit db: Database, mat: Materializer): Props =
-    Props(new CampaignCanceler(director, campaign, ns, batchSize))
+    Props(new CampaignCanceler(messageBus, campaign, ns, batchSize))
 }
 
-class CampaignCanceler(director: DirectorClient,
+class CampaignCanceler(messageBus: MessageBusPublisher,
                        campaign: CampaignId,
                        ns: Namespace,
                        batchSize: Int)
@@ -40,15 +44,15 @@ class CampaignCanceler(director: DirectorClient,
   import akka.pattern.pipe
   import context._
 
-  private val campaigns = Campaigns()
-
   override def preStart(): Unit =
     self ! Start
 
-  private def cancel(devs: Seq[DeviceId]): Future[Seq[DeviceId]] =
-    director.cancelUpdate(ns, devs).flatMap{ affected =>
-      campaigns.finishDevices(campaign, affected, DeviceStatus.cancelled).map(_ => affected)
-    }
+  private def cancel(deviceIds: Seq[DeviceId]): Future[Unit] = {
+    val correlationId = CampaignCorrelationId(campaign.uuid)
+    Future.traverse(deviceIds) { deviceId =>
+      messageBus.publish(DeviceUpdateCancelRequested(ns, Instant.now, correlationId, deviceId))
+    }.map(_ => ())
+  }
 
   def run(): Future[Done] = for {
     _ <- campaignRepo.find(campaign)

@@ -63,11 +63,6 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
 
       override def cancelUpdate(
         ns: Namespace,
-        devs: Seq[DeviceId]
-      ): Future[Seq[DeviceId]] = FastFuture.successful(Seq.empty)
-
-      override def cancelUpdate(
-        ns: Namespace,
         device: DeviceId): Future[Unit] = FastFuture.successful(())
 
       override def findAffected(ns: Namespace, updateId: ExternalUpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] =

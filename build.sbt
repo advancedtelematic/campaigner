@@ -25,8 +25,8 @@ resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content
 libraryDependencies ++= {
   val akkaV = "2.5.13"
   val akkaHttpV = "10.1.1"
-  val libatsV = "0.2.1-1-ga65cd4b"
-  val libtufV = "0.4.0-64-gcc807ad"
+  val libatsV = "0.2.1-3-gb4b154f-SNAPSHOT"
+  val libtufV = "0.6.0-5-g06e4bdd"
   val scalaTestV = "3.0.0"
   val slickV = "3.2.0"
 
