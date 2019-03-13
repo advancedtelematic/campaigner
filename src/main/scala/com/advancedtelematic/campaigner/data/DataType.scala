@@ -169,9 +169,22 @@ object DataType {
     val prepared, launched, finished, cancelled = Value
   }
 
+  /**
+   * Status of a device in the campaign:
+   * - `requested` when a device is initially added to the campaign
+   * - `rejected` when a device is rejected by Director and is not a part of the
+   *    campaign anymore
+   * - `scheduled` when a device is approved by Director and is scheduled for
+   *    an update
+   * - `accepted` when an update was accepted on a device and is about to be
+   *    installed
+   * - `successful` when a device update was applied successfully
+   * - `cancelled` when a device update was cancelled
+   * - `failed` when a device update was failed
+   */
   object DeviceStatus extends Enumeration {
     type DeviceStatus = Value
-    val scheduled, accepted, successful, cancelled, failed = Value
+    val requested, rejected, scheduled, accepted, successful, cancelled, failed = Value
   }
 
   object CancelTaskStatus extends Enumeration {
