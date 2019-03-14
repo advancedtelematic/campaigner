@@ -156,6 +156,18 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       status === DeviceStatus.cancelled
     }
 
+  /**
+   * Returns total number of devices in the given campaigns
+   */
+  private def countProcessedAction(campaignIds: Set[CampaignId]): DBIO[Long] =
+    campaignRepo.countDevices(campaignIds)(_ => true.bind)
+
+  /**
+   * Returns the number of affected devices in the given campaigns
+   */
+  private def countAffectedAction(campaignIds: Set[CampaignId]): DBIO[Long] =
+    campaignRepo.countDevices(campaignIds)(status => status =!= DeviceStatus.rejected)
+
   def allCampaigns(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, status: Option[CampaignStatus], nameContains: Option[String]): Future[PaginationResult[CampaignId]] =
     campaignRepo.all(ns, sortBy, offset, limit, status, nameContains)
 
@@ -175,13 +187,16 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   /**
    * Calculates campaign-wide statistic counters, also taking retry campaings
    * into account if any exist.
+   * TODO this method needs separate refactoring
    */
   def campaignStats(campaignId: CampaignId): Future[CampaignStats] = db.run {
     val statsAction = for {
       mainCampaign <- campaignRepo.findAction(campaignId)
       retryCampaignIds <- campaignRepo.findRetryCampaignIdsOfAction(campaignId)
-      (mainProcessed, mainAffected) <- countProcessedAndAffectedDevicesForAllOfAction(Set(campaignId))
-      (retryProcessed, retryAffected) <- countProcessedAndAffectedDevicesForAllOfAction(retryCampaignIds)
+      mainProcessed <- countProcessedAction(Set(campaignId))
+      mainAffected <- countAffectedAction(Set(campaignId))
+      retryProcessed <- countProcessedAction(retryCampaignIds)
+      retryAffected <- countAffectedAction(retryCampaignIds)
       mainCancelled <- countCancelledAction(Set(campaignId))
       retryCancelled <- countCancelledAction(retryCampaignIds)
       mainFinished  <- countFinishedAction(Set(campaignId))
@@ -227,17 +242,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       .transactionally
       .handleIntegrityErrors(CampaignAlreadyLaunched)
 
-  /**
-   * Collects `processed` and `affected` counters for each group of each of the
-   * given campaigns, sums them up, and returns total numbers for all the
-   * campaigns
-   */
-  private def countProcessedAndAffectedDevicesForAllOfAction(campaignIds: Set[CampaignId]): DBIO[(Long, Long)] =
-    groupStatsRepo.findByCampaignsAction(campaignIds)
-      .map(_.foldLeft((0L, 0L)) { case ((totalProcessed, totalAffected), group) =>
-        (totalProcessed + group.processed, totalAffected + group.affected)
-      })
-
+  // TODO remove when FE is not dependent on this information anymore
   private def findGroupsAction(campaignId: CampaignId): DBIO[Set[GroupId]] =
     campaignRepo.findAction(campaignId).flatMap { _ =>
         Schema.campaignGroups
