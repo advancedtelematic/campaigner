@@ -10,19 +10,22 @@ import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, Upda
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil}
 import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId, MultiTargetUpdateId, CorrelationId}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, InstallationResult}
-import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceInstallationReport
+import com.advancedtelematic.libats.messaging_datatype.Messages.{
+  DeviceUpdateEvent,
+  DeviceUpdateCanceled,
+  DeviceUpdateCompleted}
 import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.Arbitrary._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class DeviceInstallationReportListenerSpec extends CampaignerSpec
+class DeviceUpdateEventListenerSpec extends CampaignerSpec
   with DatabaseSpec
   with DeviceUpdateSupport
   with UpdateSupport
   with DatabaseUpdateSpecUtil {
 
-  val listener = new DeviceInstallationReportListener()
+  val listener = new DeviceUpdateEventListener()
 
   val campaigns = Campaigns()
 
@@ -74,6 +77,18 @@ class DeviceInstallationReportListenerSpec extends CampaignerSpec
     deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.failed).futureValue should contain(deviceUpdate.device)
   }
 
+  "Listener" should "mark a device as canceled using campaign CorrelationId" in {
+    val (updateSource, campaign, deviceUpdate) = prepareTest()
+    val event = DeviceUpdateCanceled(
+      campaign.namespace,
+      Instant.now,
+      CampaignCorrelationId(campaign.id.uuid),
+      deviceUpdate.device)
+
+    listener.apply(event).futureValue shouldBe (())
+    deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.cancelled).futureValue should contain(deviceUpdate.device)
+  }
+
   private def prepareTest(): (UpdateSource, Campaign, DeviceUpdate) = {
     val updateSource = UpdateSource(ExternalUpdateId(UUID.randomUUID().toString), UpdateType.multi_target)
     val update = arbitrary[Update].generate.copy(source = updateSource)
@@ -93,7 +108,7 @@ class DeviceInstallationReportListenerSpec extends CampaignerSpec
       campaign: Campaign,
       deviceUpdate: DeviceUpdate,
       correlationId: CorrelationId,
-      isSuccessful: Boolean): DeviceInstallationReport = {
+      isSuccessful: Boolean): DeviceUpdateEvent = {
 
     val installationResult =
       if (isSuccessful) {
@@ -102,12 +117,13 @@ class DeviceInstallationReportListenerSpec extends CampaignerSpec
         InstallationResult(false, "FAILURE", "Failed update")
       }
 
-    DeviceInstallationReport(campaign.namespace,
-      deviceUpdate.device,
+    DeviceUpdateCompleted(
+      campaign.namespace,
+      Instant.now,
       correlationId,
+      deviceUpdate.device,
       installationResult,
       Map.empty,
-      None,
-      Instant.now)
+      None)
   }
 }

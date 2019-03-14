@@ -8,7 +8,7 @@ import com.advancedtelematic.campaigner.daemon._
 import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.http.{BootApp, ServiceHttpClientSupport}
 import com.advancedtelematic.libats.messaging.{BusListenerMetrics, MessageListenerSupport}
-import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceEventMessage, DeviceInstallationReport}
+import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceEventMessage, DeviceUpdateEvent}
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.slick.monitoring.{DatabaseMetrics, DbHealthResource}
 import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport
@@ -43,7 +43,7 @@ object DaemonBoot extends BootApp
     "campaign-supervisor"
   )
 
-  startListener[DeviceInstallationReport](new DeviceInstallationReportListener())
+  startListener[DeviceUpdateEvent](new DeviceUpdateEventListener())
   startListener[DeviceEventMessage](new DeviceEventListener(director))
 
   val routes: Route = (versionHeaders(version) & logResponseMetrics(projectName)) {

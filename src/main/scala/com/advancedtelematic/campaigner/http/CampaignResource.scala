@@ -1,10 +1,8 @@
 package com.advancedtelematic.campaigner.http
 
-import akka.event.LoggingAdapter
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.{Directive1, Route}
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.client.DirectorClient
 import com.advancedtelematic.campaigner.data.AkkaSupport._
@@ -14,9 +12,9 @@ import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.auth.AuthedNamespaceScope
-import com.advancedtelematic.libats.data.DataType.{CorrelationId, CampaignId => CampaignCorrelationId, MultiTargetUpdateId, Namespace}
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, Namespace}
 import com.advancedtelematic.libats.http.UUIDKeyAkka._
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
+import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import slick.jdbc.MySQLProfile.api._
 
@@ -32,23 +30,6 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: 
     val metadata = request.mkCampaignMetadata(campaign.id)
     campaigns.create(campaign, request.groups, metadata)
   }
-
-  def cancelDeviceUpdate(ns: Namespace, correlationId: CorrelationId, device: DeviceId)
-                        (implicit log: LoggingAdapter): Future[Unit] =
-    director.cancelUpdate(ns, device).flatMap { _ =>
-      correlationId match {
-        case CampaignCorrelationId(uuid) =>
-          campaigns.finishDevices(CampaignId(uuid), Seq(device), DeviceStatus.cancelled)
-        case MultiTargetUpdateId(uuid) =>
-          campaigns.findCampaignsByUpdate(UpdateId(uuid)).flatMap {
-            case cs if cs.isEmpty =>
-              log.info(s"No campaign exists for $device.")
-              FastFuture.successful(())
-            case _ =>
-              campaigns.finishDevice(UpdateId(uuid), device, DeviceStatus.cancelled)
-          }
-      }
-    }
 
   private def UserCampaignPathPrefix(namespace: Namespace): Directive1[Campaign] =
     pathPrefix(CampaignId.Path).flatMap { campaign =>
@@ -92,7 +73,8 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: 
       } ~
       extractLog { implicit log =>
         (post & path("cancel_device_update_campaign") & entity(as[CancelDeviceUpdateCampaign])) { cancelDevice =>
-              complete(cancelDeviceUpdate(ns, cancelDevice.correlationId, cancelDevice.device))
+          // Deprecated
+          complete(director.cancelUpdate(ns, cancelDevice.device))
         }
       }
     }
