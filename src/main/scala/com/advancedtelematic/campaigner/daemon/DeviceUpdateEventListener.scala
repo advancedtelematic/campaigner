@@ -33,14 +33,14 @@ class DeviceUpdateEventListener()(implicit db: Database, ec: ExecutionContext)
   def handleUpdateCanceled(msg: DeviceUpdateCanceled): Future[Unit] = {
       msg.correlationId match {
         case CampaignCorrelationId(uuid) =>
-          campaigns.finishDevices(CampaignId(uuid), Seq(msg.deviceUuid), DeviceStatus.cancelled)
+          campaigns.cancelDevices(CampaignId(uuid), Seq(msg.deviceUuid))
         case MultiTargetUpdateId(uuid) =>
           campaigns.findCampaignsByUpdate(UpdateId(uuid)).flatMap {
             case cs if cs.isEmpty =>
               _log.info(s"No campaign exists for ${msg.deviceUuid}")
               Future.successful(())
             case _ =>
-              campaigns.finishDevice(UpdateId(uuid), msg.deviceUuid, DeviceStatus.cancelled)
+              campaigns.cancelDevice(UpdateId(uuid), msg.deviceUuid)
           }
       }
   }
@@ -50,21 +50,21 @@ class DeviceUpdateEventListener()(implicit db: Database, ec: ExecutionContext)
     val f = (msg.result.success, msg.correlationId) match {
 
       case (true, CampaignCorrelationId(uuid)) =>
-        campaigns.finishDevices(CampaignId(uuid), Seq(msg.deviceUuid), DeviceStatus.successful, Some(msg.result.code))
+        campaigns.succeedDevices(CampaignId(uuid), Seq(msg.deviceUuid), msg.result.code)
 
       case (false, CampaignCorrelationId(uuid)) =>
-        campaigns.finishDevices(CampaignId(uuid), Seq(msg.deviceUuid), DeviceStatus.failed, Some(msg.result.code))
+        campaigns.failDevices(CampaignId(uuid), Seq(msg.deviceUuid), msg.result.code)
 
       case (true, MultiTargetUpdateId(uuid)) =>
         for {
           update <- updateRepo.findByExternalId(msg.namespace, ExternalUpdateId(uuid.toString))
-          _ <- campaigns.finishDevice(update.uuid, msg.deviceUuid, DeviceStatus.successful, Some(msg.result.code))
+          _ <- campaigns.succeedDevice(update.uuid, msg.deviceUuid, msg.result.code)
         } yield ()
 
       case (false, MultiTargetUpdateId(uuid)) =>
         for {
           update <- updateRepo.findByExternalId(msg.namespace, ExternalUpdateId(uuid.toString))
-          _ <- campaigns.finishDevice(update.uuid, msg.deviceUuid, DeviceStatus.failed, Some(msg.result.code))
+          _ <- campaigns.failDevice(update.uuid, msg.deviceUuid, msg.result.code)
         } yield ()
     }
 

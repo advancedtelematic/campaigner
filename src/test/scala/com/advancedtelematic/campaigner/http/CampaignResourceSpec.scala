@@ -342,12 +342,12 @@ class CampaignResourceSpec
       _ <- campaigns.launch(campaignId)
       _ <- campaigns.completeGroup(campaignId, campaignCase.groupId, campaignCase.groupStats)
       _ <- campaigns.scheduleDevices(campaignId, campaign.update, campaignCase.affectedDevices:_*)
-      _ <- campaigns.finishDevices(campaignId, campaignCase.cancelledDevices, DeviceStatus.cancelled)
-      _ <- campaigns.finishDevices(campaignId, campaignCase.failedDevices, DeviceStatus.failed)
-      _ <- campaigns.finishDevices(campaignId, campaignCase.successfulDevices, DeviceStatus.successful)
+      _ <- campaigns.cancelDevices(campaignId, campaignCase.cancelledDevices)
+      _ <- campaigns.failDevices(campaignId, campaignCase.failedDevices, "failure-code-1")
+      _ <- campaigns.succeedDevices(campaignId, campaignCase.successfulDevices, "success-code-1")
     } yield ()
 
-    forAll (genCampaignCase) ((mainCase) => {
+    forAll (genCampaignCase) (mainCase => {
       val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk(
         genCreateCampaign().map(_.copy(groups = NonEmptyList.one(mainCase.groupId)))
       )

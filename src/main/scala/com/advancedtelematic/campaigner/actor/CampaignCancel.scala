@@ -47,7 +47,7 @@ class CampaignCanceler(director: DirectorClient,
 
   private def cancel(devs: Seq[DeviceId]): Future[Seq[DeviceId]] =
     director.cancelUpdate(ns, devs).flatMap{ affected =>
-      campaigns.finishDevices(campaign, affected, DeviceStatus.cancelled).map(_ => affected)
+      campaigns.cancelDevices(campaign, affected).map(_ => affected)
     }
 
   def run(): Future[Done] = for {
