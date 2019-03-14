@@ -26,7 +26,7 @@ libraryDependencies ++= {
   val akkaV = "2.5.13"
   val akkaHttpV = "10.1.1"
   val libatsV = "0.2.1-2-g962e326"
-  val libtufV = "0.4.0-64-gcc807ad"
+  val libtufV = "0.6.0-5-g06e4bdd"
   val scalaTestV = "3.0.0"
   val slickV = "3.2.0"
 

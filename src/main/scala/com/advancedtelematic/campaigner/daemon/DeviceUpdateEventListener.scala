@@ -46,18 +46,26 @@ class DeviceUpdateEventListener()(implicit db: Database, ec: ExecutionContext)
   }
 
   def handleUpdateCompleted(msg: DeviceUpdateCompleted): Future[Unit] = {
-    val resultStatus = if (msg.result.success)
-      DeviceStatus.successful
-    else
-      DeviceStatus.failed
 
-    val f = msg.correlationId match {
-      case CampaignCorrelationId(uuid) =>
-        campaigns.finishDevices(CampaignId(uuid), Seq(msg.deviceUuid), resultStatus)
-      case MultiTargetUpdateId(uuid) => for {
-        update <- updateRepo.findByExternalId(msg.namespace, ExternalUpdateId(uuid.toString))
-        _ <- campaigns.finishDevice(update.uuid, msg.deviceUuid, resultStatus)
-      } yield ()
+    val f = (msg.result.success, msg.correlationId) match {
+
+      case (true, CampaignCorrelationId(uuid)) =>
+        campaigns.finishDevices(CampaignId(uuid), Seq(msg.deviceUuid), DeviceStatus.successful, Some(msg.result.code))
+
+      case (false, CampaignCorrelationId(uuid)) =>
+        campaigns.finishDevices(CampaignId(uuid), Seq(msg.deviceUuid), DeviceStatus.failed, Some(msg.result.code))
+
+      case (true, MultiTargetUpdateId(uuid)) =>
+        for {
+          update <- updateRepo.findByExternalId(msg.namespace, ExternalUpdateId(uuid.toString))
+          _ <- campaigns.finishDevice(update.uuid, msg.deviceUuid, DeviceStatus.successful, Some(msg.result.code))
+        } yield ()
+
+      case (false, MultiTargetUpdateId(uuid)) =>
+        for {
+          update <- updateRepo.findByExternalId(msg.namespace, ExternalUpdateId(uuid.toString))
+          _ <- campaigns.finishDevice(update.uuid, msg.deviceUuid, DeviceStatus.failed, Some(msg.result.code))
+        } yield ()
     }
 
     f.recover {

@@ -73,16 +73,16 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def markDevicesAccepted(campaign: CampaignId, update: UpdateId, devices: DeviceId*): Future[Unit] =
     deviceUpdateRepo.persistMany(devices.map { d => DeviceUpdate(campaign, update, d, DeviceStatus.accepted) })
 
-  def finishDevice(updateId: UpdateId, device: DeviceId, status: DeviceStatus): Future[Unit] = db.run {
+  def finishDevice(updateId: UpdateId, device: DeviceId, status: DeviceStatus, resultCode: Option[String] = None): Future[Unit] = db.run {
     for {
-      _ <- deviceUpdateRepo.setUpdateStatusAction(updateId, device, status)
+      _ <- deviceUpdateRepo.setUpdateStatusAction(updateId, device, status, resultCode)
       campaigns <- campaignRepo.findByUpdateAction(updateId)
       _ <- DBIO.sequence(campaigns.map(c => campaignStatusTransition.devicesFinished(c.id)))
     } yield ()
   }
 
-  def finishDevices(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus): Future[Unit] = db.run {
-    deviceUpdateRepo.setUpdateStatusAction(campaign, devices, status)
+  def finishDevices(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[String] = None): Future[Unit] = db.run {
+    deviceUpdateRepo.setUpdateStatusAction(campaign, devices, status, resultCode)
       .andThen(campaignStatusTransition.devicesFinished(campaign))
   }
 

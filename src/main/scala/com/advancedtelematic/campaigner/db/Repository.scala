@@ -92,23 +92,36 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
       }
     }
 
-  protected [db] def setUpdateStatusAction(update: UpdateId, device: DeviceId, status: DeviceStatus): DBIO[Unit] =
+  /**
+    * Find all the device updates that failed with a given failure code.
+    */
+  def findFailedByFailureCode(campaignId: CampaignId, failureCode: String): Future[Set[DeviceId]] = db.run {
+    Schema.deviceUpdates
+      .filter(_.campaignId === campaignId)
+      .filter(_.status === DeviceStatus.failed)
+      .filter(_.resultCode === failureCode)
+      .map(_.deviceId)
+      .result
+      .map(_.toSet)
+  }
+
+  protected [db] def setUpdateStatusAction(update: UpdateId, device: DeviceId, status: DeviceStatus, resultCode: Option[String]): DBIO[Unit] =
     Schema.deviceUpdates
       .filter(_.updateId === update)
       .filter(_.deviceId === device)
-      .map(_.status)
-      .update(status)
+      .map(du => (du.status, du.resultCode))
+      .update((status, resultCode))
       .flatMap {
         case 0 => DBIO.failed(DeviceNotScheduled)
         case _ => DBIO.successful(())
       }.map(_ => ())
 
-  protected [db] def setUpdateStatusAction(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus): DBIO[Unit] =
+  protected [db] def setUpdateStatusAction(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[String]): DBIO[Unit] =
     Schema.deviceUpdates
       .filter(_.campaignId === campaign)
       .filter(_.deviceId inSet devices)
-      .map(_.status)
-      .update(status)
+      .map(du => (du.status, du.resultCode))
+      .update((status, resultCode))
       .flatMap {
         case n if devices.length == n => DBIO.successful(())
         case _ => DBIO.failed(DeviceNotScheduled)

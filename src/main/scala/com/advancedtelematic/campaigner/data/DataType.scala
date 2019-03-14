@@ -144,7 +144,8 @@ object DataType {
     campaign: CampaignId,
     update: UpdateId,
     device: DeviceId,
-    status: DeviceStatus
+    status: DeviceStatus,
+    resultCode: Option[String] = None
   )
 
   final case class CancelTask(
