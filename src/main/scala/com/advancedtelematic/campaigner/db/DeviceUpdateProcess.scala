@@ -2,7 +2,7 @@ package com.advancedtelematic.campaigner.db
 
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.client.DirectorClient
-import com.advancedtelematic.campaigner.data.DataType.{Campaign, CampaignId, DeviceStatus, UpdateType}
+import com.advancedtelematic.campaigner.data.DataType.{Campaign, CampaignId, UpdateType}
 import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId, Namespace}
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.slf4j.LoggerFactory
@@ -48,7 +48,7 @@ class DeviceUpdateProcess(director: DirectorClient)(implicit db: Database, ec: E
           _logger.warn(s"Could not start mtu update for device $deviceId after device accepted, device is no longer affected")
 
           campaigns.scheduleDevices(campaignId, campaign.update, deviceId).flatMap { _ =>
-            campaigns.finishDevice(campaign.update, deviceId, DeviceStatus.failed)
+            campaigns.failDevice(campaign.update, deviceId, "failure-code-1")
           }
       }
     } yield ()

@@ -8,7 +8,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil}
-import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId, MultiTargetUpdateId, CorrelationId}
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId, CampaignId => CampaignCorrelationId}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, InstallationResult}
 import com.advancedtelematic.libats.messaging_datatype.Messages.{
   DeviceUpdateEvent,
@@ -42,7 +42,7 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
   }
 
   "Listener" should "mark a device as successful using campaign CorrelationId" in {
-    val (updateSource, campaign, deviceUpdate) = prepareTest()
+    val (_, campaign, deviceUpdate) = prepareTest()
     val report = makeReport(
       campaign,
       deviceUpdate,
@@ -63,10 +63,11 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
 
     listener.apply(report).futureValue shouldBe (())
     deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.failed).futureValue should contain(deviceUpdate.device)
+    deviceUpdateRepo.findFailedByFailureCode(campaign.id, "FAILURE").futureValue should contain(deviceUpdate.device)
   }
 
   "Listener" should "mark a device as failed using campaign CorrelationId" in {
-    val (updateSource, campaign, deviceUpdate) = prepareTest()
+    val (_, campaign, deviceUpdate) = prepareTest()
     val report = makeReport(
       campaign,
       deviceUpdate,
@@ -75,10 +76,11 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
 
     listener.apply(report).futureValue shouldBe (())
     deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.failed).futureValue should contain(deviceUpdate.device)
+    deviceUpdateRepo.findFailedByFailureCode(campaign.id, "FAILURE").futureValue should contain(deviceUpdate.device)
   }
 
   "Listener" should "mark a device as canceled using campaign CorrelationId" in {
-    val (updateSource, campaign, deviceUpdate) = prepareTest()
+    val (_, campaign, deviceUpdate) = prepareTest()
     val event = DeviceUpdateCanceled(
       campaign.namespace,
       Instant.now,

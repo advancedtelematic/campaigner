@@ -73,17 +73,35 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def markDevicesAccepted(campaign: CampaignId, update: UpdateId, devices: DeviceId*): Future[Unit] =
     deviceUpdateRepo.persistMany(devices.map { d => DeviceUpdate(campaign, update, d, DeviceStatus.accepted) })
 
-  def finishDevice(updateId: UpdateId, device: DeviceId, status: DeviceStatus): Future[Unit] = db.run {
+  def succeedDevice(updateId: UpdateId, deviceId: DeviceId, successCode: String): Future[Unit] =
+    finishDevice(updateId, deviceId, DeviceStatus.successful, Some(successCode))
+
+  def succeedDevices(campaignId: CampaignId, devices: Seq[DeviceId], successCode: String): Future[Unit] =
+    finishDevices(campaignId, devices, DeviceStatus.successful, Some(successCode))
+
+  def failDevice(updateId: UpdateId, deviceId: DeviceId, failureCode: String): Future[Unit] =
+    finishDevice(updateId, deviceId, DeviceStatus.failed, Some(failureCode))
+
+  def failDevices(campaignId: CampaignId, devices: Seq[DeviceId], failureCode: String): Future[Unit] =
+    finishDevices(campaignId, devices, DeviceStatus.failed, Some(failureCode))
+
+  def cancelDevice(updateId: UpdateId, deviceId: DeviceId): Future[Unit] =
+    finishDevice(updateId, deviceId, DeviceStatus.cancelled, None)
+
+  def cancelDevices(campaignId: CampaignId, devices: Seq[DeviceId]): Future[Unit] =
+    finishDevices(campaignId, devices, DeviceStatus.cancelled, None)
+
+  private def finishDevice(updateId: UpdateId, device: DeviceId, status: DeviceStatus, resultCode: Option[String]): Future[Unit] = db.run {
     for {
-      _ <- deviceUpdateRepo.setUpdateStatusAction(updateId, device, status)
+      _ <- deviceUpdateRepo.setUpdateStatusAction(updateId, device, status, resultCode)
       campaigns <- campaignRepo.findByUpdateAction(updateId)
       _ <- DBIO.sequence(campaigns.map(c => campaignStatusTransition.devicesFinished(c.id)))
     } yield ()
   }
 
-  def finishDevices(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus): Future[Unit] = db.run {
-    deviceUpdateRepo.setUpdateStatusAction(campaign, devices, status)
-      .andThen(campaignStatusTransition.devicesFinished(campaign))
+  private def finishDevices(campaignId: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[String]): Future[Unit] = db.run {
+    deviceUpdateRepo.setUpdateStatusAction(campaignId, devices, status, resultCode)
+      .andThen(campaignStatusTransition.devicesFinished(campaignId))
   }
 
   def countByStatus: Future[Map[CampaignStatus, Int]] =

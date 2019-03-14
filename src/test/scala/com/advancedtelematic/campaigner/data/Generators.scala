@@ -50,7 +50,7 @@ object Generators {
     meta   <- genCampaignMetadata
   } yield UpdateCampaign(n, Option(List(meta)))
 
-  def genUpdateSource(genType: Gen[UpdateType]): Gen[UpdateSource] = for {
+  def genUpdateSource(genType: => Gen[UpdateType]): Gen[UpdateSource] = for {
     id <- arbitrary[String].suchThat(_.length < 200)
     t <- genType
   } yield UpdateSource(ExternalUpdateId(id), t)
