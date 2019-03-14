@@ -34,7 +34,6 @@ object DaemonBoot extends BootApp
   val deviceRegistry = new DeviceRegistryHttpClient(deviceRegistryUri, defaultHttpClient)
   val director = new DirectorHttpClient(directorUri, defaultHttpClient)
   val supervisor = system.actorOf(CampaignSupervisor.props(
-    deviceRegistry,
     director,
     schedulerPollingTimeout,
     schedulerDelay,

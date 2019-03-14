@@ -11,7 +11,6 @@ import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Errors.{CampaignFKViolation, UpdateFKViolation}
-import com.advancedtelematic.campaigner.db.Schema.GroupStatsTable
 import com.advancedtelematic.campaigner.db.SlickMapping._
 import com.advancedtelematic.campaigner.db.SlickUtil.{sortBySlickOrderedCampaignConversion, sortBySlickOrderedUpdateConversion}
 import com.advancedtelematic.campaigner.http.Errors._
@@ -195,7 +194,7 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
         case Failure(CampaignFKViolation()) => DBIO.failed(MissingMainCampaign)
       }.handleIntegrityErrors(ConflictingCampaign)
       _ <- Schema.campaignGroups ++= groups.map(campaign.id -> _)
-      < <- Schema.deviceUpdates ++= devices.map(did => DeviceUpdate(campaign.id, campaign.updateId, did, DeviceStatus.requested))
+      _ <- Schema.deviceUpdates ++= devices.map(did => DeviceUpdate(campaign.id, campaign.updateId, did, DeviceStatus.requested))
       _ <- (Schema.campaignMetadata ++= metadata).handleIntegrityErrors(ConflictingMetadata)
     } yield campaign.id
 
@@ -228,14 +227,37 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
     }
   }
 
-  def findAllScheduled(filter: GroupStatsTable => Rep[Boolean] = _ => true.bind): Future[Seq[Campaign]] = {
-    db.run {
-      Schema.groupStats.join(Schema.campaigns).on(_.campaignId === _.id)
-        .filter { case (groupStats, _) => groupStats.status === GroupStatus.scheduled }
-        .filter { case (groupStats, _) => filter(groupStats) }
-        .map(_._2)
-        .result
-    }
+  /**
+   * Returns all campaigns that have at least one device in `requested` state
+   */
+  def findAllWithRequestedDevices: DBIO[Set[Campaign]] =
+    Schema.deviceUpdates.join(Schema.campaigns).on(_.campaignId === _.id)
+      .filter { case (deviceUpdate, _) => deviceUpdate.status === DeviceStatus.requested }
+      .map(_._2)
+      .result
+      .map(_.toSet)
+
+  /**
+   * Returns all campaigns that have all devices in `requested` state
+   */
+  def findAllNewlyCreated: DBIO[Set[Campaign]] = {
+    val baseQuery = Schema.deviceUpdates.join(Schema.campaigns).on(_.campaignId === _.id)
+
+    val campaignsAllDevicesCountQuery = baseQuery
+      .groupBy(_._2)
+      .map { case (campaign, devices) => (campaign, devices.length) }
+    val campaignsRequestedDevicesCountQuery = baseQuery
+      .filter { case (deviceUpdate, _) => deviceUpdate.status === DeviceStatus.requested }
+      .groupBy(_._2)
+      .map { case (campaign, devices) => (campaign, devices.length) }
+
+    campaignsAllDevicesCountQuery
+      .join(campaignsRequestedDevicesCountQuery)
+      .on(_._1.id === _._1.id)
+      .filter { case ((_, allDevicesCount), (_, requestedDevicesCount)) => allDevicesCount === requestedDevicesCount }
+      .map(_._1._1)
+      .result
+      .map(_.toSet)
   }
 
   def update(campaign: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =

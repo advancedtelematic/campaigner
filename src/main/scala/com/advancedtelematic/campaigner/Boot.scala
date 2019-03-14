@@ -34,7 +34,7 @@ trait Settings {
   val schedulerDelay =
     FiniteDuration(_config.getDuration("scheduler.delay").toNanos, TimeUnit.NANOSECONDS)
   val schedulerBatchSize =
-    _config.getLong("scheduler.batchSize")
+    _config.getInt("scheduler.batchSize")
 }
 
 object Boot extends BootApp

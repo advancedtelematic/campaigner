@@ -3,76 +3,73 @@ package com.advancedtelematic.campaigner.actor
 import akka.actor.{Actor, ActorLogging, Props, Status}
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.campaigner.db.Campaigns
+import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateProcess}
+import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import slick.jdbc.MySQLProfile.api._
 
+import scala.concurrent.Future
 import scala.concurrent.duration._
-import cats.syntax.show._
 
 object CampaignScheduler {
 
-  private object NextGroup
-  private final case class ScheduleGroup(group: GroupId)
+  private final object NextBatch
+  private final case class BatchToSchedule(devices: Set[DeviceId])
+  private final case class BatchComplete(affectedDevices: Set[DeviceId], rejectedDevices: Set[DeviceId])
   final case class CampaignComplete(campaign: CampaignId)
 
-  def props(registry: DeviceRegistryClient,
-            director: DirectorClient,
+  def props(director: DirectorClient,
             campaign: Campaign,
             delay: FiniteDuration,
-            batchSize: Long)
+            batchSize: Int)
            (implicit db: Database): Props =
-    Props(new CampaignScheduler(registry, director, campaign, delay, batchSize))
-
+    Props(new CampaignScheduler(director, campaign, delay, batchSize))
 }
 
-class CampaignScheduler(registry: DeviceRegistryClient,
-                        director: DirectorClient,
+class CampaignScheduler(director: DirectorClient,
                         campaign: Campaign,
                         delay: FiniteDuration,
-                        batchSize: Long)
+                        batchSize: Int)
                        (implicit db: Database) extends Actor
   with ActorLogging {
 
   import CampaignScheduler._
-  import GroupScheduler._
   import akka.pattern.pipe
   import context._
 
-  val campaigns = Campaigns()
+  private val scheduler = system.scheduler
+  private val campaigns = Campaigns()
+  private val deviceUpdateProcess = new DeviceUpdateProcess(director)
 
   override def preStart(): Unit =
-    self ! NextGroup
+    self ! NextBatch
 
-  private def schedule(group: GroupId): Unit =
-    actorOf(GroupScheduler.props(
-      registry,
-      director,
-      delay,
-      batchSize,
-      campaign,
-      group),
-      s"group-scheduler-${group.show}"
-    )
+  private def schedule(deviceIds: Set[DeviceId]): Future[BatchComplete] = for {
+    affectedDevices <- deviceUpdateProcess.startUpdateFor(deviceIds.toSeq, campaign).map(_.toSet)
+    rejectedDevices = deviceIds -- affectedDevices
+    _ <- campaigns.rejectDevices(campaign.id, campaign.updateId, rejectedDevices.toSeq)
+    _ <- campaigns.updateStatus(campaign.id)
+  } yield BatchComplete(affectedDevices, rejectedDevices)
 
   def receive: Receive = {
-    case NextGroup =>
-      log.debug(s"next group")
-      campaigns.remainingGroups(campaign.id)
-        .map(_.headOption)
+    case NextBatch =>
+      log.debug("Requesting next batch")
+      // TODO limit or stream device IDs from DB
+      campaigns.requestedDevices(campaign.id)
+        .map(deviceIds => BatchToSchedule(deviceIds.take(batchSize)))
         .pipeTo(self)
 
-    case Some(group: GroupId) =>
-      log.debug(s"scheduling $group")
-      schedule(group)
+    case BatchToSchedule(devices) if devices.nonEmpty =>
+      log.debug(s"Scheduling new batch. Size: ${devices.size}.")
+      schedule(devices).pipeTo(self)
 
-    case None =>
+    case BatchToSchedule(devices) if devices.isEmpty =>
       parent ! CampaignComplete(campaign.id)
       // TODO: Should move to finished
       context.stop(self)
 
-    case GroupComplete(group) =>
-      log.debug(s"$group complete")
-      self ! NextGroup
+    case BatchComplete(affectedDevices, rejectedDevices) =>
+      log.debug(s"Completed a batch. Affected: ${affectedDevices.size}. Rejected: ${rejectedDevices.size}.")
+      scheduler.scheduleOnce(delay, self, NextBatch)
 
     case Status.Failure(ex) =>
       log.error(ex, s"An Error occurred ${ex.getMessage}")

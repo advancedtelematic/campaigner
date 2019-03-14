@@ -36,23 +36,6 @@ final class CampaignStatusRecalculateSpec
   implicit val mat = ActorMaterializer()
   implicit val defaultPatience = PatienceConfig(timeout = Span(2, Seconds))
 
-  it should "set campaign status to `cancelled` if a group was cancelled" in {
-    val groups = GroupWithDevices.genNonEmptyListOf.generate
-
-    val setupTest = for {
-      campaign <- createCampaignWithoutStatus(maybeGroups = Some(groups.map(_.id)))
-      _ <- insertGroupStatsFor(campaign.id, groups.toList)
-      _ <- groupStatsRepo.updateGroupStatsAction(
-        campaign.id, groups.head.id, GroupStatus.cancelled, Stats(0, 0)).run
-      _ <- new CampaignStatusRecalculate().run
-    } yield campaign
-
-    whenReady(setupTest) { campaign =>
-      val updatedCampaign = campaignRepo.find(campaign.id).futureValue
-      updatedCampaign.status shouldBe CampaignStatus.cancelled
-    }
-  }
-
   it should "set campaign status to `finished` if all devices finished the campaign" in {
     val groups = GroupWithDevices.genNonEmptyListOf.generate
     val totalDevicesNum = groups.map(_.devicesNum).toList.sum
@@ -77,10 +60,12 @@ final class CampaignStatusRecalculateSpec
     val groups = GroupWithDevices.genNonEmptyListOf.generate
     val totalDevicesNum = groups.map(_.devicesNum).toList.sum
     val numOfDevicesToFinish = Gen.chooseNum(0, totalDevicesNum - 1).generate
+    val numOfDevicesToSchedule = totalDevicesNum - numOfDevicesToFinish
 
     val setupTest = for {
       campaign <- createCampaignWithoutStatus(maybeGroups = Some(groups.map(_.id)))
       _ <- insertGroupStatsFor(campaign.id, groups.toList)
+      _ <- insertDeviceUpdatesFor(campaign, numOfDevicesToSchedule, DeviceStatus.scheduled)
       _ <- insertDeviceUpdatesFor(campaign, numOfDevicesToFinish, DeviceStatus.successful)
       _ <- new CampaignStatusRecalculate().run
     } yield campaign

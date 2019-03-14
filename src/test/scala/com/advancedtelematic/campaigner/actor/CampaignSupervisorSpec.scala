@@ -1,19 +1,14 @@
 package com.advancedtelematic.campaigner.actor
 
-import akka.http.scaladsl.util.FastFuture
 import akka.testkit.TestProbe
 import cats.data.NonEmptyList
-import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
-import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
 
 class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with CampaignerSpec with UpdateSupport {
@@ -35,13 +30,13 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
     val group     = NonEmptyList.one(GroupId.generate)
     val parent    = TestProbe()
 
-    campaigns.create(campaign1, group, Set.empty, Seq.empty).futureValue
-    campaigns.create(campaign2, group, Set.empty, Seq.empty).futureValue
+    val n = Gen.choose(batch, batch * 2).generate
+    val devices1 = Gen.listOfN(n, genDeviceId).generate.toSet
+    val devices2 = Gen.listOfN(n, genDeviceId).generate.toSet
 
-    campaigns.scheduleGroups(campaign1.id, group).futureValue
+    campaigns.create(campaign1, group, devices1, Seq.empty).futureValue
 
     parent.childActorOf(CampaignSupervisor.props(
-      deviceRegistry,
       director,
       schedulerPollingTimeout,
       schedulerDelay,
@@ -51,11 +46,9 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
     parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign1.id)))
     parent.expectMsg(3.seconds, CampaignComplete(campaign1.id))
 
-    campaigns.scheduleGroups(campaign2.id, group).futureValue
-
+    campaigns.create(campaign2, group, devices2, Seq.empty).futureValue
     parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign2.id)))
   }
-
 }
 
 class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with CampaignerSpec with UpdateSupport {
@@ -76,20 +69,11 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
     val group    = NonEmptyList.one(GroupId.generate)
     val parent   = TestProbe()
     val n        = Gen.choose(batch, batch * 2).generate
-    val devs     = Gen.listOfN(n, genDeviceId).generate
-    val registry = new DeviceRegistryClient {
-      override def devicesInGroup(_ns: Namespace,
-                                  _grp: GroupId,
-                                  offset: Long,
-                                  limit: Long): Future[Seq[DeviceId]] =
-        FastFuture.successful(devs.drop(offset.toInt).take(limit.toInt))
-    }
+    val devs     = Gen.listOfN(n, genDeviceId).generate.toSet
 
-    campaigns.create(campaign, group, devs.toSet, Seq.empty).futureValue
-    campaigns.scheduleGroups(campaign.id, group)
+    campaigns.create(campaign, group, devs, Seq.empty).futureValue
 
     parent.childActorOf(CampaignSupervisor.props(
-      registry,
       director,
       schedulerPollingTimeout,
       10.seconds,
