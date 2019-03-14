@@ -6,7 +6,6 @@ import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus._
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus._
-import com.advancedtelematic.campaigner.data.DataType.GroupStatus._
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.campaigner.data.DataType._
@@ -27,10 +26,6 @@ import scala.util.Failure
 
 trait CampaignSupport {
   def campaignRepo(implicit db: Database, ec: ExecutionContext) = new CampaignRepository()
-}
-
-trait GroupStatsSupport {
-  def groupStatsRepo(implicit db: Database, ec: ExecutionContext) = new GroupStatsRepository()
 }
 
 trait DeviceUpdateSupport {
@@ -128,59 +123,6 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
 
   def persistMany(updates: Seq[DeviceUpdate]): Future[Unit] = db.run {
     DBIO.sequence(updates.map(Schema.deviceUpdates.insertOrUpdate)).transactionally.map(_ => ())
-  }
-}
-
-protected [db] class GroupStatsRepository()(implicit db: Database, ec: ExecutionContext) {
-  protected [db] def updateGroupStatsAction(campaign: CampaignId, group: GroupId, status: GroupStatus, stats: Stats): DBIO[Unit] =
-    Schema.groupStats
-      .insertOrUpdate(GroupStats(campaign, group, status, stats.processed, stats.affected))
-      .map(_ => ())
-      .handleIntegrityErrors(CampaignMissing)
-
-  protected [db] def findByCampaignAction(campaignId: CampaignId): DBIO[Seq[GroupStats]] =
-    Schema.groupStats
-      .filter(_.campaignId === campaignId)
-      .result
-
-  protected [db] def findByCampaignsAction(campaignIds: Set[CampaignId]): DBIO[Seq[GroupStats]] =
-    Schema.groupStats
-      .filter(_.campaignId.inSet(campaignIds))
-      .result
-
-  protected [db] def persistManyAction(campaign: CampaignId, groups: Set[GroupId]): DBIO[Unit] =
-    DBIO.sequence(
-      groups.toSeq.map { group =>
-        persistAction(GroupStats(campaign, group, GroupStatus.scheduled, 0, 0))
-      }
-    ).map(_ => ())
-
-  protected [db] def persistAction(stats: GroupStats): DBIO[Unit] = (Schema.groupStats += stats).map(_ => ())
-
-  def groupStatusFor(campaign: CampaignId, group: GroupId): Future[Option[GroupStatus]] =
-    db.run {
-      Schema.groupStats
-        .filter(_.campaignId === campaign)
-        .filter(_.groupId === group)
-        .map(_.status)
-        .result
-        .headOption
-    }
-
-  def findScheduled(campaign: CampaignId, groupId: Option[GroupId] = None): Future[Seq[GroupStats]] = db.run {
-    Schema.groupStats
-      .filter(_.campaignId === campaign)
-      .filter(_.status === GroupStatus.scheduled)
-      .maybeFilter(_.groupId === groupId)
-      .result
-  }
-
-  protected [db] def cancelAction(campaign: CampaignId): DBIO[Unit] = {
-    Schema.groupStats
-      .filter(_.campaignId === campaign)
-      .map(_.status)
-      .update(GroupStatus.cancelled)
-      .map(_ => ())
   }
 }
 

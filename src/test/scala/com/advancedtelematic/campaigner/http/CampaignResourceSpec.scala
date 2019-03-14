@@ -326,7 +326,6 @@ class CampaignResourceSpec
       val affectedCount = affectedDevices.size.toLong
       val notAffectedCount = notAffectedDevices.size.toLong
       val processedCount = affectedCount + notAffectedCount
-      val groupStats = Stats(processedCount, affectedCount)
 
       override def toString: String =
         s"CampaignCase(s=${successfulDevices.size}, f=${failedDevices.size}, c=${cancelledDevices.size}, a=$affectedCount, n=$notAffectedCount, p=$processedCount)"
@@ -341,7 +340,6 @@ class CampaignResourceSpec
 
     def conductCampaign(campaignId: CampaignId, campaign: CreateCampaign, campaignCase: CampaignCase): Future[Unit] = for {
       _ <- campaigns.launch(campaignId)
-      _ <- campaigns.completeGroup(campaignId, campaignCase.groupId, campaignCase.groupStats)
       _ <- campaigns.scheduleDevices(campaignId, campaign.update, campaignCase.affectedDevices:_*)
       _ <- campaigns.rejectDevices(campaignId, campaign.update, campaignCase.notAffectedDevices)
       _ <- campaigns.cancelDevices(campaignId, campaignCase.cancelledDevices)

@@ -7,7 +7,6 @@ import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
-import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.libats.data.DataType.Namespace
@@ -121,16 +120,6 @@ object DataType {
 
   final case class UpdateCampaign(name: String, metadata: Option[Seq[CreateCampaignMetadata]] = None)
 
-  final case class Stats(processed: Long, affected: Long)
-
-  final case class GroupStats(
-    campaign: CampaignId,
-    group: GroupId,
-    status: GroupStatus,
-    processed: Long,
-    affected: Long
-  )
-
   final case class CampaignStats(
     campaign: CampaignId,
     status: CampaignStatus,
@@ -158,11 +147,6 @@ object DataType {
     sealed trait SortBy
     case object Name      extends SortBy
     case object CreatedAt extends SortBy
-  }
-
-  object GroupStatus extends Enumeration {
-    type GroupStatus = Value
-    val scheduled, launched, cancelled = Value
   }
 
   object CampaignStatus extends Enumeration {

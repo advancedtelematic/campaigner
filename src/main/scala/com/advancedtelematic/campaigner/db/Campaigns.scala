@@ -3,7 +3,6 @@ package com.advancedtelematic.campaigner.db
 import cats.syntax.either._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
-import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.SlickMapping._
@@ -11,7 +10,6 @@ import com.advancedtelematic.campaigner.http.Errors._
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
-import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import slick.jdbc.MySQLProfile.api._
 
@@ -22,8 +20,7 @@ object Campaigns {
 }
 
 protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
-  extends GroupStatsSupport
-    with CampaignSupport
+    extends CampaignSupport
     with CampaignMetadataSupport
     with DeviceUpdateSupport
     with CancelTaskSupport {
@@ -38,28 +35,12 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def remainingCampaigns(): Future[Set[Campaign]] =
     db.run(campaignRepo.findAllWithRequestedDevices)
 
-  def remainingGroups(campaign: CampaignId): Future[Seq[GroupId]] =
-    groupStatsRepo.findScheduled(campaign).map(_.map(_.group))
-
-  def remainingBatches(campaign: CampaignId, group: GroupId): Future[Option[Long]] =
-    groupStatsRepo.findScheduled(campaign, Some(group))
-      .map(_.headOption)
-      .map(_.map(_.processed))
-
   /**
    * Given a campaign ID, returns IDs of all devices that are in `requested`
    * state
    */
   def requestedDevices(campaign: CampaignId): Future[Set[DeviceId]] =
     deviceUpdateRepo.findByCampaign(campaign, DeviceStatus.requested)
-
-  def completeBatch(campaignId: CampaignId, group: GroupId, stats: Stats): Future[Unit] = db.run {
-    campaignStatusTransition.completeBatch(campaignId, group, stats).transactionally
-  }
-
-  def completeGroup(campaign: CampaignId, group: GroupId, stats: Stats): Future[Unit] = db.run {
-    campaignStatusTransition.completeGroup(campaign, group, stats).transactionally
-  }
 
   /**
    * Re-calculates the status of the campaign and updates the table
@@ -218,14 +199,18 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     campaignStatusTransition.cancel(campaignId)
   }
 
-  def launch(id: CampaignId): Future[Unit] = db.run {
-   val io = for {
-      groups <- findGroupsAction(id)
-      _ <- scheduleGroupsAction(id, groups)
-      _ <- campaignStatusTransition.launch(id)
+  def launch(campaignId: CampaignId): Future[Unit] = db.run {
+    val action = for {
+      campaign <- campaignRepo.findAction(campaignId)
+      _ <- if (campaign.status != CampaignStatus.prepared) {
+        throw CampaignAlreadyLaunched
+      } else {
+        DBIO.successful(())
+      }
+      _ <- campaignRepo.setStatusAction(campaignId, CampaignStatus.launched)
     } yield ()
 
-    io.transactionally
+    action.transactionally
   }
 
   def create(campaign: Campaign, groups: Set[GroupId], devices: Set[DeviceId], metadata: Seq[CampaignMetadata]): Future[CampaignId] =
@@ -233,13 +218,6 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 
   def update(id: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
     campaignRepo.update(id, name, metadata)
-
-  protected [db] def scheduleGroupsAction(campaignId: CampaignId, groups: Set[GroupId]): DBIO[Unit] =
-    campaignRepo
-      .findAction(campaignId)
-      .andThen(groupStatsRepo.persistManyAction(campaignId, groups))
-      .transactionally
-      .handleIntegrityErrors(CampaignAlreadyLaunched)
 
   // TODO remove when FE is not dependent on this information anymore
   private def findGroupsAction(campaignId: CampaignId): DBIO[Set[GroupId]] =
@@ -252,41 +230,20 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     }
 }
 
-protected [db] class CampaignStatusTransition(implicit db: Database, ec: ExecutionContext) extends CampaignSupport
-  with GroupStatsSupport with CancelTaskSupport  {
+// TODO refactor and get rid of this class
+protected [db] class CampaignStatusTransition(implicit db: Database, ec: ExecutionContext)
+    extends CampaignSupport
+    with CancelTaskSupport  {
 
   def devicesFinished(campaignId: CampaignId): DBIO[Unit] =
     updateToCalculatedStatus(campaignId)
-
-  def launch(campaignId: CampaignId): DBIO[CampaignId] =
-    campaignRepo.setStatusAction(campaignId, CampaignStatus.launched)
 
   def cancel(campaignId: CampaignId): DBIO[Unit] =
     for {
       _ <- campaignRepo.findAction(campaignId)
       _ <- cancelTaskRepo.cancelAction(campaignId)
-      _ <- groupStatsRepo.cancelAction(campaignId)
       _ <- campaignRepo.setStatusAction(campaignId, CampaignStatus.cancelled)
     } yield ()
-
-  def completeBatch(campaignId: CampaignId, group: GroupId, stats: Stats): DBIO[Unit] = {
-    for {
-      _ <- progressGroupAction(campaignId, group, GroupStatus.scheduled, stats)
-      _ <- updateToCalculatedStatus(campaignId)
-    } yield ()
-  }
-
-  def completeGroup(campaign: CampaignId, group: GroupId, stats: Stats): DBIO[Unit] =
-    for {
-      _ <- progressGroupAction(campaign, group, GroupStatus.launched, stats)
-      _ <- updateToCalculatedStatus(campaign)
-    } yield ()
-
-  private def progressGroupAction(campaignId: CampaignId, group: GroupId, status: GroupStatus, stats: Stats): DBIO[Unit] =
-    if (stats.affected > stats.processed)
-      DBIO.failed(InvalidCounts)
-    else
-      groupStatsRepo.updateGroupStatsAction(campaignId, group, status, stats)
 
   protected[db] def updateToCalculatedStatus(campaignId: CampaignId): DBIO[Unit] =
     for {

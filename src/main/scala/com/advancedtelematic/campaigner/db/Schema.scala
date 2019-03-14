@@ -5,7 +5,6 @@ import java.time.Instant
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
-import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.campaigner.data.DataType._
@@ -65,21 +64,6 @@ object Schema {
 
   protected [db] val campaignGroups = TableQuery[CampaignGroupsTable]
 
-
-  class GroupStatsTable(tag: Tag) extends Table[GroupStats](tag, "group_stats") {
-    def campaignId = column[CampaignId]("campaign_id")
-    def groupId    = column[GroupId]("group_id")
-    def status     = column[GroupStatus]("status")
-    def processed  = column[Long]("processed")
-    def affected   = column[Long]("affected")
-
-    def pk = primaryKey("group_stats_pk", (campaignId, groupId))
-
-    override def * = (campaignId, groupId, status, processed, affected) <>
-                     ((GroupStats.apply _).tupled, GroupStats.unapply)
-  }
-
-  protected [db] val groupStats = TableQuery[GroupStatsTable]
 
   class DeviceUpdatesTable(tag: Tag) extends Table[DeviceUpdate](tag, "device_updates") {
     def campaignId = column[CampaignId]("campaign_id")
