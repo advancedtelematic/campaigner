@@ -1,7 +1,6 @@
 package com.advancedtelematic.campaigner.actor
 
 import akka.testkit.TestProbe
-import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
@@ -27,14 +26,13 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
   "campaign supervisor" should "pick up unfinished and fresh campaigns" in {
     val campaign1 = buildCampaignWithUpdate
     val campaign2 = buildCampaignWithUpdate
-    val group     = NonEmptyList.one(GroupId.generate)
     val parent    = TestProbe()
 
     val n = Gen.choose(batch, batch * 2).generate
     val devices1 = Gen.listOfN(n, genDeviceId).generate.toSet
     val devices2 = Gen.listOfN(n, genDeviceId).generate.toSet
 
-    campaigns.create(campaign1, group, devices1, Seq.empty).futureValue
+    campaigns.create(campaign1, Set.empty, devices1, Seq.empty).futureValue
 
     parent.childActorOf(CampaignSupervisor.props(
       director,
@@ -46,7 +44,7 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
     parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign1.id)))
     parent.expectMsg(3.seconds, CampaignComplete(campaign1.id))
 
-    campaigns.create(campaign2, group, devices2, Seq.empty).futureValue
+    campaigns.create(campaign2, Set.empty, devices2, Seq.empty).futureValue
     parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign2.id)))
   }
 }
@@ -66,12 +64,11 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
 
   "campaign supervisor" should "clean out campaigns that are marked to be cancelled" in {
     val campaign = buildCampaignWithUpdate
-    val group    = NonEmptyList.one(GroupId.generate)
     val parent   = TestProbe()
     val n        = Gen.choose(batch, batch * 2).generate
     val devs     = Gen.listOfN(n, genDeviceId).generate.toSet
 
-    campaigns.create(campaign, group, devs, Seq.empty).futureValue
+    campaigns.create(campaign, Set.empty, devs, Seq.empty).futureValue
 
     parent.childActorOf(CampaignSupervisor.props(
       director,

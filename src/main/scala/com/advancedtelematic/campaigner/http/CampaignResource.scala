@@ -33,7 +33,7 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
     val metadata = request.mkCampaignMetadata(campaign.id)
     for {
       devices <- fetchDevicesInGroups(ns, request.groups)
-      campaignId <- campaigns.create(campaign, request.groups, devices, metadata)
+      campaignId <- campaigns.create(campaign, request.groups.toList.toSet, devices, metadata)
     } yield campaignId
   }
 

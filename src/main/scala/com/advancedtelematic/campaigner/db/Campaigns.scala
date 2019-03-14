@@ -1,6 +1,5 @@
 package com.advancedtelematic.campaigner.db
 
-import cats.data.NonEmptyList
 import cats.syntax.either._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
@@ -229,8 +228,8 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     io.transactionally
   }
 
-  def create(campaign: Campaign, groups: NonEmptyList[GroupId], devices: Set[DeviceId], metadata: Seq[CampaignMetadata]): Future[CampaignId] =
-    campaignRepo.persist(campaign, groups.toList.toSet, devices, metadata)
+  def create(campaign: Campaign, groups: Set[GroupId], devices: Set[DeviceId], metadata: Seq[CampaignMetadata]): Future[CampaignId] =
+    campaignRepo.persist(campaign, groups, devices, metadata)
 
   def update(id: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
     campaignRepo.update(id, name, metadata)

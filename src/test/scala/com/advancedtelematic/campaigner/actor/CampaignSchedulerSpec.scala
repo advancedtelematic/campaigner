@@ -2,7 +2,6 @@ package com.advancedtelematic.campaigner.actor
 
 import akka.http.scaladsl.util.FastFuture
 import akka.testkit.TestProbe
-import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
@@ -31,7 +30,6 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
 
   "campaign scheduler" should "trigger updates for each device" in {
     val campaign = buildCampaignWithUpdate
-    val groups   = arbitrary[NonEmptyList[GroupId]].generate
     val parent   = TestProbe()
     val n = Gen.choose(batch, batch * 2).generate
     val devices = Gen.listOfN(n, genDeviceId).generate.toSet
@@ -61,7 +59,7 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
         Future.successful(Seq.empty)
     }
 
-    campaigns.create(campaign, groups, devices, Seq.empty).futureValue
+    campaigns.create(campaign, Set.empty, devices, Seq.empty).futureValue
 
     parent.childActorOf(CampaignScheduler.props(
       director,
@@ -75,7 +73,6 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
   }
 
   "PRO-3672: campaign with 0 affected devices" should "yield a `finished` status" in {
-    val groups   = arbitrary[NonEmptyList[GroupId]].generate
     val campaign = buildCampaignWithUpdate
     val parent   = TestProbe()
     val n = Gen.choose(batch, batch * 2).generate
@@ -102,7 +99,7 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
         Future.successful(Seq.empty)
     }
 
-    campaigns.create(campaign, groups, devices, Seq.empty).futureValue
+    campaigns.create(campaign, Set.empty, devices, Seq.empty).futureValue
 
     parent.childActorOf(CampaignScheduler.props(
       director,
