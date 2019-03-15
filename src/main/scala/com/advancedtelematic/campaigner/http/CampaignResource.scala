@@ -58,6 +58,7 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
           mainCampaign.updateId,
           retryGroup,
           mainCampaign.id,
+          request.failureCode
         ).mkCampaign(ns)
 
         campaigns

@@ -30,6 +30,8 @@ object DataType {
     createdAt: Instant,
     updatedAt: Instant,
     mainCampaignId: Option[CampaignId],
+    // TODO ensure that they're both either Some or None
+    failureCode: Option[String],
     autoAccept: Boolean = true
   )
 
@@ -61,6 +63,7 @@ object DataType {
   final case class CreateCampaign(name: String,
                                   update: UpdateId,
                                   groups: NonEmptyList[GroupId],
+                                 // TODO remove mainCampaignId from here, we should use the other endpoint to launch a retry campaign.
                                   mainCampaignId: Option[CampaignId],
                                   metadata: Option[Seq[CreateCampaignMetadata]] = None,
                                   approvalNeeded: Option[Boolean] = Some(false))
@@ -75,6 +78,7 @@ object DataType {
         Instant.now(),
         Instant.now(),
         mainCampaignId,
+        None,
         !approvalNeeded.getOrElse(false)
       )
     }
@@ -87,9 +91,20 @@ object DataType {
                                        update: UpdateId,
                                        group: GroupId,
                                        mainCampaignId: CampaignId,
+                                       failureCode: String
                                       ) {
     def mkCampaign(ns: Namespace): Campaign =
-      CreateCampaign(name, update, NonEmptyList.one(group), Some(mainCampaignId)).mkCampaign(ns)
+      Campaign(
+        ns,
+        CampaignId.generate(),
+        name,
+        update,
+        CampaignStatus.prepared,
+        Instant.now(),
+        Instant.now(),
+        Some(mainCampaignId),
+        Some(failureCode)
+      )
   }
 
   final case class RetryFailedDevices(failureCode: String)
