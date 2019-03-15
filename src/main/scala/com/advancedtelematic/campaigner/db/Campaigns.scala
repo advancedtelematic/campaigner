@@ -111,6 +111,13 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       .andThen(campaignStatusTransition.devicesFinished(campaignId))
   }
 
+  /**
+    * Returns the IDs of all the devices that were processed in the campaign with `campaignId` and failed with
+    * the code `failureCode`.
+    */
+  def fetchFailedDevices(campaignId: CampaignId, failureCode: String): Future[Set[DeviceId]] =
+    deviceUpdateRepo.findFailedByFailureCode(campaignId, failureCode)
+
   def countByStatus: Future[Map[CampaignStatus, Int]] =
     db
       .run(campaignRepo.countByStatus)

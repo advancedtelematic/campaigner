@@ -9,7 +9,7 @@ import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns}
+import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns, DeviceUpdateSupport}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec, UpdateResourceSpecUtil}
 import com.advancedtelematic.libats.data.ErrorCodes.InvalidEntity
 import com.advancedtelematic.libats.data.ErrorRepresentation
@@ -24,12 +24,14 @@ import org.scalacheck.Gen
 import org.scalactic.source
 import org.scalatest._
 import org.scalatest.prop.PropertyChecks
+
 import scala.concurrent.Future
 
 class CampaignResourceSpec
     extends CampaignerSpec
     with ResourceSpec
     with CampaignSupport
+    with DeviceUpdateSupport
     with UpdateResourceSpecUtil
     with GivenWhenThen
     with PropertyChecks {
@@ -98,9 +100,9 @@ class CampaignResourceSpec
     )
     retryCampaign.createdAt shouldBe retryCampaign.updatedAt
 
-    And("the list of all campaings should NOT list the retry campaign")
+    And("the list of all campaigns should NOT list the retry campaign")
     val campaigns = getCampaignsOk()
-    campaigns.values should not (contain(retryId))
+    campaigns.values should not contain retryId
 
     And("the retry campaign should have `prepared` status")
     checkStats(retryId, CampaignStatus.prepared)
@@ -167,7 +169,7 @@ class CampaignResourceSpec
   }
 
   "PUT /campaigns/:campaign_id" should "update a campaign" in {
-    val (id, request) = createCampaignWithUpdateOk()
+    val (id, _) = createCampaignWithUpdateOk()
     val update  = arbitrary[UpdateCampaign].generate
     val createdAt = getCampaignOk(id).createdAt
 
@@ -184,8 +186,40 @@ class CampaignResourceSpec
     checkStats(id, CampaignStatus.prepared)
   }
 
-  "POST /campaigns/:campaign_id/launch" should "trigger an update" in {
+  "POST /campaigns/:campaign_id/retry-failed" should "create a retry-campaign" in {
     val (campaignId, campaign) = createCampaignWithUpdateOk()
+    val deviceId = genDeviceId.generate
+    val failureCode = "failureCode-1"
+    val deviceUpdate = DeviceUpdate(campaignId, campaign.update, deviceId, DeviceStatus.accepted, Some(failureCode))
+
+    deviceUpdateRepo.persistMany(deviceUpdate :: Nil).futureValue
+    campaigns.failDevices(campaignId, deviceId :: Nil, failureCode).futureValue
+
+    createRetryCampaign(campaignId, RetryFailedDevices(failureCode)) ~> routes ~> check {
+      status shouldBe Created
+    }
+  }
+
+  "POST /campaigns/:campaign_id/retry-failed" should "fail if there are no failed devices for the given failure code" in {
+    val (campaignId, _) = createCampaignWithUpdateOk()
+    val request = RetryFailedDevices("failureCode-2")
+
+    createRetryCampaign(campaignId, request) ~> routes ~> check {
+      status shouldBe PreconditionFailed
+      responseAs[ErrorRepresentation].code shouldBe Errors.MissingFailedDevices(request.failureCode).code
+    }
+  }
+
+  "POST /campaigns/:campaign_id/retry-failed" should "fail if there is no main campaign with id :campaign_id" in {
+    val request = RetryFailedDevices("failureCode-3")
+    createRetryCampaign(CampaignId.generate(), request) ~> routes ~> check {
+      status shouldBe NotFound
+      responseAs[ErrorRepresentation].code shouldBe Errors.CampaignMissing.code
+    }
+  }
+
+  "POST /campaigns/:campaign_id/launch" should "trigger an update" in {
+    val (campaignId, _) = createCampaignWithUpdateOk()
     val request = Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header)
 
     request ~> routes ~> check {
@@ -200,7 +234,7 @@ class CampaignResourceSpec
   }
 
   "POST /campaigns/:campaign_id/cancel" should "cancel a campaign" in {
-    val (campaignId, campaign) = createCampaignWithUpdateOk()
+    val (campaignId, _) = createCampaignWithUpdateOk()
 
     checkStats(campaignId, CampaignStatus.prepared)
 

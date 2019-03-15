@@ -10,6 +10,7 @@ object ErrorCodes {
   val ConflictingCampaign = ErrorCode("campaign_already_exists")
   val MissingUpdateSource = ErrorCode("missing_update_source")
   val MissingMainCampaign = ErrorCode("missing_main_campaign")
+  val MissingFailedDevices = ErrorCode("missing_failed_devices")
   val MissingUpdate = ErrorCode("missing_update")
   val ConflictingMetadata = ErrorCode("campaign_metadata_already_exists")
   val CampaignAlreadyLaunched = ErrorCode("campaign_already_launched")
@@ -26,6 +27,12 @@ object Errors {
   case class MissingUpdate(id: UpdateId) extends Error(ErrorCodes.MissingUpdate, StatusCodes.NotFound, s"Missing $id")
 
   case class MissingExternalUpdate(externalUpdateId: ExternalUpdateId) extends Error(ErrorCodes.MissingUpdate, StatusCodes.NotFound, s"Missing $externalUpdateId")
+
+  case class MissingFailedDevices(failureCode: String) extends Error(
+    ErrorCodes.MissingFailedDevices,
+    StatusCodes.PreconditionFailed,
+    s"You are attempting to retry failed devices, but no devices failed with the code '$failureCode'."
+  )
 
   val MissingUpdateSource = RawError(
     ErrorCodes.MissingUpdateSource,

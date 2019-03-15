@@ -83,6 +83,16 @@ object DataType {
       metadata.toList.flatten.map(_.toCampaignMetadata(campaignId))
   }
 
+  final case class CreateRetryCampaign(name: String,
+                                       update: UpdateId,
+                                       group: GroupId,
+                                       mainCampaignId: CampaignId,
+                                      ) {
+    def mkCampaign(ns: Namespace): Campaign =
+      CreateCampaign(name, update, NonEmptyList.one(group), Some(mainCampaignId)).mkCampaign(ns)
+  }
+
+  final case class RetryFailedDevices(failureCode: String)
 
   final case class GetCampaign(
     namespace: Namespace,
