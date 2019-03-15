@@ -30,7 +30,7 @@ object DataType {
     status: CampaignStatus,
     createdAt: Instant,
     updatedAt: Instant,
-    parentCampaignId: Option[CampaignId],
+    mainCampaignId: Option[CampaignId],
     autoAccept: Boolean = true
   )
 
@@ -62,7 +62,7 @@ object DataType {
   final case class CreateCampaign(name: String,
                                   update: UpdateId,
                                   groups: NonEmptyList[GroupId],
-                                  parentCampaignId: Option[CampaignId],
+                                  mainCampaignId: Option[CampaignId],
                                   metadata: Option[Seq[CreateCampaignMetadata]] = None,
                                   approvalNeeded: Option[Boolean] = Some(false))
   {
@@ -75,7 +75,7 @@ object DataType {
         CampaignStatus.prepared,
         Instant.now(),
         Instant.now(),
-        parentCampaignId,
+        mainCampaignId,
         !approvalNeeded.getOrElse(false)
       )
     }
@@ -93,15 +93,15 @@ object DataType {
     status: CampaignStatus,
     createdAt: Instant,
     updatedAt: Instant,
-    parentCampaignId: Option[CampaignId],
-    childCampaignIds: Set[CampaignId],
+    mainCampaignId: Option[CampaignId],
+    retryCampaignIds: Set[CampaignId],
     groups: Set[GroupId],
     metadata: Seq[CreateCampaignMetadata],
     autoAccept: Boolean
   )
 
   object GetCampaign {
-    def apply(c: Campaign, childCampaignIds: Set[CampaignId], groups: Set[GroupId], metadata: Seq[CampaignMetadata]): GetCampaign =
+    def apply(c: Campaign, retryCampaignIds: Set[CampaignId], groups: Set[GroupId], metadata: Seq[CampaignMetadata]): GetCampaign =
       GetCampaign(
         c.namespace,
         c.id,
@@ -110,8 +110,8 @@ object DataType {
         c.status,
         c.createdAt,
         c.updatedAt,
-        c.parentCampaignId,
-        childCampaignIds,
+        c.mainCampaignId,
+        retryCampaignIds,
         groups,
         metadata.map(m => CreateCampaignMetadata(m.`type`, m.value)),
         c.autoAccept

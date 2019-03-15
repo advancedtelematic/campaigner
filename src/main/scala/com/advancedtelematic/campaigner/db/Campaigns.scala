@@ -137,10 +137,10 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 
   def findClientCampaign(campaignId: CampaignId): Future[GetCampaign] = for {
     c <- campaignRepo.find(campaignId)
-    childIds <- campaignRepo.findChildIdsOf(campaignId)
+    retryIds <- campaignRepo.findRetryCampaignIdsOf(campaignId)
     groups <- db.run(findGroupsAction(c.id))
     metadata <- campaignMetadataRepo.findFor(campaignId)
-  } yield GetCampaign(c, childIds, groups, metadata)
+  } yield GetCampaign(c, retryIds, groups, metadata)
 
   def findCampaignsByUpdate(update: UpdateId): Future[Seq[Campaign]] =
     db.run(campaignRepo.findByUpdateAction(update))
@@ -152,7 +152,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def campaignStats(campaignId: CampaignId): Future[CampaignStats] = db.run {
     val statsAction = for {
       mainCampaign <- campaignRepo.findAction(campaignId)
-      retryCampaignIds <- campaignRepo.findChildIdsOfAction(campaignId)
+      retryCampaignIds <- campaignRepo.findRetryCampaignIdsOfAction(campaignId)
       (mainProcessed, mainAffected) <- countProcessedAndAffectedDevicesForAllOfAction(Set(campaignId))
       (retryProcessed, retryAffected) <- countProcessedAndAffectedDevicesForAllOfAction(retryCampaignIds)
       mainCancelled <- countCancelledAction(Set(campaignId))
