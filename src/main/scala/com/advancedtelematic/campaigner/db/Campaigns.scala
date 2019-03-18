@@ -91,7 +91,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def cancelDevices(campaignId: CampaignId, devices: Seq[DeviceId]): Future[Unit] =
     finishDevices(campaignId, devices, DeviceStatus.cancelled, None)
 
-  private def finishDevice(updateId: UpdateId, device: DeviceId, status: DeviceStatus, resultCode: Option[String]): Future[Unit] = db.run {
+  private def finishDevice(updateId: UpdateId, device: DeviceId, status: DeviceStatus, resultCode: Option[ResultCode]): Future[Unit] = db.run {
     for {
       _ <- deviceUpdateRepo.setUpdateStatusAction(updateId, device, status, resultCode)
       campaigns <- campaignRepo.findByUpdateAction(updateId)
@@ -99,7 +99,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     } yield ()
   }
 
-  private def finishDevices(campaignId: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[String]): Future[Unit] = db.run {
+  private def finishDevices(campaignId: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[ResultCode]): Future[Unit] = db.run {
     deviceUpdateRepo.setUpdateStatusAction(campaignId, devices, status, resultCode)
       .andThen(campaignStatusTransition.devicesFinished(campaignId))
   }

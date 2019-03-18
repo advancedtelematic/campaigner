@@ -16,6 +16,9 @@ import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, Updat
 
 object DataType {
 
+  type ResultCode = String
+  type FailureCode <: ResultCode
+
   final case class CampaignId(uuid: UUID) extends UUIDKey
   object CampaignId extends UUIDKeyObj[CampaignId]
 
@@ -145,7 +148,7 @@ object DataType {
     update: UpdateId,
     device: DeviceId,
     status: DeviceStatus,
-    resultCode: Option[String] = None
+    resultCode: Option[ResultCode] = None
   )
 
   final case class CancelTask(

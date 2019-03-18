@@ -86,7 +86,7 @@ object Schema {
     def updateId   = column[UpdateId]("update_id")
     def deviceId   = column[DeviceId]("device_id")
     def status     = column[DeviceStatus]("status")
-    def resultCode = column[Option[String]]("result_code")
+    def resultCode = column[Option[ResultCode]]("result_code")
 
     def pk = primaryKey("device_updates_pk", (campaignId, deviceId))
 
