@@ -1,7 +1,5 @@
 package com.advancedtelematic.campaigner.http
 
-import java.util.UUID
-
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.{Directive1, Route}
 import akka.http.scaladsl.server.Directives._
@@ -14,7 +12,6 @@ import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignSta
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
-import com.advancedtelematic.campaigner.http.Errors.MissingFailedDevices
 import com.advancedtelematic.libats.auth.AuthedNamespaceScope
 import com.advancedtelematic.libats.data.DataType.{CorrelationId, Namespace}
 import com.advancedtelematic.libats.http.UUIDKeyAkka._
@@ -42,29 +39,10 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
 
   /**
     * Create and immediately launch a retry-campaign for all the devices that were processed by `mainCampaign` and
-    * failed with a code `failureCode`. We assume there is at least one failed device. Hence, if there were not any
-    * such devices in `mainCampaign`, throw an error.
+    * failed with the code given in `request`.
     */
-  def retryFailedDevices(ns: Namespace, mainCampaign: Campaign, request: RetryFailedDevices): Future[Unit] =
-    campaigns.fetchFailedDevices(mainCampaign.id, request.failureCode).map(_.toSeq).flatMap {
-      case Nil =>
-        Future.failed(MissingFailedDevices(request.failureCode))
-
-      case deviceIds =>
-        // FIXME we just need to create this dummy group until we get totally rid of the groups.
-        val retryGroup = GroupId(UUID.fromString("0000-00-00-00-000000"))
-        val retryCampaign = CreateRetryCampaign(
-          s"retryCampaignWith-mainCampaign-${mainCampaign.id.uuid}-failureCode-${request.failureCode}",
-          mainCampaign.updateId,
-          retryGroup,
-          mainCampaign.id,
-          request.failureCode
-        ).mkCampaign(ns)
-
-        campaigns
-          .create(retryCampaign, Set(retryGroup), deviceIds.toSet, Nil)
-          .flatMap(campaigns.launch)
-    }
+  def retryFailedDevices(ns: Namespace, mainCampaign: Campaign, request: RetryFailedDevices): Future[CampaignId] =
+    campaigns.retryCampaign(ns, mainCampaign, request.failureCode)
 
   private def UserCampaignPathPrefix(namespace: Namespace): Directive1[Campaign] =
     pathPrefix(CampaignId.Path).flatMap { campaign =>

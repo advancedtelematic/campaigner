@@ -40,8 +40,7 @@ object Generators {
     update <- arbitrary[UpdateId]
     gs <- arbitrary[NonEmptyList[GroupId]]
     meta   <- Gen.option(genCampaignMetadata.map(List(_)))
-    mainId = None
-  } yield CreateCampaign(n, update, gs, mainId, meta)
+  } yield CreateCampaign(n, update, gs, meta)
 
   val genUpdateCampaign: Gen[UpdateCampaign] = for {
     n   <- arbitrary[String].suchThat(!_.isEmpty)
