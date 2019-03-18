@@ -19,7 +19,9 @@ import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, Updat
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
+import java.util.UUID
 import slick.jdbc.MySQLProfile.api._
+import slick.jdbc.GetResult
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Failure
@@ -185,23 +187,21 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
    * Returns all campaigns that have all devices in `requested` state
    */
   def findAllNewlyCreated: DBIO[Set[Campaign]] = {
-    val baseQuery = Schema.deviceUpdates.join(Schema.campaigns).on(_.campaignId === _.id)
+    implicit val `GetResult[UUID]` = GetResult(r => UUID.fromString(r.nextString))
 
-    val campaignsAllDevicesCountQuery = baseQuery
-      .groupBy(_._2)
-      .map { case (campaign, devices) => (campaign, devices.length) }
-    val campaignsRequestedDevicesCountQuery = baseQuery
-      .filter { case (deviceUpdate, _) => deviceUpdate.status === DeviceStatus.requested }
-      .groupBy(_._2)
-      .map { case (campaign, devices) => (campaign, devices.length) }
+    val queryAllNewlyCreatedCampaignIds = sql"""
+      select campaign_id
+      from device_updates
+      group by campaign_id
+      having group_concat(distinct status) = 'requested';
+    """.as[UUID]
 
-    campaignsAllDevicesCountQuery
-      .join(campaignsRequestedDevicesCountQuery)
-      .on(_._1.id === _._1.id)
-      .filter { case ((_, allDevicesCount), (_, requestedDevicesCount)) => allDevicesCount === requestedDevicesCount }
-      .map(_._1._1)
-      .result
-      .map(_.toSet)
+    val action = for {
+      ids <- queryAllNewlyCreatedCampaignIds.map(_.map(CampaignId(_)))
+      campaigns <- Schema.campaigns.filter(_.id.inSet(ids)).result
+    } yield campaigns.toSet
+
+    action.transactionally
   }
 
   def update(campaign: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
