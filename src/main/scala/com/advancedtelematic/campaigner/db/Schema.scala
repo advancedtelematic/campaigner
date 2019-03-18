@@ -29,11 +29,11 @@ object Schema {
     def autoAccept = column[Boolean]   ("auto_accept")
     def createdAt = column[Instant]   ("created_at")
     def updatedAt = column[Instant]   ("updated_at")
-    def parentCampaignId = column[Option[CampaignId]]("parent_campaign_uuid")
+    def mainCampaignId = column[Option[CampaignId]]("parent_campaign_uuid")
 
     def updateForeignKey = foreignKey("update_fk", update, updates)(_.uuid)
 
-    override def * = (namespace, id, name, update, status, createdAt, updatedAt, parentCampaignId, autoAccept) <>
+    override def * = (namespace, id, name, update, status, createdAt, updatedAt, mainCampaignId, autoAccept) <>
       ((Campaign.apply _).tupled, Campaign.unapply)
   }
 

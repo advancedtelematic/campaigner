@@ -192,7 +192,7 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
     val f = for {
       _ <- (Schema.campaigns += campaign).recover {
         case Failure(UpdateFKViolation()) => DBIO.failed(MissingUpdateSource)
-        case Failure(CampaignFKViolation()) => DBIO.failed(MissingParentCampaign)
+        case Failure(CampaignFKViolation()) => DBIO.failed(MissingMainCampaign)
       }.handleIntegrityErrors(ConflictingCampaign)
       _ <- Schema.campaignGroups ++= groups.map(campaign.id -> _)
       _ <- (Schema.campaignMetadata ++= metadata).handleIntegrityErrors(ConflictingMetadata)
@@ -218,7 +218,7 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
     db.run {
       Schema.campaigns
         .filter(_.namespace === ns)
-        .filter(_.parentCampaignId.isEmpty)
+        .filter(_.mainCampaignId.isEmpty)
         .maybeFilter(_.status === status)
         .maybeContains(_.name, nameContains)
         .sortBy(sortBy)
@@ -281,19 +281,17 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
   /**
    * Given a main campaign ID, finds all IDs of the corresponding retry
    * campaigns.
-   * FIXME change vocabulary from child/parent to main/retry
    */
-  def findChildIdsOf(parentId: CampaignId): Future[Set[CampaignId]] =
-    db.run(findChildIdsOfAction(parentId))
+  def findRetryCampaignIdsOf(mainId: CampaignId): Future[Set[CampaignId]] =
+    db.run(findRetryCampaignIdsOfAction(mainId))
 
   /**
    * Given a main campaign ID, finds all IDs of the corresponding retry
    * campaigns.
-   * FIXME change vocabulary from child/parent to main/retry
    */
-  protected[db] def findChildIdsOfAction(parentId: CampaignId): DBIO[Set[CampaignId]] =
+  protected[db] def findRetryCampaignIdsOfAction(mainId: CampaignId): DBIO[Set[CampaignId]] =
     Schema.campaigns
-      .filter(_.parentCampaignId === parentId)
+      .filter(_.mainCampaignId === mainId)
       .map(_.id)
       .result
       .map(_.toSet)

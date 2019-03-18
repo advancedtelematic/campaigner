@@ -9,7 +9,7 @@ import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
 object ErrorCodes {
   val ConflictingCampaign = ErrorCode("campaign_already_exists")
   val MissingUpdateSource = ErrorCode("missing_update_source")
-  val MissingParentCampaign = ErrorCode("missing_parent_campaign")
+  val MissingMainCampaign = ErrorCode("missing_main_campaign")
   val MissingUpdate = ErrorCode("missing_update")
   val ConflictingMetadata = ErrorCode("campaign_metadata_already_exists")
   val CampaignAlreadyLaunched = ErrorCode("campaign_already_launched")
@@ -33,10 +33,10 @@ object Errors {
     "The update associated with the given campaign does not exist."
   )
 
-  val MissingParentCampaign = RawError(
-    ErrorCodes.MissingParentCampaign,
+  val MissingMainCampaign = RawError(
+    ErrorCodes.MissingMainCampaign,
     StatusCodes.PreconditionFailed,
-    "The parent campaign for this retry campaign is invalid or does not exist."
+    "The main campaign for this retry campaign is invalid or does not exist."
   )
 
   val ConflictingCampaign = RawError(ErrorCodes.ConflictingCampaign, StatusCodes.Conflict, "campaign already exists")

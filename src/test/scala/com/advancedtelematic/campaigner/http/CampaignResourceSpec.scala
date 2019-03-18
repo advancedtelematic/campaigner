@@ -58,7 +58,7 @@ class CampaignResourceSpec
       CampaignStatus.prepared,
       campaign.createdAt,
       campaign.updatedAt,
-      request.parentCampaignId,
+      request.mainCampaignId,
       Set.empty,
       request.groups.toList.toSet,
       request.metadata.toList.flatten,
@@ -72,63 +72,63 @@ class CampaignResourceSpec
     checkStats(id, CampaignStatus.prepared)
   }
 
-  "POST /campaigns" should "set parent_campaign_id if a valid one is given" in {
-    Given("a valid parent ID")
-    val (parentId, _) = createCampaignWithUpdateOk()
+  "POST /campaigns" should "set mainCampaignId if a valid one is given" in {
+    Given("a valid main campaign ID")
+    val (mainId, _) = createCampaignWithUpdateOk()
 
-    When("a child campaign is created")
-    val (childId, request) = createCampaignWithUpdateOk(
-      genCreateCampaign().map(_.copy(parentCampaignId = Some(parentId))))
+    When("a retry campaign is created")
+    val (retryId, request) = createCampaignWithUpdateOk(
+      genCreateCampaign().map(_.copy(mainCampaignId = Some(mainId))))
 
-    Then("the child campaign should have the parent campaign ID and other properties")
-    val childCampaign = getCampaignOk(childId)
-    childCampaign shouldBe GetCampaign(
+    Then("the retry campaign should have the main campaign ID and other properties")
+    val retryCampaign = getCampaignOk(retryId)
+    retryCampaign shouldBe GetCampaign(
       testNs,
-      childId,
+      retryId,
       request.name,
       request.update,
       CampaignStatus.prepared,
-      childCampaign.createdAt,
-      childCampaign.updatedAt,
-      Some(parentId),
+      retryCampaign.createdAt,
+      retryCampaign.updatedAt,
+      Some(mainId),
       Set.empty,
       request.groups.toList.toSet,
       request.metadata.toList.flatten,
       autoAccept = true
     )
-    childCampaign.createdAt shouldBe childCampaign.updatedAt
+    retryCampaign.createdAt shouldBe retryCampaign.updatedAt
 
-    And("the list of all campaings should NOT list the child campaign")
+    And("the list of all campaings should NOT list the retry campaign")
     val campaigns = getCampaignsOk()
-    campaigns.values should not (contain(childId))
+    campaigns.values should not (contain(retryId))
 
-    And("the child campaign should have `prepared` status")
-    checkStats(childId, CampaignStatus.prepared)
+    And("the retry campaign should have `prepared` status")
+    checkStats(retryId, CampaignStatus.prepared)
 
-    And("the parent campaign should have the child campaing in child campaings list")
-    val parentCampaign = getCampaignOk(parentId)
-    parentCampaign.childCampaignIds should contain(childId)
+    And("the main campaign should have the retry campaign in retry campaigns list")
+    val mainCampaign = getCampaignOk(mainId)
+    mainCampaign.retryCampaignIds should contain(retryId)
   }
 
-  "POST /campaigns" should "fail if parent_campaign_id does not refer to an existing campaign" in {
+  "POST /campaigns" should "fail if mainCampaignId does not refer to an existing campaign" in {
       Given("a valid update")
       val createUpdate = genCreateUpdate().map(cu =>
           cu.copy(updateSource = UpdateSource(cu.updateSource.id, UpdateType.multi_target))
       ).sample.get
       val updateId = createUpdateOk(createUpdate)
 
-      Given("a non-existing parent campaign ID")
-      val genCreateCampaignWithInvalidParentId = for {
+      Given("a non-existing main campaign ID")
+      val genCreateCampaignWithInvalidMainId = for {
         createCampaign <- genCreateCampaign()
-        parentId <- arbitrary[CampaignId]
-      } yield createCampaign.copy(parentCampaignId = Some(parentId), update = updateId)
-      val createCampaignWithInvalidParentId = genCreateCampaignWithInvalidParentId.sample.get
+        mainId <- arbitrary[CampaignId]
+      } yield createCampaign.copy(mainCampaignId = Some(mainId), update = updateId)
+      val createCampaignWithInvalidMainId = genCreateCampaignWithInvalidMainId.sample.get
 
-      When("a child campaign is created")
+      When("a retry campaign is created")
       Then("a PreconditionFailed error is raised")
-      createCampaign(createCampaignWithInvalidParentId) ~> routes ~> check {
+      createCampaign(createCampaignWithInvalidMainId) ~> routes ~> check {
         status shouldBe PreconditionFailed
-        responseAs[ErrorRepresentation].code shouldBe Errors.MissingParentCampaign.code
+        responseAs[ErrorRepresentation].code shouldBe Errors.MissingMainCampaign.code
       }
   }
 
@@ -145,7 +145,7 @@ class CampaignResourceSpec
       CampaignStatus.prepared,
       campaign.createdAt,
       campaign.updatedAt,
-      request.parentCampaignId,
+      request.mainCampaignId,
       Set.empty,
       request.groups.toList.toSet,
       request.metadata.toList.flatten,
@@ -376,7 +376,7 @@ class CampaignResourceSpec
       val (retryCampaignId, retryCampaign) = createCampaignWithUpdateOk(
         genCreateCampaign().map(_.copy(
           groups = NonEmptyList.one(retryCase.groupId),
-          parentCampaignId = Some(mainCampaignId)
+          mainCampaignId = Some(mainCampaignId)
         )))
       conductCampaign(retryCampaignId, retryCampaign, retryCase).futureValue
 
