@@ -121,9 +121,11 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
         case _ => DBIO.failed(DeviceNotScheduled)
       }.map(_ => ())
 
-  def persistMany(updates: Seq[DeviceUpdate]): Future[Unit] = db.run {
+  def persistMany(updates: Seq[DeviceUpdate]): Future[Unit] =
+    db.run(persistManyAction(updates))
+
+  def persistManyAction(updates: Seq[DeviceUpdate]): DBIO[Unit] =
     DBIO.sequence(updates.map(Schema.deviceUpdates.insertOrUpdate)).transactionally.map(_ => ())
-  }
 }
 
 protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext) {

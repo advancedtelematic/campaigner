@@ -33,6 +33,7 @@ class CampaignScheduler(director: DirectorClient,
   with ActorLogging {
 
   import CampaignScheduler._
+  import DeviceUpdateProcess.StartUpdateResult
   import akka.pattern.pipe
   import context._
 
@@ -44,11 +45,11 @@ class CampaignScheduler(director: DirectorClient,
     self ! NextBatch
 
   private def schedule(deviceIds: Set[DeviceId]): Future[BatchComplete] = for {
-    affectedDevices <- deviceUpdateProcess.startUpdateFor(deviceIds.toSeq, campaign).map(_.toSet)
-    rejectedDevices = deviceIds -- affectedDevices
-    _ <- campaigns.rejectDevices(campaign.id, campaign.updateId, rejectedDevices.toSeq)
-    _ <- campaigns.updateStatus(campaign.id)
-  } yield BatchComplete(affectedDevices, rejectedDevices)
+    StartUpdateResult(accepted, scheduled, rejected) <-
+      deviceUpdateProcess.startUpdateFor(deviceIds, campaign)
+    _ <- campaigns.updateCampaignAndDevicesStatuses(
+      campaign, accepted, scheduled, rejected)
+  } yield BatchComplete(accepted ++ scheduled, rejected)
 
   def receive: Receive = {
     case NextBatch =>
