@@ -167,7 +167,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   /**
    * Calculates campaign-wide statistic counters, also taking retry campaings
    * into account if any exist.
-   * TODO this method needs separate refactoring
+   * TODO (OTA-2384) this method needs separate refactoring
    */
   def campaignStats(campaignId: CampaignId): Future[CampaignStats] = db.run {
     val statsAction = for {
@@ -180,7 +180,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       mainCancelled <- countCancelledAction(Set(campaignId))
       retryCancelled <- countCancelledAction(retryCampaignIds)
       mainFinished  <- countFinishedAction(Set(campaignId))
-      // TODO replace with failed devices groups when implemented
+      // TODO (OTA-2307) replace with failed devices groups when implemented
       failed <- findFailedDevicesAction(campaignId)
     } yield CampaignStats(
       campaign = campaignId,
@@ -219,7 +219,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def update(id: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
     campaignRepo.update(id, name, metadata)
 
-  // TODO remove when FE is not dependent on this information anymore
+  // TODO (OTA-2377) remove when FE is not dependent on this information anymore
   private def findGroupsAction(campaignId: CampaignId): DBIO[Set[GroupId]] =
     campaignRepo.findAction(campaignId).flatMap { _ =>
         Schema.campaignGroups
@@ -254,7 +254,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   }
 }
 
-// TODO refactor and get rid of this class
+// TODO (OTA-2384) refactor and get rid of this class
 protected [db] class CampaignStatusTransition(implicit db: Database, ec: ExecutionContext)
     extends CampaignSupport
     with CancelTaskSupport  {

@@ -94,7 +94,7 @@ object DataType {
     updatedAt: Instant,
     mainCampaignId: Option[CampaignId],
     retryCampaignIds: Set[CampaignId],
-    // TODO remove the field when FE is not dependent on it anymore
+    // TODO (OTA-2377) remove the field when FE is not dependent on it anymore
     groups: Set[GroupId],
     metadata: Seq[CreateCampaignMetadata],
     autoAccept: Boolean

@@ -54,7 +54,7 @@ class CampaignScheduler(director: DirectorClient,
   def receive: Receive = {
     case NextBatch =>
       log.debug("Requesting next batch")
-      // TODO limit or stream device IDs from DB
+      // TODO (OTA-2383) limit or stream device IDs from DB
       campaigns.requestedDevices(campaign.id)
         .map(deviceIds => BatchToSchedule(deviceIds.take(batchSize)))
         .pipeTo(self)
