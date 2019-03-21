@@ -24,15 +24,34 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
   }
 
   "campaign supervisor" should "pick up unfinished and fresh campaigns" in {
-    val campaign1 = buildCampaignWithUpdate
-    val campaign2 = buildCampaignWithUpdate
-    val parent    = TestProbe()
-
+    val partiallyScheduledCampaign = buildCampaignWithUpdate
+    val freshCampaign = buildCampaignWithUpdate
+    val scheduledCampaign = buildCampaignWithUpdate
+    val parent = TestProbe()
     val n = Gen.choose(batch, batch * 2).generate
-    val devices1 = Gen.listOfN(n, genDeviceId).generate.toSet
-    val devices2 = Gen.listOfN(n, genDeviceId).generate.toSet
 
-    campaigns.create(campaign1, Set.empty, devices1, Seq.empty).futureValue
+    val scheduledCampaignDevices = Gen.listOfN(n, genDeviceId).generate.toSet
+    campaigns.create(
+      scheduledCampaign,
+      Set.empty,
+      scheduledCampaignDevices,
+      Seq.empty).futureValue
+    campaigns.scheduleDevices(
+      scheduledCampaign.id,
+      scheduledCampaign.updateId,
+      scheduledCampaignDevices.toSeq:_*).futureValue
+
+    val partiallyScheduledCampaignDevices = Gen.listOfN(n, genDeviceId).generate.toSet
+    val nScheduled = Gen.choose(1, n - 1).generate
+    campaigns.create(
+      partiallyScheduledCampaign,
+      Set.empty,
+      partiallyScheduledCampaignDevices,
+      Seq.empty).futureValue
+    campaigns.scheduleDevices(
+      partiallyScheduledCampaign.id,
+      partiallyScheduledCampaign.updateId,
+      partiallyScheduledCampaignDevices.take(nScheduled).toSeq:_*).futureValue
 
     parent.childActorOf(CampaignSupervisor.props(
       director,
@@ -41,11 +60,12 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
       schedulerBatchSize
     ))
 
-    parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign1.id)))
-    parent.expectMsg(3.seconds, CampaignComplete(campaign1.id))
+    parent.expectMsg(3.seconds, CampaignsScheduled(Set(partiallyScheduledCampaign.id)))
+    parent.expectMsg(3.seconds, CampaignComplete(partiallyScheduledCampaign.id))
 
-    campaigns.create(campaign2, Set.empty, devices2, Seq.empty).futureValue
-    parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign2.id)))
+    val freshCampaignDevices = Gen.listOfN(n, genDeviceId).generate.toSet
+    campaigns.create(freshCampaign, Set.empty, freshCampaignDevices, Seq.empty).futureValue
+    parent.expectMsg(3.seconds, CampaignsScheduled(Set(freshCampaign.id)))
   }
 }
 
