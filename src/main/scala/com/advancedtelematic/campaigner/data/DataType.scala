@@ -147,6 +147,7 @@ object DataType {
     device: DeviceId,
     status: DeviceStatus,
     resultCode: Option[String] = None,
+    resultDescription: Option[String] = None,
     updatedAt: Instant = Instant.now
   )
 

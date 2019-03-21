@@ -102,23 +102,23 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
       .map(_.toSet)
   }
 
-  protected [db] def setUpdateStatusAction(update: UpdateId, device: DeviceId, status: DeviceStatus, resultCode: Option[String]): DBIO[Unit] =
+  protected [db] def setUpdateStatusAction(update: UpdateId, device: DeviceId, status: DeviceStatus, resultCode: Option[String], resultDescription: Option[String]): DBIO[Unit] =
     Schema.deviceUpdates
       .filter(_.updateId === update)
       .filter(_.deviceId === device)
-      .map(du => (du.status, du.resultCode))
-      .update((status, resultCode))
+      .map(du => (du.status, du.resultCode, du.resultDescription))
+      .update((status, resultCode, resultDescription))
       .flatMap {
         case 0 => DBIO.failed(DeviceNotScheduled)
         case _ => DBIO.successful(())
       }.map(_ => ())
 
-  protected [db] def setUpdateStatusAction(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[String]): DBIO[Unit] =
+  protected [db] def setUpdateStatusAction(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[String], resultDescription: Option[String]): DBIO[Unit] =
     Schema.deviceUpdates
       .filter(_.campaignId === campaign)
       .filter(_.deviceId inSet devices)
-      .map(du => (du.status, du.resultCode))
-      .update((status, resultCode))
+      .map(du => (du.status, du.resultCode, du.resultDescription))
+      .update((status, resultCode, resultDescription))
       .flatMap {
         case n if devices.length == n => DBIO.successful(())
         case _ => DBIO.failed(DeviceNotScheduled)

@@ -70,7 +70,7 @@ class DeviceUpdateProcess(director: DirectorClient)(implicit db: Database, ec: E
           _logger.warn(s"Could not start mtu update for device $deviceId after device accepted, device is no longer affected")
 
           campaigns.scheduleDevices(campaignId, campaign.update, deviceId).flatMap { _ =>
-            campaigns.failDevice(campaign.update, deviceId, "failure-code-1")
+            campaigns.failDevice(campaign.update, deviceId, "DEVICE_UPDATE_PROCESS_FAILED", "DeviceUpdateProcess#processDeviceAcceptedUpdate failed")
           }
       }
     } yield ()

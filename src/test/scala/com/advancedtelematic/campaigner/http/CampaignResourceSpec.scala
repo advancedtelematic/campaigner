@@ -140,11 +140,11 @@ class CampaignResourceSpec
   "POST /campaigns/:campaign_id/retry-failed" should "create and launch a retry-campaign" in {
     val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk()
     val deviceId = genDeviceId.generate
-    val failureCode = "failureCode-1"
+    val (failureCode, failureDescription) = ("failure-code-1", "failure-description-1")
     val deviceUpdate = DeviceUpdate(mainCampaignId, mainCampaign.update, deviceId, DeviceStatus.accepted, Some(failureCode))
 
     deviceUpdateRepo.persistMany(deviceUpdate :: Nil).futureValue
-    campaigns.failDevices(mainCampaignId, deviceId :: Nil, failureCode).futureValue
+    campaigns.failDevices(mainCampaignId, deviceId :: Nil, failureCode, failureDescription).futureValue
 
     val retryCampaignId = createAndLaunchRetryCampaign(mainCampaignId, RetryFailedDevices(failureCode)) ~> routes ~> check {
       status shouldBe Created
@@ -346,8 +346,8 @@ class CampaignResourceSpec
       _ <- campaigns.scheduleDevices(campaignId, updateId, campaignCase.affectedDevices:_*)
       _ <- campaigns.rejectDevices(campaignId, updateId, campaignCase.notAffectedDevices)
       _ <- campaigns.cancelDevices(campaignId, campaignCase.cancelledDevices)
-      _ <- campaigns.failDevices(campaignId, campaignCase.failedDevices, failureCode)
-      _ <- campaigns.succeedDevices(campaignId, campaignCase.successfulDevices, "success-code-1")
+      _ <- campaigns.failDevices(campaignId, campaignCase.failedDevices, failureCode, "failure-description-1")
+      _ <- campaigns.succeedDevices(campaignId, campaignCase.successfulDevices, "success-code-1", "success-description-1")
     } yield ()
 
     forAll(genCampaignCase) { mainCase =>

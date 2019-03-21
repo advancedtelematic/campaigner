@@ -49,7 +49,7 @@ class CampaignsSpec extends AsyncFlatSpec
       update <- createDbUpdate(UpdateId.generate())
       newCampaigns <- FastFuture.traverse(arbitrary[Seq[Int]].generate)(_ => createDbCampaign(ns, update, group))
       _ <- FastFuture.traverse(newCampaigns)(c => campaigns.scheduleDevices(c.id, update, device))
-      _ <- campaigns.succeedDevice(update, device, "success-code-1")
+      _ <- campaigns.succeedDevice(update, device, "success-code-1", "success-description-1")
       stats <- campaigns.campaignStats(newCampaigns.head.id)
     } yield stats.finished shouldBe 1
   }
@@ -60,7 +60,7 @@ class CampaignsSpec extends AsyncFlatSpec
     for {
       campaign <- createDbCampaignWithUpdate()
       _ <- FastFuture.traverse(devices)(d => campaigns.scheduleDevices(campaign.id, campaign.updateId, d))
-      _ <- FastFuture.traverse(devices)(d => campaigns.failDevice(campaign.updateId, d, "failure-code-1"))
+      _ <- FastFuture.traverse(devices)(d => campaigns.failDevice(campaign.updateId, d, "failure-code-1", "failure-description-1"))
       stats <- campaigns.campaignStats(campaign.id)
     } yield stats.finished shouldBe devices.length
   }
