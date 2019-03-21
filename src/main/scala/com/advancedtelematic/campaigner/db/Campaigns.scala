@@ -1,10 +1,8 @@
 package com.advancedtelematic.campaigner.db
 
-import cats.data.NonEmptyList
 import cats.syntax.either._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
-import com.advancedtelematic.campaigner.data.DataType.GroupStatus.GroupStatus
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.SlickMapping._
@@ -12,7 +10,6 @@ import com.advancedtelematic.campaigner.http.Errors._
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
-import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import slick.jdbc.MySQLProfile.api._
 
@@ -23,8 +20,7 @@ object Campaigns {
 }
 
 protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
-  extends GroupStatsSupport
-    with CampaignSupport
+    extends CampaignSupport
     with CampaignMetadataSupport
     with DeviceUpdateSupport
     with CancelTaskSupport {
@@ -33,23 +29,24 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 
   def remainingCancelling(): Future[Seq[(Namespace, CampaignId)]] = cancelTaskRepo.findInprogress()
 
-  def remainingCampaigns(): Future[Seq[Campaign]] = campaignRepo.findAllScheduled()
+  /**
+   * Returns all campaigns that have devices in `requested` state
+   */
+  def remainingCampaigns(): Future[Set[Campaign]] =
+    db.run(campaignRepo.findAllWithRequestedDevices)
 
-  def remainingGroups(campaign: CampaignId): Future[Seq[GroupId]] =
-    groupStatsRepo.findScheduled(campaign).map(_.map(_.group))
+  /**
+   * Given a campaign ID, returns IDs of all devices that are in `requested`
+   * state
+   */
+  def requestedDevices(campaign: CampaignId): Future[Set[DeviceId]] =
+    deviceUpdateRepo.findByCampaign(campaign, DeviceStatus.requested)
 
-  def remainingBatches(campaign: CampaignId, group: GroupId): Future[Option[Long]] =
-    groupStatsRepo.findScheduled(campaign, Some(group))
-      .map(_.headOption)
-      .map(_.map(_.processed))
-
-  def completeBatch(campaignId: CampaignId, group: GroupId, stats: Stats): Future[Unit] = db.run {
-    campaignStatusTransition.completeBatch(campaignId, group, stats).transactionally
-  }
-
-  def completeGroup(campaign: CampaignId, group: GroupId, stats: Stats): Future[Unit] = db.run {
-    campaignStatusTransition.completeGroup(campaign, group, stats).transactionally
-  }
+  /**
+   * Re-calculates the status of the campaign and updates the table
+   */
+  def updateStatus(campaignId: CampaignId): Future[Unit] =
+    db.run(campaignStatusTransition.updateToCalculatedStatus(campaignId))
 
   /**
    * Given a campaign ID, returns IDs of all devices that are in `failed` state
@@ -62,10 +59,20 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def freshCancelled(): Future[Seq[(Namespace, CampaignId)]] =
     cancelTaskRepo.findPending()
 
-  def freshCampaigns(): Future[Seq[Campaign]] =
-    campaignRepo.findAllScheduled { groupStats =>
-      groupStats.processed === 0L && groupStats.affected === 0L
-    }
+  /**
+   * Returns all newly created, not yet scheduled campaigns
+   */
+  def freshCampaigns(): Future[Set[Campaign]] =
+    db.run(campaignRepo.findAllNewlyCreated)
+
+  /**
+   * Sets status of each given device to `rejected` for a given campaign and
+   * update.
+   */
+  def rejectDevices(campaignId: CampaignId, updateId: UpdateId, deviceIds: Seq[DeviceId]): Future[Unit] =
+    deviceUpdateRepo.persistMany(deviceIds.map(deviceId =>
+      DeviceUpdate(campaignId, updateId, deviceId, DeviceStatus.rejected)
+    ))
 
   def scheduleDevices(campaign: CampaignId, update: UpdateId, devices: DeviceId*): Future[Unit] =
     deviceUpdateRepo.persistMany(devices.map { d => DeviceUpdate(campaign, update, d, DeviceStatus.scheduled) })
@@ -129,6 +136,18 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       status === DeviceStatus.cancelled
     }
 
+  /**
+   * Returns total number of devices in the given campaigns
+   */
+  private def countProcessedAction(campaignIds: Set[CampaignId]): DBIO[Long] =
+    campaignRepo.countDevices(campaignIds)(_ => true.bind)
+
+  /**
+   * Returns the number of affected devices in the given campaigns
+   */
+  private def countAffectedAction(campaignIds: Set[CampaignId]): DBIO[Long] =
+    campaignRepo.countDevices(campaignIds)(status => status =!= DeviceStatus.rejected)
+
   def allCampaigns(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, status: Option[CampaignStatus], nameContains: Option[String]): Future[PaginationResult[CampaignId]] =
     campaignRepo.all(ns, sortBy, offset, limit, status, nameContains)
 
@@ -148,17 +167,20 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   /**
    * Calculates campaign-wide statistic counters, also taking retry campaings
    * into account if any exist.
+   * TODO (OTA-2384) this method needs separate refactoring
    */
   def campaignStats(campaignId: CampaignId): Future[CampaignStats] = db.run {
     val statsAction = for {
       mainCampaign <- campaignRepo.findAction(campaignId)
       retryCampaignIds <- campaignRepo.findRetryCampaignIdsOfAction(campaignId)
-      (mainProcessed, mainAffected) <- countProcessedAndAffectedDevicesForAllOfAction(Set(campaignId))
-      (retryProcessed, retryAffected) <- countProcessedAndAffectedDevicesForAllOfAction(retryCampaignIds)
+      mainProcessed <- countProcessedAction(Set(campaignId))
+      mainAffected <- countAffectedAction(Set(campaignId))
+      retryProcessed <- countProcessedAction(retryCampaignIds)
+      retryAffected <- countAffectedAction(retryCampaignIds)
       mainCancelled <- countCancelledAction(Set(campaignId))
       retryCancelled <- countCancelledAction(retryCampaignIds)
       mainFinished  <- countFinishedAction(Set(campaignId))
-      // TODO replace with failed devices groups when implemented
+      // TODO (OTA-2307) replace with failed devices groups when implemented
       failed <- findFailedDevicesAction(campaignId)
     } yield CampaignStats(
       campaign = campaignId,
@@ -177,43 +199,27 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     campaignStatusTransition.cancel(campaignId)
   }
 
-  def launch(id: CampaignId): Future[Unit] = db.run {
-   val io = for {
-      groups <- findGroupsAction(id)
-      _ <- scheduleGroupsAction(id, groups)
-      _ <- campaignStatusTransition.launch(id)
+  def launch(campaignId: CampaignId): Future[Unit] = db.run {
+    val action = for {
+      campaign <- campaignRepo.findAction(campaignId)
+      _ <- if (campaign.status != CampaignStatus.prepared) {
+        throw CampaignAlreadyLaunched
+      } else {
+        DBIO.successful(())
+      }
+      _ <- campaignRepo.setStatusAction(campaignId, CampaignStatus.launched)
     } yield ()
 
-    io.transactionally
+    action.transactionally
   }
 
-  def create(campaign: Campaign, groups: NonEmptyList[GroupId], metadata: Seq[CampaignMetadata]): Future[CampaignId] =
-    campaignRepo.persist(campaign, groups.toList.toSet, metadata)
+  def create(campaign: Campaign, groups: Set[GroupId], devices: Set[DeviceId], metadata: Seq[CampaignMetadata]): Future[CampaignId] =
+    campaignRepo.persist(campaign, groups, devices, metadata)
 
   def update(id: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
     campaignRepo.update(id, name, metadata)
 
-  protected [db] def scheduleGroupsAction(campaignId: CampaignId, groups: Set[GroupId]): DBIO[Unit] =
-    campaignRepo
-      .findAction(campaignId)
-      .andThen(groupStatsRepo.persistManyAction(campaignId, groups))
-      .transactionally
-      .handleIntegrityErrors(CampaignAlreadyLaunched)
-
-  def scheduleGroups(campaign: CampaignId, groups: NonEmptyList[GroupId]): Future[Unit] =
-    db.run(scheduleGroupsAction(campaign, groups.toList.toSet))
-
-  /**
-   * Collects `processed` and `affected` counters for each group of each of the
-   * given campaigns, sums them up, and returns total numbers for all the
-   * campaigns
-   */
-  private def countProcessedAndAffectedDevicesForAllOfAction(campaignIds: Set[CampaignId]): DBIO[(Long, Long)] =
-    groupStatsRepo.findByCampaignsAction(campaignIds)
-      .map(_.foldLeft((0L, 0L)) { case ((totalProcessed, totalAffected), group) =>
-        (totalProcessed + group.processed, totalAffected + group.affected)
-      })
-
+  // TODO (OTA-2377) remove when FE is not dependent on this information anymore
   private def findGroupsAction(campaignId: CampaignId): DBIO[Set[GroupId]] =
     campaignRepo.findAction(campaignId).flatMap { _ =>
         Schema.campaignGroups
@@ -222,45 +228,48 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
           .result
           .map(_.toSet)
     }
+
+  /**
+   * Given a campaign and sets of accepted, scheduled and rejected
+   * devices, calculates and updates campaign and devices statuses in the database.
+   */
+  def updateCampaignAndDevicesStatuses(
+      campaign: Campaign,
+      acceptedDeviceIds: Set[DeviceId],
+      scheduledDeviceIds: Set[DeviceId],
+      rejectedDeviceIds: Set[DeviceId]): Future[Unit] = {
+    def persistDeviceUpdates(deviceIds: Set[DeviceId], status: DeviceStatus): DBIO[Unit] =
+      deviceUpdateRepo.persistManyAction(deviceIds.toSeq.map(deviceId =>
+        DeviceUpdate(campaign.id, campaign.updateId, deviceId, status)
+      ))
+
+    val action = for {
+      _ <- persistDeviceUpdates(acceptedDeviceIds, DeviceStatus.accepted)
+      _ <- persistDeviceUpdates(scheduledDeviceIds, DeviceStatus.scheduled)
+      _ <- persistDeviceUpdates(rejectedDeviceIds, DeviceStatus.rejected)
+      _ <- campaignStatusTransition.updateToCalculatedStatus(campaign.id)
+    } yield ()
+
+    db.run(action.transactionally)
+  }
 }
 
-protected [db] class CampaignStatusTransition(implicit db: Database, ec: ExecutionContext) extends CampaignSupport
-  with GroupStatsSupport with CancelTaskSupport  {
+// TODO (OTA-2384) refactor and get rid of this class
+protected [db] class CampaignStatusTransition(implicit db: Database, ec: ExecutionContext)
+    extends CampaignSupport
+    with CancelTaskSupport  {
 
   def devicesFinished(campaignId: CampaignId): DBIO[Unit] =
     updateToCalculatedStatus(campaignId)
-
-  def launch(campaignId: CampaignId): DBIO[CampaignId] =
-    campaignRepo.setStatusAction(campaignId, CampaignStatus.launched)
 
   def cancel(campaignId: CampaignId): DBIO[Unit] =
     for {
       _ <- campaignRepo.findAction(campaignId)
       _ <- cancelTaskRepo.cancelAction(campaignId)
-      _ <- groupStatsRepo.cancelAction(campaignId)
       _ <- campaignRepo.setStatusAction(campaignId, CampaignStatus.cancelled)
     } yield ()
 
-  def completeBatch(campaignId: CampaignId, group: GroupId, stats: Stats): DBIO[Unit] = {
-    for {
-      _ <- progressGroupAction(campaignId, group, GroupStatus.scheduled, stats)
-      _ <- updateToCalculatedStatus(campaignId)
-    } yield ()
-  }
-
-  def completeGroup(campaign: CampaignId, group: GroupId, stats: Stats): DBIO[Unit] =
-    for {
-      _ <- progressGroupAction(campaign, group, GroupStatus.launched, stats)
-      _ <- updateToCalculatedStatus(campaign)
-    } yield ()
-
-  private def progressGroupAction(campaignId: CampaignId, group: GroupId, status: GroupStatus, stats: Stats): DBIO[Unit] =
-    if (stats.affected > stats.processed)
-      DBIO.failed(InvalidCounts)
-    else
-      groupStatsRepo.updateGroupStatsAction(campaignId, group, status, stats)
-
-  private def updateToCalculatedStatus(campaignId: CampaignId): DBIO[Unit] =
+  protected[db] def updateToCalculatedStatus(campaignId: CampaignId): DBIO[Unit] =
     for {
       maybeStatus <- calculateCampaignStatus(campaignId)
       _ <-  maybeStatus match {
@@ -272,29 +281,18 @@ protected [db] class CampaignStatusTransition(implicit db: Database, ec: Executi
     } yield ()
 
   protected [db] def calculateCampaignStatus(campaign: CampaignId): DBIO[Either[Unit, CampaignStatus]] = {
-    def countDevicesByStatus(status: GroupStatus) =
-      Schema.groupStats.filter(_.campaignId === campaign).filter(_.status === status).length.result
-
-    val countAffectedDevices =
-      Schema.groupStats.filter(_.campaignId === campaign).map(_.affected).sum.result.map(_.getOrElse(0L))
-
-    val countFinishedDevices =
-      Schema.deviceUpdates
-        .filter(_.campaignId === campaign).map(_.status)
-        .filter(status => status === DeviceStatus.successful || status === DeviceStatus.failed || status === DeviceStatus.cancelled)
-        .length.result
+    def devicesWithStatus(statuses: Set[DeviceStatus]): DBIO[Long] =
+      campaignRepo.countDevices(Set(campaign))(_.inSet(statuses))
 
     for {
-      groupCount <- groupStatsRepo.findByCampaignAction(campaign).map(_.length)
-      scheduled <- countDevicesByStatus(GroupStatus.scheduled)
-      cancelled <- countDevicesByStatus(GroupStatus.cancelled)
-
-      affected <- countAffectedDevices
-      finished <- countFinishedDevices
-      status = (groupCount, scheduled, cancelled, affected, finished) match {
-        case (_, _, c, _, _) if c > 0           => CampaignStatus.cancelled.asRight
-        case (g, 0, _, a, f) if g > 0 && a == f => CampaignStatus.finished.asRight
-        case _                                  => ().asLeft
+      affected <- devicesWithStatus(DeviceStatus.values - DeviceStatus.requested - DeviceStatus.rejected)
+      finished <- devicesWithStatus(Set(DeviceStatus.successful, DeviceStatus.failed, DeviceStatus.cancelled))
+      cancelled <- devicesWithStatus(Set(DeviceStatus.cancelled))
+      requested <- devicesWithStatus(Set(DeviceStatus.requested))
+      total <- devicesWithStatus(DeviceStatus.values)
+      status = (total, requested, cancelled, affected, finished) match {
+        case (t, 0, _, a, f) if a == f => CampaignStatus.finished.asRight
+        case _                         => ().asLeft
       }
     } yield status
   }

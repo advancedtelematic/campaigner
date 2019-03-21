@@ -320,12 +320,12 @@ class CampaignResourceSpec
         successfulDevices: Seq[DeviceId],
         failedDevices: Seq[DeviceId],
         cancelledDevices: Seq[DeviceId],
-        notAffectedCount: Long) {
+        notAffectedDevices: Seq[DeviceId]) {
       val groupId = genGroupId.generate
       val affectedDevices = successfulDevices ++ failedDevices ++ cancelledDevices
       val affectedCount = affectedDevices.size.toLong
+      val notAffectedCount = notAffectedDevices.size.toLong
       val processedCount = affectedCount + notAffectedCount
-      val groupStats = Stats(processedCount, affectedCount)
 
       override def toString: String =
         s"CampaignCase(s=${successfulDevices.size}, f=${failedDevices.size}, c=${cancelledDevices.size}, a=$affectedCount, n=$notAffectedCount, p=$processedCount)"
@@ -335,13 +335,13 @@ class CampaignResourceSpec
       successfulDevices <- Gen.listOf(genDeviceId)
       failedDevices <- Gen.listOf(genDeviceId)
       cancelledDevices <- Gen.listOf(genDeviceId)
-      notAffectedCount <- Gen.choose[Long](0, 5)
-    } yield CampaignCase(successfulDevices, failedDevices, cancelledDevices, notAffectedCount)
+      notAffectedDevices <- Gen.listOf(genDeviceId)
+    } yield CampaignCase(successfulDevices, failedDevices, cancelledDevices, notAffectedDevices)
 
     def conductCampaign(campaignId: CampaignId, campaign: CreateCampaign, campaignCase: CampaignCase): Future[Unit] = for {
       _ <- campaigns.launch(campaignId)
-      _ <- campaigns.completeGroup(campaignId, campaignCase.groupId, campaignCase.groupStats)
       _ <- campaigns.scheduleDevices(campaignId, campaign.update, campaignCase.affectedDevices:_*)
+      _ <- campaigns.rejectDevices(campaignId, campaign.update, campaignCase.notAffectedDevices)
       _ <- campaigns.cancelDevices(campaignId, campaignCase.cancelledDevices)
       _ <- campaigns.failDevices(campaignId, campaignCase.failedDevices, "failure-code-1")
       _ <- campaigns.succeedDevices(campaignId, campaignCase.successfulDevices, "success-code-1")
@@ -371,8 +371,9 @@ class CampaignResourceSpec
         successfulDevices = retriedS,
         failedDevices = retriedF,
         cancelledDevices = retriedC,
-        notAffectedCount = notAffectedDevices.size.toLong
+        notAffectedDevices = notAffectedDevices
       )
+
       val (retryCampaignId, retryCampaign) = createCampaignWithUpdateOk(
         genCreateCampaign().map(_.copy(
           groups = NonEmptyList.one(retryCase.groupId),

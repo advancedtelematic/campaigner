@@ -3,8 +3,9 @@ package com.advancedtelematic.campaigner.http
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.{Directive1, Route}
 import akka.http.scaladsl.server.Directives._
+import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.Settings
-import com.advancedtelematic.campaigner.client.DirectorClient
+import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, DirectorClient}
 import com.advancedtelematic.campaigner.data.AkkaSupport._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
@@ -20,7 +21,9 @@ import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: DirectorClient)
+class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
+                       director: DirectorClient,
+                       deviceRegistry: DeviceRegistryClient)
                       (implicit db: Database, ec: ExecutionContext) extends Settings {
 
   val campaigns = Campaigns()
@@ -28,13 +31,22 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope], director: 
   def createCampaign(ns: Namespace, request: CreateCampaign): Future[CampaignId] = {
     val campaign = request.mkCampaign(ns)
     val metadata = request.mkCampaignMetadata(campaign.id)
-    campaigns.create(campaign, request.groups, metadata)
+    for {
+      devices <- fetchDevicesInGroups(ns, request.groups)
+      campaignId <- campaigns.create(campaign, request.groups.toList.toSet, devices, metadata)
+    } yield campaignId
   }
 
   private def UserCampaignPathPrefix(namespace: Namespace): Directive1[Campaign] =
     pathPrefix(CampaignId.Path).flatMap { campaign =>
       onSuccess(campaigns.findNamespaceCampaign(namespace, campaign)).flatMap(provide)
     }
+
+  private def fetchDevicesInGroups(ns: Namespace, groups: NonEmptyList[GroupId]): Future[Set[DeviceId]] = {
+    val groupSet = groups.toList.toSet
+    // TODO (OTA-2385) review the retrieval logic and 'limit' parameter
+    Future.traverse(groupSet)(gid => deviceRegistry.devicesInGroup(ns, gid, 0, 50)).map(_.flatten)
+  }
 
   val route: Route =
     extractAuth { auth =>

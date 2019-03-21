@@ -3,7 +3,6 @@ package com.advancedtelematic.campaigner.daemon
 import java.time.Instant
 import java.util.UUID
 
-import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, UpdateSupport}
@@ -97,8 +96,7 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
     updateRepo.persist(update).futureValue
 
     val campaign = arbitrary[Campaign].generate.copy(namespace = update.namespace, updateId = update.uuid)
-    val group = NonEmptyList.one(GroupId.generate())
-    campaigns.create(campaign, group, Seq.empty).futureValue
+    campaigns.create(campaign, Set.empty, Set.empty, Seq.empty).futureValue
 
     val deviceUpdate = DeviceUpdate(campaign.id, update.uuid, DeviceId.generate(), DeviceStatus.accepted)
     deviceUpdateRepo.persistMany(Seq(deviceUpdate)).futureValue

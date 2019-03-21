@@ -45,9 +45,6 @@ object Codecs {
   implicit val decoderUpdateCampaign: Decoder[UpdateCampaign] = deriveDecoder
   implicit val encoderUpdateCampaign: Encoder[UpdateCampaign] = deriveEncoder
 
-  implicit val decoderStats: Decoder[Stats] = deriveDecoder
-  implicit val encoderStats: Encoder[Stats] = deriveEncoder
-
   implicit val decoderCampaignStatus: Decoder[CampaignStatus] = Decoder.enumDecoder(CampaignStatus)
   implicit val encoderCampaignStatus: Encoder[CampaignStatus] = Encoder.enumEncoder(CampaignStatus)
 

@@ -71,11 +71,6 @@ object Generators {
     d <- Gen.option(arbitrary[String])
   } yield CreateUpdate(us, n, d)
 
-  val genStats: Gen[Stats] = for {
-    p <- Gen.posNum[Long]
-    a <- Gen.posNum[Long]
-  } yield Stats(p, a)
-
   implicit lazy val arbCampaignId: Arbitrary[CampaignId] = Arbitrary(genCampaignId)
   implicit lazy val arbGroupId: Arbitrary[GroupId] = Arbitrary(genGroupId)
   implicit lazy val arbDeviceId: Arbitrary[DeviceId] = Arbitrary(genDeviceId)
@@ -88,7 +83,5 @@ object Generators {
   implicit lazy val arbUpdate: Arbitrary[Update] = Arbitrary(genUpdate())
   implicit lazy val arbMetadataType: Arbitrary[MetadataType] = Arbitrary(genMetadataType)
   implicit lazy val arbCreateUpdate: Arbitrary[CreateUpdate] = Arbitrary(genCreateUpdate())
-  implicit lazy val arbStats: Arbitrary[Stats] = Arbitrary(genStats)
   implicit lazy val arbNonEmptyGroupIdList: Arbitrary[NonEmptyList[GroupId]] = Arbitrary(genNonEmptyGroupIdList)
-
 }

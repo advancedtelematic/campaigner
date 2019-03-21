@@ -5,7 +5,7 @@ import akka.actor.{Actor, ActorLogging, Props}
 import akka.actor.Status.Failure
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Sink}
-import com.advancedtelematic.campaigner.db.{Campaigns, CampaignSupport, CancelTaskSupport, DeviceUpdateSupport, GroupStatsSupport}
+import com.advancedtelematic.campaigner.db.{Campaigns, CampaignSupport, CancelTaskSupport, DeviceUpdateSupport}
 import com.advancedtelematic.campaigner.client.DirectorClient
 import com.advancedtelematic.campaigner.data.DataType.{CampaignId, CancelTaskStatus, DeviceStatus}
 import com.advancedtelematic.libats.data.DataType.Namespace
@@ -31,7 +31,6 @@ class CampaignCanceler(director: DirectorClient,
                       (implicit db: Database, mat: Materializer)
     extends Actor
     with ActorLogging
-    with GroupStatsSupport
     with CampaignSupport
     with DeviceUpdateSupport
     with CancelTaskSupport {

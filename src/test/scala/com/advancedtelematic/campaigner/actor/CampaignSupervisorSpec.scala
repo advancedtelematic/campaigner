@@ -1,19 +1,13 @@
 package com.advancedtelematic.campaigner.actor
 
-import akka.http.scaladsl.util.FastFuture
 import akka.testkit.TestProbe
-import cats.data.NonEmptyList
-import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
-import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
 
 class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with CampaignerSpec with UpdateSupport {
@@ -30,32 +24,49 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
   }
 
   "campaign supervisor" should "pick up unfinished and fresh campaigns" in {
-    val campaign1 = buildCampaignWithUpdate
-    val campaign2 = buildCampaignWithUpdate
-    val group     = NonEmptyList.one(GroupId.generate)
-    val parent    = TestProbe()
+    val partiallyScheduledCampaign = buildCampaignWithUpdate
+    val freshCampaign = buildCampaignWithUpdate
+    val scheduledCampaign = buildCampaignWithUpdate
+    val parent = TestProbe()
+    val n = Gen.choose(batch, batch * 2).generate
 
-    campaigns.create(campaign1, group, Seq.empty).futureValue
-    campaigns.create(campaign2, group, Seq.empty).futureValue
+    val scheduledCampaignDevices = Gen.listOfN(n, genDeviceId).generate.toSet
+    campaigns.create(
+      scheduledCampaign,
+      Set.empty,
+      scheduledCampaignDevices,
+      Seq.empty).futureValue
+    campaigns.scheduleDevices(
+      scheduledCampaign.id,
+      scheduledCampaign.updateId,
+      scheduledCampaignDevices.toSeq:_*).futureValue
 
-    campaigns.scheduleGroups(campaign1.id, group).futureValue
+    val partiallyScheduledCampaignDevices = Gen.listOfN(n, genDeviceId).generate.toSet
+    val nScheduled = Gen.choose(1, n - 1).generate
+    campaigns.create(
+      partiallyScheduledCampaign,
+      Set.empty,
+      partiallyScheduledCampaignDevices,
+      Seq.empty).futureValue
+    campaigns.scheduleDevices(
+      partiallyScheduledCampaign.id,
+      partiallyScheduledCampaign.updateId,
+      partiallyScheduledCampaignDevices.take(nScheduled).toSeq:_*).futureValue
 
     parent.childActorOf(CampaignSupervisor.props(
-      deviceRegistry,
       director,
       schedulerPollingTimeout,
       schedulerDelay,
       schedulerBatchSize
     ))
 
-    parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign1.id)))
-    parent.expectMsg(3.seconds, CampaignComplete(campaign1.id))
+    parent.expectMsg(3.seconds, CampaignsScheduled(Set(partiallyScheduledCampaign.id)))
+    parent.expectMsg(3.seconds, CampaignComplete(partiallyScheduledCampaign.id))
 
-    campaigns.scheduleGroups(campaign2.id, group).futureValue
-
-    parent.expectMsg(3.seconds, CampaignsScheduled(Set(campaign2.id)))
+    val freshCampaignDevices = Gen.listOfN(n, genDeviceId).generate.toSet
+    campaigns.create(freshCampaign, Set.empty, freshCampaignDevices, Seq.empty).futureValue
+    parent.expectMsg(3.seconds, CampaignsScheduled(Set(freshCampaign.id)))
   }
-
 }
 
 class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with CampaignerSpec with UpdateSupport {
@@ -73,23 +84,13 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
 
   "campaign supervisor" should "clean out campaigns that are marked to be cancelled" in {
     val campaign = buildCampaignWithUpdate
-    val group    = NonEmptyList.one(GroupId.generate)
     val parent   = TestProbe()
     val n        = Gen.choose(batch, batch * 2).generate
-    val devs     = Gen.listOfN(n, genDeviceId).generate
-    val registry = new DeviceRegistryClient {
-      override def devicesInGroup(_ns: Namespace,
-                                  _grp: GroupId,
-                                  offset: Long,
-                                  limit: Long): Future[Seq[DeviceId]] =
-        FastFuture.successful(devs.drop(offset.toInt).take(limit.toInt))
-    }
+    val devs     = Gen.listOfN(n, genDeviceId).generate.toSet
 
-    campaigns.create(campaign, group, Seq.empty).futureValue
-    campaigns.scheduleGroups(campaign.id, group)
+    campaigns.create(campaign, Set.empty, devs, Seq.empty).futureValue
 
     parent.childActorOf(CampaignSupervisor.props(
-      registry,
       director,
       schedulerPollingTimeout,
       10.seconds,

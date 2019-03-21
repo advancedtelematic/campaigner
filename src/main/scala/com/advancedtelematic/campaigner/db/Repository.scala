@@ -6,12 +6,10 @@ import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus._
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus._
-import com.advancedtelematic.campaigner.data.DataType.GroupStatus._
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Errors.{CampaignFKViolation, UpdateFKViolation}
-import com.advancedtelematic.campaigner.db.Schema.GroupStatsTable
 import com.advancedtelematic.campaigner.db.SlickMapping._
 import com.advancedtelematic.campaigner.db.SlickUtil.{sortBySlickOrderedCampaignConversion, sortBySlickOrderedUpdateConversion}
 import com.advancedtelematic.campaigner.http.Errors._
@@ -21,17 +19,15 @@ import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, Updat
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
+import java.util.UUID
 import slick.jdbc.MySQLProfile.api._
+import slick.jdbc.GetResult
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Failure
 
 trait CampaignSupport {
   def campaignRepo(implicit db: Database, ec: ExecutionContext) = new CampaignRepository()
-}
-
-trait GroupStatsSupport {
-  def groupStatsRepo(implicit db: Database, ec: ExecutionContext) = new GroupStatsRepository()
 }
 
 trait DeviceUpdateSupport {
@@ -127,74 +123,24 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
         case _ => DBIO.failed(DeviceNotScheduled)
       }.map(_ => ())
 
-  def persistMany(updates: Seq[DeviceUpdate]): Future[Unit] = db.run {
+  def persistMany(updates: Seq[DeviceUpdate]): Future[Unit] =
+    db.run(persistManyAction(updates))
+
+  def persistManyAction(updates: Seq[DeviceUpdate]): DBIO[Unit] =
     DBIO.sequence(updates.map(Schema.deviceUpdates.insertOrUpdate)).transactionally.map(_ => ())
-  }
-}
-
-protected [db] class GroupStatsRepository()(implicit db: Database, ec: ExecutionContext) {
-  protected [db] def updateGroupStatsAction(campaign: CampaignId, group: GroupId, status: GroupStatus, stats: Stats): DBIO[Unit] =
-    Schema.groupStats
-      .insertOrUpdate(GroupStats(campaign, group, status, stats.processed, stats.affected))
-      .map(_ => ())
-      .handleIntegrityErrors(CampaignMissing)
-
-  protected [db] def findByCampaignAction(campaignId: CampaignId): DBIO[Seq[GroupStats]] =
-    Schema.groupStats
-      .filter(_.campaignId === campaignId)
-      .result
-
-  protected [db] def findByCampaignsAction(campaignIds: Set[CampaignId]): DBIO[Seq[GroupStats]] =
-    Schema.groupStats
-      .filter(_.campaignId.inSet(campaignIds))
-      .result
-
-  protected [db] def persistManyAction(campaign: CampaignId, groups: Set[GroupId]): DBIO[Unit] =
-    DBIO.sequence(
-      groups.toSeq.map { group =>
-        persistAction(GroupStats(campaign, group, GroupStatus.scheduled, 0, 0))
-      }
-    ).map(_ => ())
-
-  protected [db] def persistAction(stats: GroupStats): DBIO[Unit] = (Schema.groupStats += stats).map(_ => ())
-
-  def groupStatusFor(campaign: CampaignId, group: GroupId): Future[Option[GroupStatus]] =
-    db.run {
-      Schema.groupStats
-        .filter(_.campaignId === campaign)
-        .filter(_.groupId === group)
-        .map(_.status)
-        .result
-        .headOption
-    }
-
-  def findScheduled(campaign: CampaignId, groupId: Option[GroupId] = None): Future[Seq[GroupStats]] = db.run {
-    Schema.groupStats
-      .filter(_.campaignId === campaign)
-      .filter(_.status === GroupStatus.scheduled)
-      .maybeFilter(_.groupId === groupId)
-      .result
-  }
-
-  protected [db] def cancelAction(campaign: CampaignId): DBIO[Unit] = {
-    Schema.groupStats
-      .filter(_.campaignId === campaign)
-      .map(_.status)
-      .update(GroupStatus.cancelled)
-      .map(_ => ())
-  }
 }
 
 protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext) {
   import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 
-  def persist(campaign: Campaign, groups: Set[GroupId], metadata: Seq[CampaignMetadata]): Future[CampaignId] = db.run {
+  def persist(campaign: Campaign, groups: Set[GroupId], devices: Set[DeviceId], metadata: Seq[CampaignMetadata]): Future[CampaignId] = db.run {
     val f = for {
       _ <- (Schema.campaigns += campaign).recover {
         case Failure(UpdateFKViolation()) => DBIO.failed(MissingUpdateSource)
         case Failure(CampaignFKViolation()) => DBIO.failed(MissingMainCampaign)
       }.handleIntegrityErrors(ConflictingCampaign)
       _ <- Schema.campaignGroups ++= groups.map(campaign.id -> _)
+      _ <- Schema.deviceUpdates ++= devices.map(did => DeviceUpdate(campaign.id, campaign.updateId, did, DeviceStatus.requested))
       _ <- (Schema.campaignMetadata ++= metadata).handleIntegrityErrors(ConflictingMetadata)
     } yield campaign.id
 
@@ -227,14 +173,35 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
     }
   }
 
-  def findAllScheduled(filter: GroupStatsTable => Rep[Boolean] = _ => true.bind): Future[Seq[Campaign]] = {
-    db.run {
-      Schema.groupStats.join(Schema.campaigns).on(_.campaignId === _.id)
-        .filter { case (groupStats, _) => groupStats.status === GroupStatus.scheduled }
-        .filter { case (groupStats, _) => filter(groupStats) }
-        .map(_._2)
-        .result
-    }
+  /**
+   * Returns all campaigns that have at least one device in `requested` state
+   */
+  def findAllWithRequestedDevices: DBIO[Set[Campaign]] =
+    Schema.deviceUpdates.join(Schema.campaigns).on(_.campaignId === _.id)
+      .filter { case (deviceUpdate, _) => deviceUpdate.status === DeviceStatus.requested }
+      .map(_._2)
+      .result
+      .map(_.toSet)
+
+  /**
+   * Returns all campaigns that have all devices in `requested` state
+   */
+  def findAllNewlyCreated: DBIO[Set[Campaign]] = {
+    implicit val `GetResult[UUID]` = GetResult(r => UUID.fromString(r.nextString))
+
+    val queryAllNewlyCreatedCampaignIds = sql"""
+      select campaign_id
+      from device_updates
+      group by campaign_id
+      having group_concat(distinct status) = 'requested';
+    """.as[UUID]
+
+    val action = for {
+      ids <- queryAllNewlyCreatedCampaignIds.map(_.map(CampaignId(_)))
+      campaigns <- Schema.campaigns.filter(_.id.inSet(ids)).result
+    } yield campaigns.toSet
+
+    action.transactionally
   }
 
   def update(campaign: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =

@@ -23,21 +23,19 @@ object CampaignSupervisor {
   final case class CampaignsScheduled(campaigns: Set[CampaignId])
   final case class CampaignsCancelled(campaigns: Set[CampaignId])
 
-  def props(registry: DeviceRegistryClient,
-            director: DirectorClient,
+  def props(director: DirectorClient,
             pollingTimeout: FiniteDuration,
             delay: FiniteDuration,
-            batchSize: Long)
+            batchSize: Int)
            (implicit db: Database, mat: Materializer): Props =
-    Props(new CampaignSupervisor(registry, director, pollingTimeout, delay, batchSize))
+    Props(new CampaignSupervisor(director, pollingTimeout, delay, batchSize))
 
 }
 
-class CampaignSupervisor(registry: DeviceRegistryClient,
-                         director: DirectorClient,
+class CampaignSupervisor(director: DirectorClient,
                          pollingTimeout: FiniteDuration,
                          delay: FiniteDuration,
-                         batchSize: Long)
+                         batchSize: Int)
                         (implicit db: Database, mat: Materializer) extends Actor
   with ActorLogging {
 
@@ -75,11 +73,11 @@ class CampaignSupervisor(registry: DeviceRegistryClient,
       director,
       campaign,
       ns,
-      batchSize.toInt
+      batchSize
     ))
 
   def scheduleCampaign(campaign: Campaign): ActorRef = {
-    val childProps = CampaignScheduler.props(registry, director, campaign, delay, batchSize)
+    val childProps = CampaignScheduler.props(director, campaign, delay, batchSize)
 
     val props = BackoffSupervisor.props(
       Backoff.onFailure(

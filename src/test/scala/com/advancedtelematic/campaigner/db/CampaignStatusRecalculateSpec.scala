@@ -23,35 +23,15 @@ final class CampaignStatusRecalculateSpec
     with ScalaFutures
     with DatabaseSpec
     with CampaignSupport
-    with GroupStatsSupport
     with DeviceUpdateSupport
     with UpdateSupport
     with Matchers
     with DatabaseUpdateSpecUtil
     with CampaignerSpecUtil {
 
-  import SlickUtil._
-
   implicit lazy val ec = system.dispatcher
   implicit val mat = ActorMaterializer()
   implicit val defaultPatience = PatienceConfig(timeout = Span(2, Seconds))
-
-  it should "set campaign status to `cancelled` if a group was cancelled" in {
-    val groups = GroupWithDevices.genNonEmptyListOf.generate
-
-    val setupTest = for {
-      campaign <- createCampaignWithoutStatus(maybeGroups = Some(groups.map(_.id)))
-      _ <- insertGroupStatsFor(campaign.id, groups.toList)
-      _ <- groupStatsRepo.updateGroupStatsAction(
-        campaign.id, groups.head.id, GroupStatus.cancelled, Stats(0, 0)).run
-      _ <- new CampaignStatusRecalculate().run
-    } yield campaign
-
-    whenReady(setupTest) { campaign =>
-      val updatedCampaign = campaignRepo.find(campaign.id).futureValue
-      updatedCampaign.status shouldBe CampaignStatus.cancelled
-    }
-  }
 
   it should "set campaign status to `finished` if all devices finished the campaign" in {
     val groups = GroupWithDevices.genNonEmptyListOf.generate
@@ -61,7 +41,6 @@ final class CampaignStatusRecalculateSpec
 
     val setupTest = for {
       campaign <- createCampaignWithoutStatus(maybeGroups = Some(groups.map(_.id)))
-      _ <- insertGroupStatsFor(campaign.id, groups.toList)
       _ <- insertDeviceUpdatesFor(campaign, devicesNumToSucceed, DeviceStatus.successful)
       _ <- insertDeviceUpdatesFor(campaign, devicesNumToFail, DeviceStatus.failed)
       _ <- new CampaignStatusRecalculate().run
@@ -77,10 +56,11 @@ final class CampaignStatusRecalculateSpec
     val groups = GroupWithDevices.genNonEmptyListOf.generate
     val totalDevicesNum = groups.map(_.devicesNum).toList.sum
     val numOfDevicesToFinish = Gen.chooseNum(0, totalDevicesNum - 1).generate
+    val numOfDevicesToSchedule = totalDevicesNum - numOfDevicesToFinish
 
     val setupTest = for {
       campaign <- createCampaignWithoutStatus(maybeGroups = Some(groups.map(_.id)))
-      _ <- insertGroupStatsFor(campaign.id, groups.toList)
+      _ <- insertDeviceUpdatesFor(campaign, numOfDevicesToSchedule, DeviceStatus.scheduled)
       _ <- insertDeviceUpdatesFor(campaign, numOfDevicesToFinish, DeviceStatus.successful)
       _ <- new CampaignStatusRecalculate().run
     } yield campaign
@@ -96,13 +76,6 @@ final class CampaignStatusRecalculateSpec
       campaign <- createDbCampaignWithUpdate(maybeGroups = maybeGroups)
       _ <- db.run(sqlu"update campaigns set status = null where uuid = ${campaign.id.uuid.toString}")
     } yield campaign
-  }
-
-  private def insertGroupStatsFor(campaignId: CampaignId, groups: List[GroupWithDevices]): Future[Unit] = {
-    Future.sequence(groups.map(group =>
-      groupStatsRepo.updateGroupStatsAction(
-        campaignId, group.id, GroupStatus.launched, Stats(group.devicesNum.toLong, group.devicesNum.toLong)).run
-    )).map(_ => ())
   }
 
   private def insertDeviceUpdatesFor(campaign: Campaign, numOfDevicesToFinish: Int, status: DeviceStatus.Value): Future[Unit] = {
