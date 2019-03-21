@@ -2,7 +2,9 @@ package com.advancedtelematic.campaigner.http
 
 import java.time.temporal.ChronoUnit
 
+import akka.http.scaladsl.model.ContentTypes
 import akka.http.scaladsl.model.StatusCodes._
+import akka.util.ByteString
 import cats.data.NonEmptyList
 import cats.syntax.either._
 import cats.syntax.option._
@@ -27,6 +29,7 @@ import org.scalactic.source
 import org.scalatest._
 import org.scalatest.prop.PropertyChecks
 
+import scala.annotation.tailrec
 import scala.concurrent.Future
 
 class CampaignResourceSpec
@@ -314,6 +317,47 @@ class CampaignResourceSpec
       resultNames.size shouldBe expected.size
       resultNames should contain allElementsOf expected
     }
+  }
+
+  "GET /campaigns/:id/failed-installations.csv" should "export the failed installations in a CSV" in {
+
+    def assertCsvResponse(expected: Seq[String]): Unit = {
+      status shouldBe OK
+      contentType shouldBe ContentTypes.`text/csv(UTF-8)`
+      val result = entityAs[ByteString].utf8String.split("\n")
+      result.tail should contain allElementsOf expected
+    }
+
+    @tailrec
+    def failInstallationsAndCheckExport(campaignId: CampaignId, testCase: Seq[(DeviceId, String, String, String)]): Unit = testCase match {
+      case Nil => ()
+
+      case succeeded :: failedHead :: failedTail =>
+        val failed = failedHead :: failedTail
+        campaigns
+          .succeedDevices(campaignId, succeeded._1 :: Nil, "SUCCESS", "EUREKA")
+          .flatMap(_ => campaigns.failDevices(campaignId, failed.map(_._1), failedHead._3, failedHead._4))
+          .futureValue
+
+        getFailedExport(campaignId, failedHead._3) ~> routes ~> check {
+          val expected = failed.map(_._2).tail.map(oemId => s"$oemId;${failedHead._3};${failedHead._4}")
+          assertCsvResponse(expected)
+        }
+
+        failInstallationsAndCheckExport(campaignId, failed)
+
+      case succeeded :: _ =>
+        campaigns.succeedDevices(campaignId, succeeded._1 :: Nil, "SUCCESS", "EUREKA").futureValue
+    }
+
+    val testCase = Gen.listOfN(20, genExportCase).generate
+    val (campaignId, _) = createCampaignWithUpdateOk()
+    val campaign = campaigns.findNamespaceCampaign(testNs, campaignId).futureValue
+
+    fakeRegistry.setOemIds(testCase.map(_._1).zip(testCase.map(_._2)): _*)
+    campaigns.scheduleDevices(campaignId, campaign.updateId, testCase.map(_._1): _*).futureValue
+
+    failInstallationsAndCheckExport(campaignId, testCase)
   }
 
   "GET /campaigns/:id/stats" should "return correct statistics" in {

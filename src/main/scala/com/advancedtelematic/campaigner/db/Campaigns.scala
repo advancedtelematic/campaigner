@@ -113,6 +113,18 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def fetchFailedDevices(campaignId: CampaignId, failureCode: String): Future[Set[DeviceId]] =
     deviceUpdateRepo.findFailedByFailureCode(campaignId, failureCode)
 
+  /**
+    * Returns all the devices that are now failed with the code `failureCode` as a result of running the campaign
+    * with ID `campaignId` or any of its retry-campaigns.
+    */
+  def fetchFailureCodes(campaignId: CampaignId, failureCode: String): Future[Set[(DeviceId, String, String)]] = db.run {
+    campaignRepo
+      .findRetryCampaignsOfAction(campaignId)
+      .flatMap(cids => findFailedDeviceUpdatesAction(cids.map(_.id) + campaignId))
+      .map(_.filter(_.resultCode.contains(failureCode)))
+      .map(_.map(du => (du.device, du.resultCode.getOrElse(""), du.resultDescription.getOrElse(""))))
+  }
+
   def countByStatus: Future[Map[CampaignStatus, Int]] =
     db
       .run(campaignRepo.countByStatus)

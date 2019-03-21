@@ -10,6 +10,7 @@ import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.http.HttpOps.HttpRequestOps
 import com.advancedtelematic.libats.http.ServiceHttpClient
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
+import io.circe.Decoder
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -18,6 +19,7 @@ trait DeviceRegistryClient {
                      groupId: GroupId,
                      offset: Long,
                      limit: Long): Future[Seq[DeviceId]]
+  def fetchOemId(ns: Namespace, deviceIds: DeviceId): Future[String]
 }
 
 class DeviceRegistryHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResponse])
@@ -33,4 +35,10 @@ class DeviceRegistryHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpR
     execHttp[PaginationResult[DeviceId]](req)().map(_.values)
   }
 
+  override def fetchOemId(ns: Namespace, deviceId: DeviceId): Future[String] = {
+    val path  = uri.path / "api" / "v1" / "devices" / deviceId.show
+    val req = HttpRequest(HttpMethods.GET, uri.withPath(path)).withNs(ns)
+    val um = unmarshaller[String](Decoder.instance(_.get("deviceId")))
+    execHttp[String](req)()(scala.reflect.classTag[String], um)
+  }
 }

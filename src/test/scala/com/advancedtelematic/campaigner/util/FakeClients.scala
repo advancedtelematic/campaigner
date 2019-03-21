@@ -58,11 +58,17 @@ class FakeDirectorClient extends DirectorClient with CampaignerSpecUtil {
 class FakeDeviceRegistry extends DeviceRegistryClient {
 
   private val groups = new ConcurrentHashMap[GroupId, Set[DeviceId]]()
+  private val oemIds = new ConcurrentHashMap[DeviceId, String]()
 
   def clear(): Unit = groups.clear()
 
   def setGroup(groupId: GroupId, devices: Seq[DeviceId]): Unit =
     groups.put(groupId, devices.toSet)
+
+  def setOemIds(pairs: (DeviceId, String)*): Unit =
+    pairs.foreach { case (k, v) =>
+      oemIds.put(k, v)
+    }
 
   def allGroups(): Set[GroupId] = {
     groups.keys().asScala.toSet
@@ -74,12 +80,21 @@ class FakeDeviceRegistry extends DeviceRegistryClient {
   override def devicesInGroup(namespace: Namespace, groupId: GroupId, offset: Long, limit: Long): Future[Seq[DeviceId]] = Future.successful {
     allGroupDevices(groupId).slice(offset.toInt, (offset + limit).toInt)
   }
+
+  override def fetchOemId(ns: Namespace, deviceId: DeviceId): Future[String] = Future.successful {
+    oemIds.getOrDefault(deviceId, "OEM-ID-NOT-FOUND")
+  }
 }
 
 class SlowFakeDeviceRegistry extends FakeDeviceRegistry {
   override def devicesInGroup(namespace: Namespace, groupId: GroupId, offset: Long, limit: Long): Future[Seq[DeviceId]] = {
     Thread.sleep(11000L)
     super.devicesInGroup(namespace, groupId, offset, limit)
+  }
+
+  override def fetchOemId(ns: Namespace, deviceId: DeviceId): Future[String] = {
+    Thread.sleep(11000L)
+    super.fetchOemId(ns, deviceId)
   }
 }
 
