@@ -135,7 +135,8 @@ object DataType {
     update: UpdateId,
     device: DeviceId,
     status: DeviceStatus,
-    resultCode: Option[String] = None
+    resultCode: Option[String] = None,
+    updatedAt: Instant = Instant.now
   )
 
   final case class CancelTask(
