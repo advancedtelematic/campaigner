@@ -13,6 +13,7 @@ import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
+import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -142,6 +143,23 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 
   def findCampaignsByUpdate(update: UpdateId): Future[Seq[Campaign]] =
     db.run(campaignRepo.findByUpdateAction(update))
+
+  /**
+   * Given a set of campaign IDs, finds all device updates that happened in
+   * these campaigns, selects the most recent failures and returns them.
+   */
+  protected[db] def findFailedDeviceUpdatesAction(campaignIds: Set[CampaignId]): DBIO[Set[DeviceUpdate]] = {
+    Schema.deviceUpdates
+      .join(Schema.deviceUpdates
+      .filter(upd => upd.campaignId.inSet(campaignIds))
+        .groupBy(_.deviceId)
+        .map { case (id, upd) => (id, upd.map(_.updatedAt).max) })
+        .on { (fst, snd) => fst.deviceId === snd._1 && fst.updatedAt === snd._2 }
+      .map(_._1)
+      .filter(_.status === DeviceStatus.failed)
+      .result
+      .map(_.toSet)
+  }
 
   /**
    * Calculates campaign-wide statistic counters, also taking retry campaings
