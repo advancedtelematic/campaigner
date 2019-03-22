@@ -128,7 +128,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 
   def findClientCampaign(campaignId: CampaignId): Future[GetCampaign] = for {
     c <- campaignRepo.find(campaignId)
-    retryIds <- campaignRepo.findRetryCampaignIdsOf(campaignId)
+    retryIds <- campaignRepo.findRetryCampaignsOf(campaignId).map(_.map(_.id))
     groups <- db.run(findGroupsAction(c.id))
     metadata <- campaignMetadataRepo.findFor(campaignId)
   } yield GetCampaign(c, retryIds, groups, metadata)
@@ -175,15 +175,39 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
         counts.getOrElse(DeviceStatus.failed, 0).toLong
     )
 
+    def processFailures(failedDevices: Set[DeviceUpdate], retryCampaigns: Set[Campaign]): Set[CampaignFailureStats] = {
+      val missingErrorCode = "MISSING_ERROR_CODE"
+      val retryStatusByFailureCode = retryCampaigns
+        .groupBy(_.failureCode.getOrElse(missingErrorCode))
+        .mapValues { campaigns =>
+          if (campaigns.exists(_.status == CampaignStatus.finished)) {
+            RetryStatus.finished
+          } else {
+            RetryStatus.launched
+          }
+        }
+
+      failedDevices
+        .groupBy(_.resultCode.getOrElse(missingErrorCode))
+        .map { case (errorCode, devices) => CampaignFailureStats(
+          code = errorCode,
+          count = devices.size.toLong,
+          retryStatus = retryStatusByFailureCode.getOrElse(errorCode, RetryStatus.not_launched),
+        )}
+        .toSet
+    }
+
     val statsAction = for {
       mainCampaign <- campaignRepo.findAction(campaignId)
-      retryCampaignIds <- campaignRepo.findRetryCampaignIdsOfAction(campaignId)
+      retryCampaigns <- campaignRepo.findRetryCampaignsOfAction(campaignId)
+      retryCampaignIds = retryCampaigns.map(_.id)
       failedDevices <- findFailedDeviceUpdatesAction(retryCampaignIds + campaignId)
       mainCnt <- deviceUpdateRepo.countByStatus(Set(campaignId)).map(processCounts)
       retryCnt <- deviceUpdateRepo.countByStatus(retryCampaignIds).map(processCounts)
     } yield {
       val finished = mainCnt.finished  - (retryCnt.rejected + retryCnt.cancelled)
       val failed = failedDevices.size.toLong
+      val failures = processFailures(failedDevices, retryCampaigns)
 
       CampaignStats(
         campaign = campaignId,
@@ -194,6 +218,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
         finished = finished,
         failed = failed,
         successful = finished - failed,
+        failures = failures,
       )
     }
 
