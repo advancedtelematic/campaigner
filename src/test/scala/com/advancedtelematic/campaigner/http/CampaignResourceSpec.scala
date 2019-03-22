@@ -41,13 +41,21 @@ class CampaignResourceSpec
   val campaigns = Campaigns()
 
   def checkStats(id: CampaignId, campaignStatus: CampaignStatus, processed: Long = 0, affected: Long = 0,
-                 finished: Long = 0, failed: Set[DeviceId] = Set.empty, cancelled: Long = 0)
+                 finished: Long = 0, failed: Long = 0, cancelled: Long = 0, successful: Long = 0)
                 (implicit pos: source.Position): Unit =
     Get(apiUri(s"campaigns/${id.show}/stats")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
       val campaignStats = responseAs[CampaignStats]
       campaignStats.status shouldBe campaignStatus
-      campaignStats shouldBe CampaignStats(id, campaignStatus, finished, failed, cancelled, processed, affected)
+      campaignStats shouldBe CampaignStats(
+        campaign = id,
+        status = campaignStatus,
+        processed = processed,
+        affected = affected,
+        cancelled = cancelled,
+        finished = finished,
+        failed = failed,
+        successful = successful)
     }
 
   "POST and GET /campaigns" should "create a campaign, return the created campaign" in {
@@ -356,7 +364,7 @@ class CampaignResourceSpec
         val campaignStats = responseAs[CampaignStats]
         campaignStats.status shouldBe CampaignStatus.finished
         campaignStats.finished shouldBe (mainCase.successfulDevices.size + mainCase.failedDevices.size)
-        campaignStats.failed should contain theSameElementsAs mainCase.failedDevices
+        campaignStats.failed shouldBe mainCase.failedDevices.size
         campaignStats.cancelled shouldBe mainCase.cancelledDevices.size
         campaignStats.processed shouldBe mainCase.processedCount
         campaignStats.affected shouldBe mainCase.affectedCount
@@ -390,7 +398,10 @@ class CampaignResourceSpec
         campaignStats.processed shouldBe mainCase.processedCount
         campaignStats.affected shouldBe (
           mainCase.affectedCount - (retryCase.processedCount - retryCase.affectedCount)
-          )
+        )
+        campaignStats.failed shouldBe (
+          mainCase.failedDevices.size - retryCase.processedCount + retryCase.failedDevices.size
+        )
       }
     }
   }

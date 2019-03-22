@@ -51,14 +51,6 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def updateStatus(campaignId: CampaignId): Future[Unit] =
     db.run(campaignStatusTransition.updateToCalculatedStatus(campaignId))
 
-  /**
-   * Given a campaign ID, returns IDs of all devices that are in `failed` state
-   */
-  private def findFailedDevicesAction(campaign: CampaignId): DBIO[Set[DeviceId]] =
-    campaignRepo.findAction(campaign).flatMap { _ =>
-      deviceUpdateRepo.findByCampaignAction(campaign, DeviceStatus.failed)
-    }
-
   def freshCancelled(): Future[Seq[(Namespace, CampaignId)]] =
     cancelTaskRepo.findPending()
 
@@ -186,19 +178,24 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     val statsAction = for {
       mainCampaign <- campaignRepo.findAction(campaignId)
       retryCampaignIds <- campaignRepo.findRetryCampaignIdsOfAction(campaignId)
+      failedDevices <- findFailedDeviceUpdatesAction(retryCampaignIds + campaignId)
       mainCnt <- deviceUpdateRepo.countByStatus(Set(campaignId)).map(processCounts)
       retryCnt <- deviceUpdateRepo.countByStatus(retryCampaignIds).map(processCounts)
-      // TODO (OTA-2307) replace with failed devices groups when implemented
-      failed <- findFailedDevicesAction(campaignId)
-    } yield CampaignStats(
-      campaign = campaignId,
-      status = mainCampaign.status,
-      finished = mainCnt.finished  - (retryCnt.rejected + retryCnt.cancelled),
-      failed = failed,
-      cancelled = mainCnt.cancelled + retryCnt.cancelled,
-      processed = mainCnt.processed,
-      affected  = mainCnt.affected - retryCnt.rejected,
-    )
+    } yield {
+      val finished = mainCnt.finished  - (retryCnt.rejected + retryCnt.cancelled)
+      val failed = failedDevices.size.toLong
+
+      CampaignStats(
+        campaign = campaignId,
+        status = mainCampaign.status,
+        processed = mainCnt.processed,
+        affected  = mainCnt.affected - retryCnt.rejected,
+        cancelled = mainCnt.cancelled + retryCnt.cancelled,
+        finished = finished,
+        failed = failed,
+        successful = finished - failed,
+      )
+    }
 
     statsAction.transactionally
   }

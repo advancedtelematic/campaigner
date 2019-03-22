@@ -125,11 +125,12 @@ object DataType {
   final case class CampaignStats(
     campaign: CampaignId,
     status: CampaignStatus,
-    finished: Long,
-    failed: Set[DeviceId],
-    cancelled: Long,
     processed: Long,
-    affected: Long
+    affected: Long,
+    cancelled: Long,
+    finished: Long,
+    failed: Long,
+    successful: Long,
   )
 
   final case class DeviceUpdate(
