@@ -118,36 +118,6 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
         CampaignStatus.values.map(s => s -> counts.getOrElse(s, 0)).toMap
       }
 
-  /**
-   * Returns the number of devices that took part in the given campaigns and
-   * finished, either successfully or with a failure.
-   */
-  private def countFinishedAction(campaignIds: Set[CampaignId]): DBIO[Long] =
-    campaignRepo.countDevices(campaignIds) { status =>
-      status === DeviceStatus.successful || status === DeviceStatus.failed
-    }
-
-  /**
-   * Returns the number of devices that took part in the given campaigns, but
-   * were cancelled before the update could be applied.
-   */
-  private def countCancelledAction(campaignIds: Set[CampaignId]): DBIO[Long] =
-    campaignRepo.countDevices(campaignIds) { status =>
-      status === DeviceStatus.cancelled
-    }
-
-  /**
-   * Returns total number of devices in the given campaigns
-   */
-  private def countProcessedAction(campaignIds: Set[CampaignId]): DBIO[Long] =
-    campaignRepo.countDevices(campaignIds)(_ => true.bind)
-
-  /**
-   * Returns the number of affected devices in the given campaigns
-   */
-  private def countAffectedAction(campaignIds: Set[CampaignId]): DBIO[Long] =
-    campaignRepo.countDevices(campaignIds)(status => status =!= DeviceStatus.rejected)
-
   def allCampaigns(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, status: Option[CampaignStatus], nameContains: Option[String]): Future[PaginationResult[CampaignId]] =
     campaignRepo.all(ns, sortBy, offset, limit, status, nameContains)
 
@@ -167,29 +137,40 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   /**
    * Calculates campaign-wide statistic counters, also taking retry campaings
    * into account if any exist.
-   * TODO (OTA-2384) this method needs separate refactoring
    */
   def campaignStats(campaignId: CampaignId): Future[CampaignStats] = db.run {
+    final case class Counts(
+      processed: Long,
+      affected: Long,
+      rejected: Long,
+      cancelled: Long,
+      finished: Long)
+
+    def processCounts(counts: Map[DeviceStatus, Int]): Counts = Counts(
+      processed = counts.values.sum.toLong,
+      affected = counts.filterKeys(_ != DeviceStatus.rejected).values.sum.toLong,
+      rejected = counts.getOrElse(DeviceStatus.rejected, 0).toLong,
+      cancelled = counts.getOrElse(DeviceStatus.cancelled, 0).toLong,
+      finished =
+        counts.getOrElse(DeviceStatus.successful, 0).toLong +
+        counts.getOrElse(DeviceStatus.failed, 0).toLong
+    )
+
     val statsAction = for {
       mainCampaign <- campaignRepo.findAction(campaignId)
       retryCampaignIds <- campaignRepo.findRetryCampaignIdsOfAction(campaignId)
-      mainProcessed <- countProcessedAction(Set(campaignId))
-      mainAffected <- countAffectedAction(Set(campaignId))
-      retryProcessed <- countProcessedAction(retryCampaignIds)
-      retryAffected <- countAffectedAction(retryCampaignIds)
-      mainCancelled <- countCancelledAction(Set(campaignId))
-      retryCancelled <- countCancelledAction(retryCampaignIds)
-      mainFinished  <- countFinishedAction(Set(campaignId))
+      mainCnt <- deviceUpdateRepo.countByStatus(Set(campaignId)).map(processCounts)
+      retryCnt <- deviceUpdateRepo.countByStatus(retryCampaignIds).map(processCounts)
       // TODO (OTA-2307) replace with failed devices groups when implemented
       failed <- findFailedDevicesAction(campaignId)
     } yield CampaignStats(
       campaign = campaignId,
       status = mainCampaign.status,
-      finished = mainFinished - (retryProcessed - retryAffected + retryCancelled),
+      finished = mainCnt.finished  - (retryCnt.rejected + retryCnt.cancelled),
       failed = failed,
-      cancelled = mainCancelled + retryCancelled,
-      processed = mainProcessed,
-      affected  = mainAffected - (retryProcessed - retryAffected)
+      cancelled = mainCnt.cancelled + retryCnt.cancelled,
+      processed = mainCnt.processed,
+      affected  = mainCnt.affected - retryCnt.rejected,
     )
 
     statsAction.transactionally

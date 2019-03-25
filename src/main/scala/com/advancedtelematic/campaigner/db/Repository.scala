@@ -128,6 +128,19 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
 
   def persistManyAction(updates: Seq[DeviceUpdate]): DBIO[Unit] =
     DBIO.sequence(updates.map(Schema.deviceUpdates.insertOrUpdate)).transactionally.map(_ => ())
+
+  /**
+   * Given a set of campaigns, finds device updates happend in them, groups them
+   * by status and counts.
+   */
+  def countByStatus(campaignIds: Set[CampaignId]): DBIO[Map[DeviceStatus, Int]] = {
+    Schema.deviceUpdates
+      .filter(_.campaignId.inSet(campaignIds))
+      .groupBy(_.status)
+      .map { case (st, upds) => (st, upds.size) }
+      .result
+      .map(_.toMap)
+  }
 }
 
 protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext) {
