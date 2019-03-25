@@ -71,10 +71,11 @@ object Schema {
     def deviceId   = column[DeviceId]("device_id")
     def status     = column[DeviceStatus]("status")
     def resultCode = column[Option[String]]("result_code")
+    def updatedAt  = column[Instant]("updated_at")
 
     def pk = primaryKey("device_updates_pk", (campaignId, deviceId))
 
-    override def * = (campaignId, updateId, deviceId, status, resultCode) <>
+    override def * = (campaignId, updateId, deviceId, status, resultCode, updatedAt) <>
                      ((DeviceUpdate.apply _).tupled, DeviceUpdate.unapply)
   }
 
