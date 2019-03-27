@@ -13,6 +13,7 @@ import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{AsyncFlatSpec, Matchers}
+import org.scalatest.time.{Seconds, Span}
 import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.Future
@@ -63,6 +64,21 @@ class CampaignsSpec extends AsyncFlatSpec
       stats <- campaigns.campaignStats(campaign.id)
     } yield stats.finished shouldBe devices.length
   }
+}
+
+final class CampaignsFindFailedDevicesSpec extends AsyncFlatSpec
+  with DatabaseSpec
+  with Matchers
+  with ScalaFutures
+  with CampaignSupport
+  with UpdateSupport
+  with DatabaseUpdateSpecUtil
+  with CampaignerSpecUtil {
+
+  import Arbitrary._
+
+  val campaigns = Campaigns()
+  implicit val defaultPatience = PatienceConfig(timeout = Span(2, Seconds))
 
   "findFailedDeviceUpdates" should "find all failed device update from all the given campaigns and return only the most recent ones" in {
     val nCampaigns = Gen.choose(1, 4).generate
