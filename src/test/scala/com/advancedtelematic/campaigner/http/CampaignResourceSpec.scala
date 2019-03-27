@@ -1,5 +1,7 @@
 package com.advancedtelematic.campaigner.http
 
+import java.time.temporal.ChronoUnit
+
 import akka.http.scaladsl.model.StatusCodes._
 import cats.data.NonEmptyList
 import cats.syntax.either._
@@ -9,11 +11,11 @@ import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns}
+import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns, DeviceUpdateSupport}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec, UpdateResourceSpecUtil}
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId}
 import com.advancedtelematic.libats.data.ErrorCodes.InvalidEntity
 import com.advancedtelematic.libats.data.ErrorRepresentation
-import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
@@ -24,12 +26,14 @@ import org.scalacheck.Gen
 import org.scalactic.source
 import org.scalatest._
 import org.scalatest.prop.PropertyChecks
+
 import scala.concurrent.Future
 
 class CampaignResourceSpec
     extends CampaignerSpec
     with ResourceSpec
     with CampaignSupport
+    with DeviceUpdateSupport
     with UpdateResourceSpecUtil
     with GivenWhenThen
     with PropertyChecks {
@@ -58,7 +62,7 @@ class CampaignResourceSpec
       CampaignStatus.prepared,
       campaign.createdAt,
       campaign.updatedAt,
-      request.mainCampaignId,
+      None,
       Set.empty,
       request.groups.toList.toSet,
       request.metadata.toList.flatten,
@@ -70,66 +74,6 @@ class CampaignResourceSpec
     campaigns.values should contain (id)
 
     checkStats(id, CampaignStatus.prepared)
-  }
-
-  "POST /campaigns" should "set mainCampaignId if a valid one is given" in {
-    Given("a valid main campaign ID")
-    val (mainId, _) = createCampaignWithUpdateOk()
-
-    When("a retry campaign is created")
-    val (retryId, request) = createCampaignWithUpdateOk(
-      genCreateCampaign().map(_.copy(mainCampaignId = Some(mainId))))
-
-    Then("the retry campaign should have the main campaign ID and other properties")
-    val retryCampaign = getCampaignOk(retryId)
-    retryCampaign shouldBe GetCampaign(
-      testNs,
-      retryId,
-      request.name,
-      request.update,
-      CampaignStatus.prepared,
-      retryCampaign.createdAt,
-      retryCampaign.updatedAt,
-      Some(mainId),
-      Set.empty,
-      request.groups.toList.toSet,
-      request.metadata.toList.flatten,
-      autoAccept = true
-    )
-    retryCampaign.createdAt shouldBe retryCampaign.updatedAt
-
-    And("the list of all campaings should NOT list the retry campaign")
-    val campaigns = getCampaignsOk()
-    campaigns.values should not (contain(retryId))
-
-    And("the retry campaign should have `prepared` status")
-    checkStats(retryId, CampaignStatus.prepared)
-
-    And("the main campaign should have the retry campaign in retry campaigns list")
-    val mainCampaign = getCampaignOk(mainId)
-    mainCampaign.retryCampaignIds should contain(retryId)
-  }
-
-  "POST /campaigns" should "fail if mainCampaignId does not refer to an existing campaign" in {
-      Given("a valid update")
-      val createUpdate = genCreateUpdate().map(cu =>
-          cu.copy(updateSource = UpdateSource(cu.updateSource.id, UpdateType.multi_target))
-      ).sample.get
-      val updateId = createUpdateOk(createUpdate)
-
-      Given("a non-existing main campaign ID")
-      val genCreateCampaignWithInvalidMainId = for {
-        createCampaign <- genCreateCampaign()
-        mainId <- arbitrary[CampaignId]
-      } yield createCampaign.copy(mainCampaignId = Some(mainId), update = updateId)
-      val createCampaignWithInvalidMainId = genCreateCampaignWithInvalidMainId.sample.get
-
-      When("a retry campaign is created")
-      Then("a PreconditionFailed error is raised")
-      createCampaign(createCampaignWithInvalidMainId) ~> routes ~> check {
-        status shouldBe PreconditionFailed
-        responseAs[ErrorRepresentation].code shouldBe Errors.MissingMainCampaign.code
-      }
   }
 
   "POST/GET autoAccept campaign" should "create and return the created campaign" in {
@@ -145,7 +89,7 @@ class CampaignResourceSpec
       CampaignStatus.prepared,
       campaign.createdAt,
       campaign.updatedAt,
-      request.mainCampaignId,
+      None,
       Set.empty,
       request.groups.toList.toSet,
       request.metadata.toList.flatten,
@@ -167,7 +111,7 @@ class CampaignResourceSpec
   }
 
   "PUT /campaigns/:campaign_id" should "update a campaign" in {
-    val (id, request) = createCampaignWithUpdateOk()
+    val (id, _) = createCampaignWithUpdateOk()
     val update  = arbitrary[UpdateCampaign].generate
     val createdAt = getCampaignOk(id).createdAt
 
@@ -184,8 +128,58 @@ class CampaignResourceSpec
     checkStats(id, CampaignStatus.prepared)
   }
 
+  "POST /campaigns/:campaign_id/retry-failed" should "create and launch a retry-campaign" in {
+    val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk()
+    val deviceId = genDeviceId.generate
+    val failureCode = "failureCode-1"
+    val deviceUpdate = DeviceUpdate(mainCampaignId, mainCampaign.update, deviceId, DeviceStatus.accepted, Some(failureCode))
+
+    deviceUpdateRepo.persistMany(deviceUpdate :: Nil).futureValue
+    campaigns.failDevices(mainCampaignId, deviceId :: Nil, failureCode).futureValue
+
+    val retryCampaignId = createAndLaunchRetryCampaign(mainCampaignId, RetryFailedDevices(failureCode)) ~> routes ~> check {
+      status shouldBe Created
+      responseAs[CampaignId]
+    }
+
+    val retryCampaign = getCampaignOk(retryCampaignId)
+    retryCampaign shouldBe GetCampaign(
+      testNs,
+      retryCampaignId,
+      s"retryCampaignWith-mainCampaign-${mainCampaignId.uuid}-failureCode-$failureCode",
+      mainCampaign.update,
+      CampaignStatus.launched,
+      retryCampaign.createdAt,
+      retryCampaign.updatedAt,
+      Some(mainCampaignId),
+      Set.empty,
+      Set.empty,
+      Nil,
+      autoAccept = true
+    )
+    retryCampaign.createdAt.truncatedTo(ChronoUnit.SECONDS) shouldBe retryCampaign.updatedAt.truncatedTo(ChronoUnit.SECONDS)
+  }
+
+  "POST /campaigns/:campaign_id/retry-failed" should "fail if there are no failed devices for the given failure code" in {
+    val (campaignId, _) = createCampaignWithUpdateOk()
+    val request = RetryFailedDevices("failureCode-2")
+
+    createAndLaunchRetryCampaign(campaignId, request) ~> routes ~> check {
+      status shouldBe PreconditionFailed
+      responseAs[ErrorRepresentation].code shouldBe Errors.MissingFailedDevices(request.failureCode).code
+    }
+  }
+
+  "POST /campaigns/:campaign_id/retry-failed" should "fail if there is no main campaign with id :campaign_id" in {
+    val request = RetryFailedDevices("failureCode-3")
+    createAndLaunchRetryCampaign(CampaignId.generate(), request) ~> routes ~> check {
+      status shouldBe NotFound
+      responseAs[ErrorRepresentation].code shouldBe Errors.CampaignMissing.code
+    }
+  }
+
   "POST /campaigns/:campaign_id/launch" should "trigger an update" in {
-    val (campaignId, campaign) = createCampaignWithUpdateOk()
+    val (campaignId, _) = createCampaignWithUpdateOk()
     val request = Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header)
 
     request ~> routes ~> check {
@@ -200,7 +194,7 @@ class CampaignResourceSpec
   }
 
   "POST /campaigns/:campaign_id/cancel" should "cancel a campaign" in {
-    val (campaignId, campaign) = createCampaignWithUpdateOk()
+    val (campaignId, _) = createCampaignWithUpdateOk()
 
     checkStats(campaignId, CampaignStatus.prepared)
 
@@ -315,6 +309,7 @@ class CampaignResourceSpec
 
   "GET /campaigns/:id/stats" should "return correct statistics" in {
     val campaigns = Campaigns()
+    val failureCode = "failure-code-1"
 
     case class CampaignCase(
         successfulDevices: Seq[DeviceId],
@@ -338,20 +333,22 @@ class CampaignResourceSpec
       notAffectedDevices <- Gen.listOf(genDeviceId)
     } yield CampaignCase(successfulDevices, failedDevices, cancelledDevices, notAffectedDevices)
 
-    def conductCampaign(campaignId: CampaignId, campaign: CreateCampaign, campaignCase: CampaignCase): Future[Unit] = for {
-      _ <- campaigns.launch(campaignId)
-      _ <- campaigns.scheduleDevices(campaignId, campaign.update, campaignCase.affectedDevices:_*)
-      _ <- campaigns.rejectDevices(campaignId, campaign.update, campaignCase.notAffectedDevices)
+    def conductCampaign(campaignId: CampaignId, updateId: UpdateId, campaignCase: CampaignCase): Future[Unit] = for {
+      _ <- campaigns.scheduleDevices(campaignId, updateId, campaignCase.affectedDevices:_*)
+      _ <- campaigns.rejectDevices(campaignId, updateId, campaignCase.notAffectedDevices)
       _ <- campaigns.cancelDevices(campaignId, campaignCase.cancelledDevices)
-      _ <- campaigns.failDevices(campaignId, campaignCase.failedDevices, "failure-code-1")
+      _ <- campaigns.failDevices(campaignId, campaignCase.failedDevices, failureCode)
       _ <- campaigns.succeedDevices(campaignId, campaignCase.successfulDevices, "success-code-1")
     } yield ()
 
-    forAll (genCampaignCase) (mainCase => {
+    forAll(genCampaignCase) { mainCase =>
       val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk(
         genCreateCampaign().map(_.copy(groups = NonEmptyList.one(mainCase.groupId)))
       )
-      conductCampaign(mainCampaignId, mainCampaign, mainCase).futureValue
+      campaigns
+        .launch(mainCampaignId)
+        .flatMap(_ => conductCampaign(mainCampaignId, mainCampaign.update, mainCase))
+        .futureValue
 
       Get(apiUri(s"campaigns/${mainCampaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
         status shouldBe OK
@@ -374,12 +371,11 @@ class CampaignResourceSpec
         notAffectedDevices = notAffectedDevices
       )
 
-      val (retryCampaignId, retryCampaign) = createCampaignWithUpdateOk(
-        genCreateCampaign().map(_.copy(
-          groups = NonEmptyList.one(retryCase.groupId),
-          mainCampaignId = Some(mainCampaignId)
-        )))
-      conductCampaign(retryCampaignId, retryCampaign, retryCase).futureValue
+      // We'll get a 412 Precondition Error if we try to launch a retry-campaign with no failed devices. See test above.
+      if (mainCase.failedDevices.nonEmpty) {
+        val retryCampaignId = createAndLaunchRetryCampaignOk(mainCampaignId, RetryFailedDevices(failureCode))
+        conductCampaign(retryCampaignId, mainCampaign.update, retryCase).futureValue
+      }
 
       Get(apiUri(s"campaigns/${mainCampaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
         status shouldBe OK
@@ -388,16 +384,15 @@ class CampaignResourceSpec
         campaignStats.status shouldBe CampaignStatus.finished
         campaignStats.finished shouldBe (
           mainCase.successfulDevices.size + mainCase.failedDevices.size -
-          (retryCase.processedCount - retryCase.affectedCount + retryCase.cancelledDevices.size)
-        )
+            (retryCase.processedCount - retryCase.affectedCount + retryCase.cancelledDevices.size)
+          )
         campaignStats.cancelled shouldBe (mainCase.cancelledDevices.size + retryCase.cancelledDevices.size)
         campaignStats.processed shouldBe mainCase.processedCount
         campaignStats.affected shouldBe (
-          mainCase.affectedCount -
-          (retryCase.processedCount - retryCase.affectedCount)
-        )
+          mainCase.affectedCount - (retryCase.processedCount - retryCase.affectedCount)
+          )
       }
-    })
+    }
   }
 
   private def splitIntoGroupsRandomly[T](seq: Seq[T], n: Int): Seq[Seq[T]] = {

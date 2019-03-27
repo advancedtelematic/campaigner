@@ -1,5 +1,7 @@
 package com.advancedtelematic.campaigner.db
 
+import java.time.Instant
+
 import cats.syntax.either._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
@@ -111,6 +113,13 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       .andThen(campaignStatusTransition.devicesFinished(campaignId))
   }
 
+  /**
+    * Returns the IDs of all the devices that were processed in the campaign with `campaignId` and failed with
+    * the code `failureCode`.
+    */
+  def fetchFailedDevices(campaignId: CampaignId, failureCode: String): Future[Set[DeviceId]] =
+    deviceUpdateRepo.findFailedByFailureCode(campaignId, failureCode)
+
   def countByStatus: Future[Map[CampaignStatus, Int]] =
     db
       .run(campaignRepo.countByStatus)
@@ -196,6 +205,31 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 
   def create(campaign: Campaign, groups: Set[GroupId], devices: Set[DeviceId], metadata: Seq[CampaignMetadata]): Future[CampaignId] =
     campaignRepo.persist(campaign, groups, devices, metadata)
+
+  /**
+    * Create and immediately launch a retry-campaign for all the devices that were processed by `mainCampaign` and
+    * failed with a code `failureCode`. There should be at least one failed device with that code. If there were not
+    * any such devices in `mainCampaign`, an exception is thrown.
+    */
+  def retryCampaign(ns: Namespace, mainCampaign: Campaign, failureCode: String): Future[CampaignId] =
+    fetchFailedDevices(mainCampaign.id, failureCode).flatMap {
+      case deviceIds if deviceIds.isEmpty =>
+        Future.failed(MissingFailedDevices(failureCode))
+      case deviceIds =>
+        val retryCampaign = Campaign(
+          ns,
+          CampaignId.generate(),
+          s"retryCampaignWith-mainCampaign-${mainCampaign.id.uuid}-failureCode-$failureCode",
+          mainCampaign.updateId,
+          CampaignStatus.prepared,
+          Instant.now(),
+          Instant.now(),
+          Some(mainCampaign.id),
+          Some(failureCode)
+        )
+        create(retryCampaign, Set.empty, deviceIds, Nil)
+    }
+    .map { cid => launch(cid); cid }
 
   def update(id: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
     campaignRepo.update(id, name, metadata)

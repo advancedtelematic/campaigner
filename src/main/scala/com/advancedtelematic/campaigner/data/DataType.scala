@@ -30,6 +30,7 @@ object DataType {
     createdAt: Instant,
     updatedAt: Instant,
     mainCampaignId: Option[CampaignId],
+    failureCode: Option[String],
     autoAccept: Boolean = true
   )
 
@@ -61,7 +62,6 @@ object DataType {
   final case class CreateCampaign(name: String,
                                   update: UpdateId,
                                   groups: NonEmptyList[GroupId],
-                                  mainCampaignId: Option[CampaignId],
                                   metadata: Option[Seq[CreateCampaignMetadata]] = None,
                                   approvalNeeded: Option[Boolean] = Some(false))
   {
@@ -74,7 +74,8 @@ object DataType {
         CampaignStatus.prepared,
         Instant.now(),
         Instant.now(),
-        mainCampaignId,
+        None,
+        None,
         !approvalNeeded.getOrElse(false)
       )
     }
@@ -83,6 +84,7 @@ object DataType {
       metadata.toList.flatten.map(_.toCampaignMetadata(campaignId))
   }
 
+  final case class RetryFailedDevices(failureCode: String)
 
   final case class GetCampaign(
     namespace: Namespace,

@@ -62,7 +62,7 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
 
     listener.apply(report).futureValue shouldBe (())
     deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.failed).futureValue should contain(deviceUpdate.device)
-    deviceUpdateRepo.findFailedByFailureCode(campaign.id, "FAILURE").futureValue should contain(deviceUpdate.device)
+    campaigns.fetchFailedDevices(campaign.id, "FAILURE").futureValue should contain(deviceUpdate.device)
   }
 
   "Listener" should "mark a device as failed using campaign CorrelationId" in {
@@ -75,7 +75,7 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
 
     listener.apply(report).futureValue shouldBe (())
     deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.failed).futureValue should contain(deviceUpdate.device)
-    deviceUpdateRepo.findFailedByFailureCode(campaign.id, "FAILURE").futureValue should contain(deviceUpdate.device)
+    campaigns.fetchFailedDevices(campaign.id, "FAILURE").futureValue should contain(deviceUpdate.device)
   }
 
   "Listener" should "mark a device as canceled using campaign CorrelationId" in {

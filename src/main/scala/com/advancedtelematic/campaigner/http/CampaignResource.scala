@@ -37,6 +37,13 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
     } yield campaignId
   }
 
+  /**
+    * Create and immediately launch a retry-campaign for all the devices that were processed by `mainCampaign` and
+    * failed with the code given in `request`.
+    */
+  def retryFailedDevices(ns: Namespace, mainCampaign: Campaign, request: RetryFailedDevices): Future[CampaignId] =
+    campaigns.retryCampaign(ns, mainCampaign, request.failureCode)
+
   private def UserCampaignPathPrefix(namespace: Namespace): Directive1[Campaign] =
     pathPrefix(CampaignId.Path).flatMap { campaign =>
       onSuccess(campaigns.findNamespaceCampaign(namespace, campaign)).flatMap(provide)
@@ -72,14 +79,19 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
               complete(campaigns.update(campaign.id, updated.name, updated.metadata.toList.flatten.map(_.toCampaignMetadata(campaign.id))))
             }
           } ~
-          (post & path("launch")) {
-            complete(campaigns.launch(campaign.id))
+          post {
+            path("launch") {
+              complete(campaigns.launch(campaign.id))
+            } ~
+            path("cancel") {
+              complete(campaigns.cancel(campaign.id))
+            } ~
+            (path("retry-failed") & entity(as[RetryFailedDevices])) { request =>
+              complete(StatusCodes.Created -> retryFailedDevices(ns, campaign, request))
+            }
           } ~
           (get & path("stats")) {
             complete(campaigns.campaignStats(campaign.id))
-          } ~
-          (post & path("cancel")) {
-            complete(campaigns.cancel(campaign.id))
           }
         }
       } ~

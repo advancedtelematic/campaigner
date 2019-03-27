@@ -89,9 +89,10 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
     }
 
   /**
-    * Find all the device updates that failed with a given failure code.
+    * Returns the IDs of all the devices that were processed in the campaign with `campaignId` and failed with
+    * the code `failureCode`.
     */
-  def findFailedByFailureCode(campaignId: CampaignId, failureCode: String): Future[Set[DeviceId]] = db.run {
+  protected [db] def findFailedByFailureCode(campaignId: CampaignId, failureCode: String): Future[Set[DeviceId]] = db.run {
     Schema.deviceUpdates
       .filter(_.campaignId === campaignId)
       .filter(_.status === DeviceStatus.failed)
