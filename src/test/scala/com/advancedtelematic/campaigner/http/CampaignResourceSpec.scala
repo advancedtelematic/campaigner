@@ -41,13 +41,22 @@ class CampaignResourceSpec
   val campaigns = Campaigns()
 
   def checkStats(id: CampaignId, campaignStatus: CampaignStatus, processed: Long = 0, affected: Long = 0,
-                 finished: Long = 0, failed: Set[DeviceId] = Set.empty, cancelled: Long = 0)
+                 finished: Long = 0, failed: Long = 0, cancelled: Long = 0, successful: Long = 0)
                 (implicit pos: source.Position): Unit =
     Get(apiUri(s"campaigns/${id.show}/stats")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
       val campaignStats = responseAs[CampaignStats]
       campaignStats.status shouldBe campaignStatus
-      campaignStats shouldBe CampaignStats(id, campaignStatus, finished, failed, cancelled, processed, affected)
+      campaignStats shouldBe CampaignStats(
+        campaign = id,
+        status = campaignStatus,
+        processed = processed,
+        affected = affected,
+        cancelled = cancelled,
+        finished = finished,
+        failed = failed,
+        successful = successful,
+        failures = Set.empty)
     }
 
   "POST and GET /campaigns" should "create a campaign, return the created campaign" in {
@@ -309,7 +318,6 @@ class CampaignResourceSpec
 
   "GET /campaigns/:id/stats" should "return correct statistics" in {
     val campaigns = Campaigns()
-    val failureCode = "failure-code-1"
 
     case class CampaignCase(
         successfulDevices: Seq[DeviceId],
@@ -321,6 +329,7 @@ class CampaignResourceSpec
       val affectedCount = affectedDevices.size.toLong
       val notAffectedCount = notAffectedDevices.size.toLong
       val processedCount = affectedCount + notAffectedCount
+      val failedCount = failedDevices.size.toLong
 
       override def toString: String =
         s"CampaignCase(s=${successfulDevices.size}, f=${failedDevices.size}, c=${cancelledDevices.size}, a=$affectedCount, n=$notAffectedCount, p=$processedCount)"
@@ -333,7 +342,7 @@ class CampaignResourceSpec
       notAffectedDevices <- Gen.listOf(genDeviceId)
     } yield CampaignCase(successfulDevices, failedDevices, cancelledDevices, notAffectedDevices)
 
-    def conductCampaign(campaignId: CampaignId, updateId: UpdateId, campaignCase: CampaignCase): Future[Unit] = for {
+    def conductCampaign(campaignId: CampaignId, updateId: UpdateId, campaignCase: CampaignCase, failureCode: String): Future[Unit] = for {
       _ <- campaigns.scheduleDevices(campaignId, updateId, campaignCase.affectedDevices:_*)
       _ <- campaigns.rejectDevices(campaignId, updateId, campaignCase.notAffectedDevices)
       _ <- campaigns.cancelDevices(campaignId, campaignCase.cancelledDevices)
@@ -345,9 +354,10 @@ class CampaignResourceSpec
       val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk(
         genCreateCampaign().map(_.copy(groups = NonEmptyList.one(mainCase.groupId)))
       )
+      val mainCampaignFailureCode = "failure-code-main"
       campaigns
         .launch(mainCampaignId)
-        .flatMap(_ => conductCampaign(mainCampaignId, mainCampaign.update, mainCase))
+        .flatMap(_ => conductCampaign(mainCampaignId, mainCampaign.update, mainCase, mainCampaignFailureCode))
         .futureValue
 
       Get(apiUri(s"campaigns/${mainCampaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
@@ -355,42 +365,61 @@ class CampaignResourceSpec
 
         val campaignStats = responseAs[CampaignStats]
         campaignStats.status shouldBe CampaignStatus.finished
-        campaignStats.finished shouldBe (mainCase.successfulDevices.size + mainCase.failedDevices.size)
-        campaignStats.failed should contain theSameElementsAs mainCase.failedDevices
+        campaignStats.finished shouldBe (mainCase.successfulDevices.size + mainCase.failedCount)
+        campaignStats.failed shouldBe mainCase.failedCount
         campaignStats.cancelled shouldBe mainCase.cancelledDevices.size
         campaignStats.processed shouldBe mainCase.processedCount
         campaignStats.affected shouldBe mainCase.affectedCount
+
+        if (mainCase.failedDevices.nonEmpty) {
+          campaignStats.failures shouldBe Set(CampaignFailureStats(
+            code = mainCampaignFailureCode,
+            count = mainCase.failedCount,
+            retryStatus = RetryStatus.not_launched,
+          ))
+        }
       }
 
-      val Seq(retriedS, retriedF, retriedC, notRetriedDevices, notAffectedDevices) =
-        splitIntoGroupsRandomly(mainCase.failedDevices, 5)
-      val retryCase = CampaignCase(
-        successfulDevices = retriedS,
-        failedDevices = retriedF,
-        cancelledDevices = retriedC,
-        notAffectedDevices = notAffectedDevices
-      )
-
-      // We'll get a 412 Precondition Error if we try to launch a retry-campaign with no failed devices. See test above.
       if (mainCase.failedDevices.nonEmpty) {
-        val retryCampaignId = createAndLaunchRetryCampaignOk(mainCampaignId, RetryFailedDevices(failureCode))
-        conductCampaign(retryCampaignId, mainCampaign.update, retryCase).futureValue
-      }
+        val Seq(retriedS, retriedF, retriedC, notAffectedDevices) =
+          splitIntoGroupsRandomly(mainCase.failedDevices, 4)
+        val retryCase = CampaignCase(
+          successfulDevices = retriedS,
+          failedDevices = retriedF,
+          cancelledDevices = retriedC,
+          notAffectedDevices = notAffectedDevices
+        )
 
-      Get(apiUri(s"campaigns/${mainCampaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
-        status shouldBe OK
+        val retryCampaignFailureCode = "failure-code-retry"
+        val retryCampaignId = createAndLaunchRetryCampaignOk(mainCampaignId, RetryFailedDevices(mainCampaignFailureCode))
+        conductCampaign(retryCampaignId, mainCampaign.update, retryCase, retryCampaignFailureCode).futureValue
 
-        val campaignStats = responseAs[CampaignStats]
-        campaignStats.status shouldBe CampaignStatus.finished
-        campaignStats.finished shouldBe (
-          mainCase.successfulDevices.size + mainCase.failedDevices.size -
-            (retryCase.processedCount - retryCase.affectedCount + retryCase.cancelledDevices.size)
+        Get(apiUri(s"campaigns/${mainCampaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
+          status shouldBe OK
+
+          val campaignStats = responseAs[CampaignStats]
+          campaignStats.status shouldBe CampaignStatus.finished
+          campaignStats.finished shouldBe (
+            mainCase.successfulDevices.size + mainCase.failedDevices.size -
+              (retryCase.processedCount - retryCase.affectedCount + retryCase.cancelledDevices.size)
+            )
+          campaignStats.cancelled shouldBe (mainCase.cancelledDevices.size + retryCase.cancelledDevices.size)
+          campaignStats.processed shouldBe mainCase.processedCount
+          campaignStats.affected shouldBe (
+            mainCase.affectedCount - (retryCase.processedCount - retryCase.affectedCount)
           )
-        campaignStats.cancelled shouldBe (mainCase.cancelledDevices.size + retryCase.cancelledDevices.size)
-        campaignStats.processed shouldBe mainCase.processedCount
-        campaignStats.affected shouldBe (
-          mainCase.affectedCount - (retryCase.processedCount - retryCase.affectedCount)
+          campaignStats.failed shouldBe (
+            mainCase.failedCount - retryCase.processedCount + retryCase.failedCount
           )
+
+          if (retryCase.failedDevices.nonEmpty) {
+            campaignStats.failures shouldBe Set(CampaignFailureStats(
+              code = retryCampaignFailureCode,
+              count = retryCase.failedCount,
+              retryStatus = RetryStatus.not_launched,
+            ))
+          }
+        }
       }
     }
   }

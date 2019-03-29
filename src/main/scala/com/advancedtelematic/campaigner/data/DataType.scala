@@ -8,6 +8,7 @@ import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignSta
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
+import com.advancedtelematic.campaigner.data.DataType.RetryStatus.RetryStatus
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
@@ -125,11 +126,19 @@ object DataType {
   final case class CampaignStats(
     campaign: CampaignId,
     status: CampaignStatus,
-    finished: Long,
-    failed: Set[DeviceId],
-    cancelled: Long,
     processed: Long,
-    affected: Long
+    affected: Long,
+    cancelled: Long,
+    finished: Long,
+    failed: Long,
+    successful: Long,
+    failures: Set[CampaignFailureStats],
+  )
+
+  final case class CampaignFailureStats(
+    code: String,
+    count: Long,
+    retryStatus: RetryStatus,
   )
 
   final case class DeviceUpdate(
@@ -155,6 +164,11 @@ object DataType {
   object CampaignStatus extends Enumeration {
     type CampaignStatus = Value
     val prepared, launched, finished, cancelled = Value
+  }
+
+  object RetryStatus extends Enumeration {
+    type RetryStatus = Value
+    val not_launched, launched, finished = Value
   }
 
   /**

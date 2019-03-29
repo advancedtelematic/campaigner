@@ -9,6 +9,7 @@ import io.circe.{Decoder, Encoder, KeyEncoder}
 
 object Codecs {
   import DataType.CampaignStatus.CampaignStatus
+  import DataType.RetryStatus.RetryStatus
   import io.circe.generic.semiauto._
 
 
@@ -52,6 +53,12 @@ object Codecs {
   implicit val encoderCampaignStatus: Encoder[CampaignStatus] = Encoder.enumEncoder(CampaignStatus)
 
   implicit val keyEncoderCampaignStatus: KeyEncoder[CampaignStatus] = KeyEncoder[String].contramap(_.toString)
+
+  implicit val decoderRetryStatus: Decoder[RetryStatus] = Decoder.enumDecoder(RetryStatus)
+  implicit val encoderRetryStatus: Encoder[RetryStatus] = Encoder.enumEncoder(RetryStatus)
+
+  implicit val decoderCampaignFailureStats: Decoder[CampaignFailureStats] = deriveDecoder
+  implicit val encoderCampaignFailureStats: Encoder[CampaignFailureStats] = deriveEncoder
 
   implicit val decoderCampaignStats: Decoder[CampaignStats] = deriveDecoder
   implicit val encoderCampaignStats: Encoder[CampaignStats] = deriveEncoder

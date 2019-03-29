@@ -260,20 +260,17 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
       .filter(_.id === campaignId).map(_.status).update(status).map(_ => campaignId)
 
   /**
-   * Given a main campaign ID, finds all IDs of the corresponding retry
-   * campaigns.
+   * Given a main campaign ID, finds all the corresponding retry campaigns.
    */
-  def findRetryCampaignIdsOf(mainId: CampaignId): Future[Set[CampaignId]] =
-    db.run(findRetryCampaignIdsOfAction(mainId))
+  def findRetryCampaignsOf(mainId: CampaignId): Future[Set[Campaign]] =
+    db.run(findRetryCampaignsOfAction(mainId))
 
   /**
-   * Given a main campaign ID, finds all IDs of the corresponding retry
-   * campaigns.
+   * Given a main campaign ID, finds all the corresponding retry campaigns.
    */
-  protected[db] def findRetryCampaignIdsOfAction(mainId: CampaignId): DBIO[Set[CampaignId]] =
+  protected[db] def findRetryCampaignsOfAction(mainId: CampaignId): DBIO[Set[Campaign]] =
     Schema.campaigns
       .filter(_.mainCampaignId === mainId)
-      .map(_.id)
       .result
       .map(_.toSet)
 }

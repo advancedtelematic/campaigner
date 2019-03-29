@@ -13,6 +13,7 @@ import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
+import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -49,14 +50,6 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
    */
   def updateStatus(campaignId: CampaignId): Future[Unit] =
     db.run(campaignStatusTransition.updateToCalculatedStatus(campaignId))
-
-  /**
-   * Given a campaign ID, returns IDs of all devices that are in `failed` state
-   */
-  private def findFailedDevicesAction(campaign: CampaignId): DBIO[Set[DeviceId]] =
-    campaignRepo.findAction(campaign).flatMap { _ =>
-      deviceUpdateRepo.findByCampaignAction(campaign, DeviceStatus.failed)
-    }
 
   def freshCancelled(): Future[Seq[(Namespace, CampaignId)]] =
     cancelTaskRepo.findPending()
@@ -135,13 +128,30 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 
   def findClientCampaign(campaignId: CampaignId): Future[GetCampaign] = for {
     c <- campaignRepo.find(campaignId)
-    retryIds <- campaignRepo.findRetryCampaignIdsOf(campaignId)
+    retryIds <- campaignRepo.findRetryCampaignsOf(campaignId).map(_.map(_.id))
     groups <- db.run(findGroupsAction(c.id))
     metadata <- campaignMetadataRepo.findFor(campaignId)
   } yield GetCampaign(c, retryIds, groups, metadata)
 
   def findCampaignsByUpdate(update: UpdateId): Future[Seq[Campaign]] =
     db.run(campaignRepo.findByUpdateAction(update))
+
+  /**
+   * Given a set of campaign IDs, finds all device updates that happened in
+   * these campaigns, selects the most recent failures and returns them.
+   */
+  protected[db] def findFailedDeviceUpdatesAction(campaignIds: Set[CampaignId]): DBIO[Set[DeviceUpdate]] = {
+    Schema.deviceUpdates
+      .join(Schema.deviceUpdates
+      .filter(upd => upd.campaignId.inSet(campaignIds))
+        .groupBy(_.deviceId)
+        .map { case (id, upd) => (id, upd.map(_.updatedAt).max) })
+        .on { (fst, snd) => fst.deviceId === snd._1 && fst.updatedAt === snd._2 }
+      .map(_._1)
+      .filter(_.status === DeviceStatus.failed)
+      .result
+      .map(_.toSet)
+  }
 
   /**
    * Calculates campaign-wide statistic counters, also taking retry campaings
@@ -165,22 +175,52 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
         counts.getOrElse(DeviceStatus.failed, 0).toLong
     )
 
+    def processFailures(failedDevices: Set[DeviceUpdate], retryCampaigns: Set[Campaign]): Set[CampaignFailureStats] = {
+      val missingErrorCode = "MISSING_ERROR_CODE"
+      val retryStatusByFailureCode = retryCampaigns
+        .groupBy(_.failureCode.getOrElse(missingErrorCode))
+        .mapValues { campaigns =>
+          if (campaigns.exists(_.status == CampaignStatus.finished)) {
+            RetryStatus.finished
+          } else {
+            RetryStatus.launched
+          }
+        }
+
+      failedDevices
+        .groupBy(_.resultCode.getOrElse(missingErrorCode))
+        .map { case (errorCode, devices) => CampaignFailureStats(
+          code = errorCode,
+          count = devices.size.toLong,
+          retryStatus = retryStatusByFailureCode.getOrElse(errorCode, RetryStatus.not_launched),
+        )}
+        .toSet
+    }
+
     val statsAction = for {
       mainCampaign <- campaignRepo.findAction(campaignId)
-      retryCampaignIds <- campaignRepo.findRetryCampaignIdsOfAction(campaignId)
+      retryCampaigns <- campaignRepo.findRetryCampaignsOfAction(campaignId)
+      retryCampaignIds = retryCampaigns.map(_.id)
+      failedDevices <- findFailedDeviceUpdatesAction(retryCampaignIds + campaignId)
       mainCnt <- deviceUpdateRepo.countByStatus(Set(campaignId)).map(processCounts)
       retryCnt <- deviceUpdateRepo.countByStatus(retryCampaignIds).map(processCounts)
-      // TODO (OTA-2307) replace with failed devices groups when implemented
-      failed <- findFailedDevicesAction(campaignId)
-    } yield CampaignStats(
-      campaign = campaignId,
-      status = mainCampaign.status,
-      finished = mainCnt.finished  - (retryCnt.rejected + retryCnt.cancelled),
-      failed = failed,
-      cancelled = mainCnt.cancelled + retryCnt.cancelled,
-      processed = mainCnt.processed,
-      affected  = mainCnt.affected - retryCnt.rejected,
-    )
+    } yield {
+      val finished = mainCnt.finished  - (retryCnt.rejected + retryCnt.cancelled)
+      val failed = failedDevices.size.toLong
+      val failures = processFailures(failedDevices, retryCampaigns)
+
+      CampaignStats(
+        campaign = campaignId,
+        status = mainCampaign.status,
+        processed = mainCnt.processed,
+        affected  = mainCnt.affected - retryCnt.rejected,
+        cancelled = mainCnt.cancelled + retryCnt.cancelled,
+        finished = finished,
+        failed = failed,
+        successful = finished - failed,
+        failures = failures,
+      )
+    }
 
     statsAction.transactionally
   }

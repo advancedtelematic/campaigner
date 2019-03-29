@@ -68,6 +68,17 @@ object Generators {
     d <- Gen.option(arbitrary[String])
   } yield CreateUpdate(us, n, d)
 
+  def genDeviceUpdate(
+      genCampaignId: Gen[CampaignId] = arbitrary[CampaignId],
+      genResultCode: Gen[String] = Gen.alphaNumStr): Gen[DeviceUpdate] = for {
+    cid <- genCampaignId
+    uid <- genUpdateId
+    did <- genDeviceId
+    st <- Gen.oneOf(DeviceStatus.values.toSeq)
+    rc <- Gen.option(genResultCode)
+    upAt <- Gen.posNum[Long].map(Instant.ofEpochSecond)
+  } yield DeviceUpdate(cid, uid, did, st, rc, upAt)
+
   implicit lazy val arbCampaignId: Arbitrary[CampaignId] = Arbitrary(genCampaignId)
   implicit lazy val arbGroupId: Arbitrary[GroupId] = Arbitrary(genGroupId)
   implicit lazy val arbDeviceId: Arbitrary[DeviceId] = Arbitrary(genDeviceId)
