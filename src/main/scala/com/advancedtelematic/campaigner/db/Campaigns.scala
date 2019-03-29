@@ -153,12 +153,15 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
    * these campaigns, selects the most recent failures and returns them.
    */
   protected[db] def findFailedDeviceUpdatesAction(campaignIds: Set[CampaignId]): DBIO[Set[DeviceUpdate]] = {
-    Schema.deviceUpdates
-      .join(Schema.deviceUpdates
-      .filter(upd => upd.campaignId.inSet(campaignIds))
+    val latestUpdatePerDevice =
+      Schema.deviceUpdates
+        .filter(_.campaignId inSet campaignIds)
         .groupBy(_.deviceId)
-        .map { case (id, upd) => (id, upd.map(_.updatedAt).max) })
-        .on { (fst, snd) => fst.deviceId === snd._1 && fst.updatedAt === snd._2 }
+        .map { case (id, upd) => (id, upd.map(_.updatedAt).max) }
+
+    Schema.deviceUpdates
+      .join(latestUpdatePerDevice)
+      .on { (fst, snd) => fst.deviceId === snd._1 && fst.updatedAt === snd._2 }
       .map(_._1)
       .filter(_.status === DeviceStatus.failed)
       .result
@@ -265,17 +268,20 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     */
   def retryCampaign(ns: Namespace, mainCampaign: Campaign, failureCode: String): Future[CampaignId] =
     fetchFailedDevices(mainCampaign.id, failureCode).flatMap {
+
       case deviceIds if deviceIds.isEmpty =>
         Future.failed(MissingFailedDevices(failureCode))
+
       case deviceIds =>
+        val now = Instant.now
         val retryCampaign = Campaign(
           ns,
           CampaignId.generate(),
           s"retryCampaignWith-mainCampaign-${mainCampaign.id.uuid}-failureCode-$failureCode",
           mainCampaign.updateId,
           CampaignStatus.prepared,
-          Instant.now(),
-          Instant.now(),
+          now,
+          now,
           Some(mainCampaign.id),
           Some(failureCode)
         )

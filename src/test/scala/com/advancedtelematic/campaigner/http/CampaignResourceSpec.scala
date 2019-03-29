@@ -1,7 +1,5 @@
 package com.advancedtelematic.campaigner.http
 
-import java.time.temporal.ChronoUnit
-
 import akka.http.scaladsl.model.ContentTypes
 import akka.http.scaladsl.model.StatusCodes._
 import akka.util.ByteString
@@ -169,7 +167,7 @@ class CampaignResourceSpec
       Nil,
       autoAccept = true
     )
-    retryCampaign.createdAt.truncatedTo(ChronoUnit.SECONDS) shouldBe retryCampaign.updatedAt.truncatedTo(ChronoUnit.SECONDS)
+    retryCampaign.createdAt shouldBe retryCampaign.updatedAt
   }
 
   "POST /campaigns/:campaign_id/retry-failed" should "fail if there are no failed devices for the given failure code" in {
