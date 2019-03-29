@@ -1,6 +1,8 @@
 package com.advancedtelematic.campaigner.http
 
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.marshalling.{Marshaller, ToResponseMarshaller}
+import akka.http.scaladsl.model.headers.{ContentDispositionTypes, `Content-Disposition`}
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusCodes}
 import akka.http.scaladsl.server.{Directive1, Route}
 import akka.http.scaladsl.server.Directives._
 import cats.data.NonEmptyList
@@ -8,6 +10,7 @@ import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, DirectorClient}
 import com.advancedtelematic.campaigner.data.AkkaSupport._
 import com.advancedtelematic.campaigner.data.Codecs._
+import com.advancedtelematic.campaigner.data.CsvSerializer
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
@@ -43,6 +46,31 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
     */
   def retryFailedDevices(ns: Namespace, mainCampaign: Campaign, request: RetryFailedDevices): Future[CampaignId] =
     campaigns.retryCampaign(ns, mainCampaign, request.failureCode)
+
+
+  def installationFailureCsvMarshaller(campaignId: CampaignId): ToResponseMarshaller[Seq[(String, String, String)]] =
+    Marshaller.withFixedContentType(ContentTypes.`text/csv(UTF-8)`) { t =>
+      val csv = CsvSerializer.asCsv(Seq("Device ID", "Failure Code", "Failure Description"), t)
+      val e = HttpEntity(ContentTypes.`text/csv(UTF-8)`, csv)
+      val h = `Content-Disposition`(ContentDispositionTypes.attachment, Map("filename" -> s"campaign-${campaignId.uuid.toString}-device-failures.csv"))
+      HttpResponse(headers = h :: Nil, entity = e)
+    }
+
+  /**
+    * For the devices that are in failed status `failureCode` after executing the campaign with ID `campaignId`
+    * or any of its retry-campaigns, calculate the triplets (DeviceOemId, ResultCode, ResultDescription) and
+    * return them as a CSV file.
+    */
+  def fetchFailureCodes(ns: Namespace, campaignId: CampaignId, failureCode: String): Route = {
+    val f = campaigns.fetchFailureCodes(campaignId, failureCode).flatMap {
+      Future.traverse(_) { case (did, fc, fd) =>
+        deviceRegistry.fetchOemId(ns, did).map((_, fc, fd))
+      }
+      .map(_.toSeq)
+    }
+    implicit val marshaller = installationFailureCsvMarshaller(campaignId)
+    complete(f)
+  }
 
   private def UserCampaignPathPrefix(namespace: Namespace): Directive1[Campaign] =
     pathPrefix(CampaignId.Path).flatMap { campaign =>
@@ -90,8 +118,13 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
               complete(StatusCodes.Created -> retryFailedDevices(ns, campaign, request))
             }
           } ~
-          (get & path("stats")) {
-            complete(campaigns.campaignStats(campaign.id))
+          get {
+            path("stats") {
+              complete(campaigns.campaignStats(campaign.id))
+            } ~
+            (path("failed-installations.csv") & parameter('failureCode.as[String])) {
+              failureCode => fetchFailureCodes(ns, campaign.id, failureCode)
+            }
           }
         }
       } ~

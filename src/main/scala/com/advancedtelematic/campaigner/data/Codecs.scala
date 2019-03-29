@@ -12,7 +12,6 @@ object Codecs {
   import DataType.RetryStatus.RetryStatus
   import io.circe.generic.semiauto._
 
-
   implicit val createCampaignMetadataEncoder: Encoder[CreateCampaignMetadata] = deriveEncoder
   implicit val createCampaignMetadataDecoder: Decoder[CreateCampaignMetadata] = deriveDecoder
 

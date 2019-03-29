@@ -70,14 +70,24 @@ object Generators {
 
   def genDeviceUpdate(
       genCampaignId: Gen[CampaignId] = arbitrary[CampaignId],
-      genResultCode: Gen[String] = Gen.alphaNumStr): Gen[DeviceUpdate] = for {
-    cid <- genCampaignId
-    uid <- genUpdateId
-    did <- genDeviceId
-    st <- Gen.oneOf(DeviceStatus.values.toSeq)
-    rc <- Gen.option(genResultCode)
-    upAt <- Gen.posNum[Long].map(Instant.ofEpochSecond)
-  } yield DeviceUpdate(cid, uid, did, st, rc, upAt)
+      genResultCode: Gen[String] = Gen.alphaNumStr,
+      genResultDescription: Gen[String] = Gen.alphaNumStr): Gen[DeviceUpdate] =
+    for {
+      cid <- genCampaignId
+      uid <- genUpdateId
+      did <- genDeviceId
+      st <- Gen.oneOf(DeviceStatus.values.toSeq)
+      rc <- Gen.option(genResultCode)
+      rd <- Gen.option(genResultDescription)
+      upAt <- Gen.posNum[Long].map(Instant.ofEpochSecond)
+    } yield DeviceUpdate(cid, uid, did, st, rc, rd, upAt)
+
+  val genExportCase: Gen[(DeviceId, String, String, String)] = for {
+    deviceId <- genDeviceId
+    deviceOemId <- Gen.alphaNumStr.map("OEM-ID-" + _)
+    failureCode <- Gen.alphaStr.map("FAILURE-CODE-" + _)
+    failureDescription <- Gen.alphaStr.map("FAILURE-DESCRIPTION-" + _)
+  } yield (deviceId, deviceOemId, failureCode, failureDescription)
 
   implicit lazy val arbCampaignId: Arbitrary[CampaignId] = Arbitrary(genCampaignId)
   implicit lazy val arbGroupId: Arbitrary[GroupId] = Arbitrary(genGroupId)
@@ -92,4 +102,5 @@ object Generators {
   implicit lazy val arbMetadataType: Arbitrary[MetadataType] = Arbitrary(genMetadataType)
   implicit lazy val arbCreateUpdate: Arbitrary[CreateUpdate] = Arbitrary(genCreateUpdate())
   implicit lazy val arbNonEmptyGroupIdList: Arbitrary[NonEmptyList[GroupId]] = Arbitrary(genNonEmptyGroupIdList)
+
 }

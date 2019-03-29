@@ -1,9 +1,9 @@
 package com.advancedtelematic.campaigner.util
 
 import akka.http.scaladsl.model.StatusCodes._
-import akka.http.scaladsl.model.{HttpRequest, Uri}
 import akka.http.scaladsl.model.Uri.Query
 import akka.http.scaladsl.model.headers.RawHeader
+import akka.http.scaladsl.model.{HttpRequest, Uri}
 import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import cats.syntax.show._
@@ -14,6 +14,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
+import com.advancedtelematic.libats.http.HttpOps._
 import com.advancedtelematic.libats.test.DatabaseSpec
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
@@ -78,6 +79,11 @@ trait ResourceSpec extends ScalatestRouteTest
       status shouldBe OK
       responseAs[PaginationResult[CampaignId]]
     }
+  }
+
+  def getFailedExport(campaignId: CampaignId, failureCode: String): HttpRequest = {
+    val q = Query("failureCode" -> failureCode)
+    Get(apiUri(s"campaigns/${campaignId.show}/failed-installations.csv").withQuery(q)).withNs(testNs)
   }
 }
 
