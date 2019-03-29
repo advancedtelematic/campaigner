@@ -48,14 +48,13 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
     campaigns.retryCampaign(ns, mainCampaign, request.failureCode)
 
 
-  implicit val installationFailureCsvMarshaller: ToResponseMarshaller[Seq[(String, String, String)]] =
+  def installationFailureCsvMarshaller(campaignId: CampaignId): ToResponseMarshaller[Seq[(String, String, String)]] =
     Marshaller.withFixedContentType(ContentTypes.`text/csv(UTF-8)`) { t =>
       val csv = CsvSerializer.asCsv(Seq("Device ID", "Failure Code", "Failure Description"), t)
       val e = HttpEntity(ContentTypes.`text/csv(UTF-8)`, csv)
-      val h = `Content-Disposition`(ContentDispositionTypes.attachment, Map("filename" -> "device-failures.csv"))
+      val h = `Content-Disposition`(ContentDispositionTypes.attachment, Map("filename" -> s"campaign-${campaignId.uuid.toString}-device-failures.csv"))
       HttpResponse(headers = h :: Nil, entity = e)
     }
-
 
   /**
     * For the devices that are in failed status `failureCode` after executing the campaign with ID `campaignId`
@@ -69,6 +68,7 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
       }
       .map(_.toSeq)
     }
+    implicit val marshaller = installationFailureCsvMarshaller(campaignId)
     complete(f)
   }
 
