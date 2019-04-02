@@ -12,7 +12,7 @@ import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignSta
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.http.Routes
-import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode}
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.http.HttpOps._
 import com.advancedtelematic.libats.test.DatabaseSpec
@@ -81,8 +81,8 @@ trait ResourceSpec extends ScalatestRouteTest
     }
   }
 
-  def getFailedExport(campaignId: CampaignId, failureCode: String): HttpRequest = {
-    val q = Query("failureCode" -> failureCode)
+  def getFailedExport(campaignId: CampaignId, failureCode: ResultCode): HttpRequest = {
+    val q = Query("failureCode" -> failureCode.value)
     Get(apiUri(s"campaigns/${campaignId.show}/failed-installations.csv").withQuery(q)).withNs(testNs)
   }
 }

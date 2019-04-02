@@ -9,7 +9,7 @@ import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.SlickMapping._
 import com.advancedtelematic.campaigner.http.Errors._
-import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
@@ -75,16 +75,16 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def markDevicesAccepted(campaign: CampaignId, update: UpdateId, devices: DeviceId*): Future[Unit] =
     deviceUpdateRepo.persistMany(devices.map { d => DeviceUpdate(campaign, update, d, DeviceStatus.accepted) })
 
-  def succeedDevice(updateId: UpdateId, deviceId: DeviceId, successCode: String, successDescription: String): Future[Unit] =
+  def succeedDevice(updateId: UpdateId, deviceId: DeviceId, successCode: ResultCode, successDescription: ResultDescription): Future[Unit] =
     finishDevice(updateId, deviceId, DeviceStatus.successful, Some(successCode), Some(successDescription))
 
-  def succeedDevices(campaignId: CampaignId, devices: Seq[DeviceId], successCode: String, successDescription: String): Future[Unit] =
+  def succeedDevices(campaignId: CampaignId, devices: Seq[DeviceId], successCode: ResultCode, successDescription: ResultDescription): Future[Unit] =
     finishDevices(campaignId, devices, DeviceStatus.successful, Some(successCode), Some(successDescription))
 
-  def failDevice(updateId: UpdateId, deviceId: DeviceId, failureCode: String, failureDescription: String): Future[Unit] =
+  def failDevice(updateId: UpdateId, deviceId: DeviceId, failureCode: ResultCode, failureDescription: ResultDescription): Future[Unit] =
     finishDevice(updateId, deviceId, DeviceStatus.failed, Some(failureCode), Some(failureDescription))
 
-  def failDevices(campaignId: CampaignId, devices: Seq[DeviceId], failureCode: String, failureDescription: String): Future[Unit] =
+  def failDevices(campaignId: CampaignId, devices: Seq[DeviceId], failureCode: ResultCode, failureDescription: ResultDescription): Future[Unit] =
     finishDevices(campaignId, devices, DeviceStatus.failed, Some(failureCode), Some(failureDescription))
 
   def cancelDevice(updateId: UpdateId, deviceId: DeviceId): Future[Unit] =
@@ -93,7 +93,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def cancelDevices(campaignId: CampaignId, devices: Seq[DeviceId]): Future[Unit] =
     finishDevices(campaignId, devices, DeviceStatus.cancelled, None, None)
 
-  private def finishDevice(updateId: UpdateId, device: DeviceId, status: DeviceStatus, resultCode: Option[String], resultDescription: Option[String]): Future[Unit] = db.run {
+  private def finishDevice(updateId: UpdateId, device: DeviceId, status: DeviceStatus, resultCode: Option[ResultCode], resultDescription: Option[ResultDescription]): Future[Unit] = db.run {
     for {
       _ <- deviceUpdateRepo.setUpdateStatusAction(updateId, device, status, resultCode, resultDescription)
       campaigns <- campaignRepo.findByUpdateAction(updateId)
@@ -101,7 +101,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     } yield ()
   }
 
-  private def finishDevices(campaignId: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[String], resultDescription: Option[String]): Future[Unit] = db.run {
+  private def finishDevices(campaignId: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[ResultCode], resultDescription: Option[ResultDescription]): Future[Unit] = db.run {
     deviceUpdateRepo.setUpdateStatusAction(campaignId, devices, status, resultCode, resultDescription)
       .andThen(campaignStatusTransition.devicesFinished(campaignId))
   }
@@ -110,7 +110,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     * Returns the most recent device updates that have failed with the code `failureCode` in the campaign with ID
     * `mainCampaignId` or any of its retry-campaigns.
     */
-  def findLatestFailedUpdates(mainCampaignId: CampaignId, failureCode: String): Future[Set[DeviceUpdate]] = db.run {
+  def findLatestFailedUpdates(mainCampaignId: CampaignId, failureCode: ResultCode): Future[Set[DeviceUpdate]] = db.run {
     campaignRepo
       .findRetryCampaignsOfAction(mainCampaignId)
       .flatMap(cids => findFailedDeviceUpdatesAction(cids.map(_.id) + mainCampaignId))
@@ -183,7 +183,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     )
 
     def processFailures(failedDevices: Set[DeviceUpdate], retryCampaigns: Set[Campaign]): Set[CampaignFailureStats] = {
-      val missingErrorCode = "MISSING_ERROR_CODE"
+      val missingErrorCode = ResultCode("MISSING_ERROR_CODE")
       val retryStatusByFailureCode = retryCampaigns
         .groupBy(_.failureCode.getOrElse(missingErrorCode))
         .mapValues { campaigns =>
@@ -258,7 +258,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     * failed with a code `failureCode`. There should be at least one failed device with that code. If there were not
     * any such devices in `mainCampaign`, an exception is thrown.
     */
-  def retryCampaign(ns: Namespace, mainCampaign: Campaign, failureCode: String): Future[CampaignId] =
+  def retryCampaign(ns: Namespace, mainCampaign: Campaign, failureCode: ResultCode): Future[CampaignId] =
     findLatestFailedUpdates(mainCampaign.id, failureCode)
       .map(_.map(_.device))
       .flatMap {

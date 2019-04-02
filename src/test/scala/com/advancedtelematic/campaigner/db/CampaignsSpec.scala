@@ -6,7 +6,7 @@ import com.advancedtelematic.campaigner.data.DataType.CampaignStatus._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.util.{CampaignerSpecUtil, DatabaseUpdateSpecUtil}
-import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.{Arbitrary, Gen}
@@ -48,7 +48,7 @@ class CampaignsSpec extends AsyncFlatSpec
       update <- createDbUpdate(UpdateId.generate())
       newCampaigns <- FastFuture.traverse(arbitrary[Seq[Int]].generate)(_ => createDbCampaign(ns, update, group))
       _ <- FastFuture.traverse(newCampaigns)(c => campaigns.scheduleDevices(c.id, update, device))
-      _ <- campaigns.succeedDevice(update, device, "success-code-1", "success-description-1")
+      _ <- campaigns.succeedDevice(update, device, ResultCode("success-code-1"), ResultDescription("success-description-1"))
       stats <- campaigns.campaignStats(newCampaigns.head.id)
     } yield stats.finished shouldBe 1
   }
@@ -59,7 +59,7 @@ class CampaignsSpec extends AsyncFlatSpec
     for {
       campaign <- createDbCampaignWithUpdate()
       _ <- FastFuture.traverse(devices)(d => campaigns.scheduleDevices(campaign.id, campaign.updateId, d))
-      _ <- FastFuture.traverse(devices)(d => campaigns.failDevice(campaign.updateId, d, "failure-code-1", "failure-description-1"))
+      _ <- FastFuture.traverse(devices)(d => campaigns.failDevice(campaign.updateId, d, ResultCode("failure-code-1"), ResultDescription("failure-description-1")))
       stats <- campaigns.campaignStats(campaign.id)
     } yield stats.finished shouldBe devices.length
   }
@@ -78,7 +78,6 @@ final class CampaignsFindFailedDevicesSpec extends AsyncFlatSpec
   implicit val defaultPatience = PatienceConfig(timeout = 2 seconds)
 
   "findFailedDeviceUpdates" should "find all failed device update from all the given campaigns and return only the most recent ones" in {
-
     val campaignIds = Gen.choose(3, 6).flatMap(Gen.listOfN(_, genCampaignId)).generate
     val updateId = createDbUpdate(UpdateId.generate()).futureValue
     val campaignObjects = campaignIds.map(cid => genCampaign.generate.copy(id = cid, updateId = updateId))

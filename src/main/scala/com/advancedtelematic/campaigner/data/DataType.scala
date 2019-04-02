@@ -10,7 +10,7 @@ import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
 import com.advancedtelematic.campaigner.data.DataType.RetryStatus.RetryStatus
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
-import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 
@@ -31,7 +31,7 @@ object DataType {
     createdAt: Instant,
     updatedAt: Instant,
     mainCampaignId: Option[CampaignId],
-    failureCode: Option[String],
+    failureCode: Option[ResultCode],
     autoAccept: Boolean = true
   )
 
@@ -86,7 +86,7 @@ object DataType {
       metadata.toList.flatten.map(_.toCampaignMetadata(campaignId))
   }
 
-  final case class RetryFailedDevices(failureCode: String)
+  final case class RetryFailedDevices(failureCode: ResultCode)
 
   final case class GetCampaign(
     namespace: Namespace,
@@ -134,7 +134,7 @@ object DataType {
   )
 
   final case class CampaignFailureStats(
-    code: String,
+    code: ResultCode,
     count: Long,
     retryStatus: RetryStatus,
   )
@@ -144,8 +144,8 @@ object DataType {
     update: UpdateId,
     device: DeviceId,
     status: DeviceStatus,
-    resultCode: Option[String] = None,
-    resultDescription: Option[String] = None,
+    resultCode: Option[ResultCode] = None,
+    resultDescription: Option[ResultDescription] = None,
     updatedAt: Instant = Instant.now
   )
 

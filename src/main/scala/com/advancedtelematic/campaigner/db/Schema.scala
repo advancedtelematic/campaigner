@@ -9,7 +9,7 @@ import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.SlickMapping._
-import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
@@ -26,7 +26,7 @@ object Schema {
     def status = column[CampaignStatus]("status")
     def update    = column[UpdateId]  ("update_uuid")
     def mainCampaignId = column[Option[CampaignId]]("parent_campaign_uuid")
-    def failureCode = column[Option[String]]("failure_code")
+    def failureCode = column[Option[ResultCode]]("failure_code")
     def autoAccept = column[Boolean]   ("auto_accept")
     def createdAt = column[Instant]   ("created_at")
     def updatedAt = column[Instant]   ("updated_at")
@@ -71,8 +71,8 @@ object Schema {
     def updateId   = column[UpdateId]("update_id")
     def deviceId   = column[DeviceId]("device_id")
     def status     = column[DeviceStatus]("status")
-    def resultCode = column[Option[String]]("result_code")
-    def resultDescription = column[Option[String]]("result_description")
+    def resultCode = column[Option[ResultCode]]("result_code")
+    def resultDescription = column[Option[ResultDescription]]("result_description")
     def updatedAt  = column[Instant]("updated_at")
 
     def pk = primaryKey("device_updates_pk", (campaignId, deviceId))

@@ -13,13 +13,14 @@ import com.advancedtelematic.campaigner.db.Errors.{CampaignFKViolation, UpdateFK
 import com.advancedtelematic.campaigner.db.SlickMapping._
 import com.advancedtelematic.campaigner.db.SlickUtil.{sortBySlickOrderedCampaignConversion, sortBySlickOrderedUpdateConversion}
 import com.advancedtelematic.campaigner.http.Errors._
-import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import java.util.UUID
+
 import slick.jdbc.MySQLProfile.api._
 import slick.jdbc.GetResult
 
@@ -92,7 +93,7 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
     * Returns the IDs of all the devices that were processed in the campaign with `campaignId` and failed with
     * the code `failureCode`.
     */
-  protected [db] def findFailedByFailureCode(campaignId: CampaignId, failureCode: String): Future[Set[DeviceId]] = db.run {
+  protected [db] def findFailedByFailureCode(campaignId: CampaignId, failureCode: ResultCode): Future[Set[DeviceId]] = db.run {
     Schema.deviceUpdates
       .filter(_.campaignId === campaignId)
       .filter(_.status === DeviceStatus.failed)
@@ -102,7 +103,7 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
       .map(_.toSet)
   }
 
-  protected [db] def setUpdateStatusAction(update: UpdateId, device: DeviceId, status: DeviceStatus, resultCode: Option[String], resultDescription: Option[String]): DBIO[Unit] =
+  protected [db] def setUpdateStatusAction(update: UpdateId, device: DeviceId, status: DeviceStatus, resultCode: Option[ResultCode], resultDescription: Option[ResultDescription]): DBIO[Unit] =
     Schema.deviceUpdates
       .filter(_.updateId === update)
       .filter(_.deviceId === device)
@@ -113,7 +114,7 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
         case _ => DBIO.successful(())
       }.map(_ => ())
 
-  protected [db] def setUpdateStatusAction(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[String], resultDescription: Option[String]): DBIO[Unit] =
+  protected [db] def setUpdateStatusAction(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[ResultCode], resultDescription: Option[ResultDescription]): DBIO[Unit] =
     Schema.deviceUpdates
       .filter(_.campaignId === campaign)
       .filter(_.deviceId inSet devices)
@@ -131,7 +132,7 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
     DBIO.sequence(updates.map(Schema.deviceUpdates.insertOrUpdate)).transactionally.map(_ => ())
 
   /**
-   * Given a set of campaigns, finds device updates happend in them, groups them
+   * Given a set of campaigns, finds device updates happened in them, groups them
    * by status and counts.
    */
   def countByStatus(campaignIds: Set[CampaignId]): DBIO[Map[DeviceStatus, Int]] = {

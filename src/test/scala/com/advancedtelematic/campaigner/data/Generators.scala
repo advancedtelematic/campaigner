@@ -6,7 +6,7 @@ import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import org.scalacheck.Arbitrary._
 import org.scalacheck.{Arbitrary, Gen}
@@ -70,8 +70,8 @@ object Generators {
 
   def genDeviceUpdate(
       genCampaignId: Gen[CampaignId] = arbitrary[CampaignId],
-      genResultCode: Gen[String] = Gen.alphaNumStr,
-      genResultDescription: Gen[String] = Gen.alphaNumStr): Gen[DeviceUpdate] =
+      genResultCode: Gen[ResultCode] = Gen.alphaNumStr.map(ResultCode),
+      genResultDescription: Gen[ResultDescription] = Gen.alphaNumStr.map(ResultDescription)): Gen[DeviceUpdate] =
     for {
       cid <- genCampaignId
       uid <- genUpdateId
@@ -90,11 +90,11 @@ object Generators {
       upAt <- Gen.posNum[Long].map(Instant.ofEpochSecond)
     } yield DeviceUpdate(cid, uid, did, st, rc, rd, upAt)
 
-  val genExportCase: Gen[(DeviceId, String, String, String)] = for {
+  val genExportCase: Gen[(DeviceId, String, ResultCode, ResultDescription)] = for {
     deviceId <- genDeviceId
     deviceOemId <- Gen.alphaNumStr.map("OEM-ID-" + _)
-    failureCode <- Gen.alphaStr.map("FAILURE-CODE-" + _)
-    failureDescription <- Gen.alphaStr.map("FAILURE-DESCRIPTION-" + _)
+    failureCode <- Gen.alphaStr.map("FAILURE-CODE-" + _).map(ResultCode)
+    failureDescription <- Gen.alphaStr.map("FAILURE-DESCRIPTION-" + _).map(ResultDescription)
   } yield (deviceId, deviceOemId, failureCode, failureDescription)
 
   implicit lazy val arbCampaignId: Arbitrary[CampaignId] = Arbitrary(genCampaignId)

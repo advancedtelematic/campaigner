@@ -13,7 +13,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns, DeviceUpdateSupport}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec, UpdateResourceSpecUtil}
-import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId}
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId, ResultCode, ResultDescription}
 import com.advancedtelematic.libats.data.ErrorCodes.InvalidEntity
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
@@ -141,11 +141,11 @@ class CampaignResourceSpec
   "POST /campaigns/:campaign_id/retry-failed" should "create and launch a retry-campaign" in {
     val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk()
     val deviceId = genDeviceId.generate
-    val failureCode = Gen.alphaNumStr.generate
+    val failureCode = ResultCode("failure-code-1")
     val deviceUpdate = DeviceUpdate(mainCampaignId, mainCampaign.update, deviceId, DeviceStatus.accepted, Some(failureCode))
 
     deviceUpdateRepo.persistMany(deviceUpdate :: Nil).futureValue
-    campaigns.failDevices(mainCampaignId, deviceId :: Nil, failureCode, Gen.alphaNumStr.generate).futureValue
+    campaigns.failDevices(mainCampaignId, deviceId :: Nil, failureCode, Gen.alphaNumStr.map(ResultDescription).generate).futureValue
 
     val retryCampaignId = createAndLaunchRetryCampaign(mainCampaignId, RetryFailedDevices(failureCode)) ~> routes ~> check {
       status shouldBe Created
@@ -159,14 +159,14 @@ class CampaignResourceSpec
     val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk()
     val deviceId = genDeviceId.generate
 
-    val deviceUpdates = Gen.listOfN(2, Gen.alphaNumStr).generate.map { failureCode =>
+    val deviceUpdates = Gen.listOfN(2, Gen.alphaNumStr).generate.map(ResultCode).map { failureCode =>
       DeviceUpdate(mainCampaignId, mainCampaign.update, deviceId, DeviceStatus.accepted, Some(failureCode))
     }
     deviceUpdateRepo.persistMany(deviceUpdates).futureValue
 
     val failureCode1 :: failureCode2 :: Nil = deviceUpdates.map(_.resultCode.get)
 
-    campaigns.failDevices(mainCampaignId, deviceId :: Nil, failureCode1, Gen.alphaNumStr.generate).futureValue
+    campaigns.failDevices(mainCampaignId, deviceId :: Nil, failureCode1, Gen.alphaNumStr.map(ResultDescription).generate).futureValue
     val retryCampaignId1 = createAndLaunchRetryCampaign(mainCampaignId, RetryFailedDevices(failureCode1)) ~> routes ~> check {
       status shouldBe Created
       responseAs[CampaignId]
@@ -174,7 +174,7 @@ class CampaignResourceSpec
 
     assertRetryCampaign(getCampaignOk(retryCampaignId1), failureCode1, mainCampaign.update, mainCampaignId)
 
-    campaigns.failDevices(mainCampaignId, deviceId :: Nil, failureCode2, Gen.alphaNumStr.generate).futureValue
+    campaigns.failDevices(mainCampaignId, deviceId :: Nil, failureCode2, Gen.alphaNumStr.map(ResultDescription).generate).futureValue
     val retryCampaignId2 = createAndLaunchRetryCampaign(mainCampaignId, RetryFailedDevices(failureCode2)) ~> routes ~> check {
       status shouldBe Created
       responseAs[CampaignId]
@@ -185,7 +185,7 @@ class CampaignResourceSpec
 
   "POST /campaigns/:campaign_id/retry-failed" should "fail if there are no failed devices for the given failure code" in {
     val (campaignId, _) = createCampaignWithUpdateOk()
-    val request = RetryFailedDevices("failureCode-2")
+    val request = RetryFailedDevices(ResultCode("failureCode-2"))
 
     createAndLaunchRetryCampaign(campaignId, request) ~> routes ~> check {
       status shouldBe PreconditionFailed
@@ -194,7 +194,7 @@ class CampaignResourceSpec
   }
 
   "POST /campaigns/:campaign_id/retry-failed" should "fail if there is no main campaign with id :campaign_id" in {
-    val request = RetryFailedDevices("failureCode-3")
+    val request = RetryFailedDevices(ResultCode("failureCode-3"))
     createAndLaunchRetryCampaign(CampaignId.generate(), request) ~> routes ~> check {
       status shouldBe NotFound
       responseAs[ErrorRepresentation].code shouldBe Errors.CampaignMissing.code
@@ -340,25 +340,25 @@ class CampaignResourceSpec
     }
 
     @tailrec
-    def failInstallationsAndCheckExport(campaignId: CampaignId, testCase: Seq[(DeviceId, String, String, String)]): Unit = testCase match {
+    def failInstallationsAndCheckExport(campaignId: CampaignId, testCase: Seq[(DeviceId, String, ResultCode, ResultDescription)]): Unit = testCase match {
       case Nil => ()
 
       case succeeded :: failedHead :: failedTail =>
         val failed = failedHead :: failedTail
         campaigns
-          .succeedDevices(campaignId, succeeded._1 :: Nil, "SUCCESS", "EUREKA")
+          .succeedDevices(campaignId, succeeded._1 :: Nil, ResultCode("SUCCESS"), ResultDescription("EUREKA"))
           .flatMap(_ => campaigns.failDevices(campaignId, failed.map(_._1), failedHead._3, failedHead._4))
           .futureValue
 
         getFailedExport(campaignId, failedHead._3) ~> routes ~> check {
-          val expected = failed.map(_._2).tail.map(oemId => s"$oemId;${failedHead._3};${failedHead._4}")
+          val expected = failed.map(_._2).tail.map(oemId => s"$oemId;${failedHead._3.value};${failedHead._4.value}")
           assertCsvResponse(expected)
         }
 
         failInstallationsAndCheckExport(campaignId, failed)
 
       case succeeded :: _ =>
-        campaigns.succeedDevices(campaignId, succeeded._1 :: Nil, "SUCCESS", "EUREKA").futureValue
+        campaigns.succeedDevices(campaignId, succeeded._1 :: Nil, ResultCode("SUCCESS"), ResultDescription("EUREKA")).futureValue
     }
 
     val testCase = Gen.listOfN(20, genExportCase).generate
@@ -397,19 +397,19 @@ class CampaignResourceSpec
       notAffectedDevices <- Gen.listOf(genDeviceId)
     } yield CampaignCase(successfulDevices, failedDevices, cancelledDevices, notAffectedDevices)
 
-    def conductCampaign(campaignId: CampaignId, updateId: UpdateId, campaignCase: CampaignCase, failureCode: String): Future[Unit] = for {
+    def conductCampaign(campaignId: CampaignId, updateId: UpdateId, campaignCase: CampaignCase, failureCode: ResultCode): Future[Unit] = for {
       _ <- campaigns.scheduleDevices(campaignId, updateId, campaignCase.affectedDevices:_*)
       _ <- campaigns.rejectDevices(campaignId, updateId, campaignCase.notAffectedDevices)
       _ <- campaigns.cancelDevices(campaignId, campaignCase.cancelledDevices)
-      _ <- campaigns.failDevices(campaignId, campaignCase.failedDevices, failureCode, "failure-description-1")
-      _ <- campaigns.succeedDevices(campaignId, campaignCase.successfulDevices, "success-code-1", "success-description-1")
+      _ <- campaigns.failDevices(campaignId, campaignCase.failedDevices, failureCode, ResultDescription("failure-description-1"))
+      _ <- campaigns.succeedDevices(campaignId, campaignCase.successfulDevices, ResultCode("success-code-1"), ResultDescription("success-description-1"))
     } yield ()
 
     forAll(genCampaignCase) { mainCase =>
       val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk(
         genCreateCampaign().map(_.copy(groups = NonEmptyList.one(mainCase.groupId)))
       )
-      val mainCampaignFailureCode = "failure-code-main"
+      val mainCampaignFailureCode = ResultCode("failure-code-main")
       campaigns
         .launch(mainCampaignId)
         .flatMap(_ => conductCampaign(mainCampaignId, mainCampaign.update, mainCase, mainCampaignFailureCode))
@@ -445,7 +445,7 @@ class CampaignResourceSpec
           notAffectedDevices = notAffectedDevices
         )
 
-        val retryCampaignFailureCode = "failure-code-retry"
+        val retryCampaignFailureCode = ResultCode("failure-code-retry")
         val retryCampaignId = createAndLaunchRetryCampaignOk(mainCampaignId, RetryFailedDevices(mainCampaignFailureCode))
         conductCampaign(retryCampaignId, mainCampaign.update, retryCase, retryCampaignFailureCode).futureValue
 
@@ -484,7 +484,7 @@ class CampaignResourceSpec
     0.until(n).map(groupNum => elemsWithGroupNumAssigned.getOrElse(groupNum, Seq.empty))
   }
 
-  private def assertRetryCampaign(retryCampaign: GetCampaign, failureCode: String, updateId: UpdateId, mainCampaignId: CampaignId): Assertion = {
+  private def assertRetryCampaign(retryCampaign: GetCampaign, failureCode: ResultCode, updateId: UpdateId, mainCampaignId: CampaignId): Assertion = {
     eventually {
       retryCampaign shouldBe GetCampaign(
         testNs,

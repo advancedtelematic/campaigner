@@ -38,7 +38,7 @@ class DeviceRegistryHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpR
   override def fetchOemId(ns: Namespace, deviceId: DeviceId): Future[String] = {
     val path  = uri.path / "api" / "v1" / "devices" / deviceId.show
     val req = HttpRequest(HttpMethods.GET, uri.withPath(path)).withNs(ns)
-    val um = unmarshaller[String](Decoder.instance(_.get("deviceId")))
-    execHttp[String](req)()(scala.reflect.classTag[String], um)
+    implicit val um = unmarshaller[String](Decoder.instance(_.get("deviceId")))
+    execHttp[String](req)()
   }
 }
