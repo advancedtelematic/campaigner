@@ -1,7 +1,5 @@
 package com.advancedtelematic.campaigner.http
 
-import java.time.temporal.ChronoUnit
-
 import akka.http.scaladsl.model.ContentTypes
 import akka.http.scaladsl.model.StatusCodes._
 import akka.util.ByteString
@@ -27,6 +25,7 @@ import org.scalacheck.Arbitrary._
 import org.scalacheck.Gen
 import org.scalactic.source
 import org.scalatest._
+import org.scalatest.concurrent.Eventually
 import org.scalatest.prop.PropertyChecks
 
 import scala.annotation.tailrec
@@ -38,6 +37,7 @@ class CampaignResourceSpec
     with CampaignSupport
     with DeviceUpdateSupport
     with UpdateResourceSpecUtil
+    with Eventually
     with GivenWhenThen
     with PropertyChecks {
 
@@ -143,33 +143,46 @@ class CampaignResourceSpec
   "POST /campaigns/:campaign_id/retry-failed" should "create and launch a retry-campaign" in {
     val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk()
     val deviceId = genDeviceId.generate
-    val (failureCode, failureDescription) = ("failure-code-1", "failure-description-1")
+    val failureCode = Gen.alphaNumStr.generate
     val deviceUpdate = DeviceUpdate(mainCampaignId, mainCampaign.update, deviceId, DeviceStatus.accepted, Some(failureCode))
 
     deviceUpdateRepo.persistMany(deviceUpdate :: Nil).futureValue
-    campaigns.failDevices(mainCampaignId, deviceId :: Nil, failureCode, failureDescription).futureValue
+    campaigns.failDevices(mainCampaignId, deviceId :: Nil, failureCode, Gen.alphaNumStr.generate).futureValue
 
     val retryCampaignId = createAndLaunchRetryCampaign(mainCampaignId, RetryFailedDevices(failureCode)) ~> routes ~> check {
       status shouldBe Created
       responseAs[CampaignId]
     }
 
-    val retryCampaign = getCampaignOk(retryCampaignId)
-    retryCampaign shouldBe GetCampaign(
-      testNs,
-      retryCampaignId,
-      s"retryCampaignWith-mainCampaign-${mainCampaignId.uuid}-failureCode-$failureCode",
-      mainCampaign.update,
-      CampaignStatus.launched,
-      retryCampaign.createdAt,
-      retryCampaign.updatedAt,
-      Some(mainCampaignId),
-      Set.empty,
-      Set.empty,
-      Nil,
-      autoAccept = true
-    )
-    retryCampaign.createdAt.truncatedTo(ChronoUnit.SECONDS) shouldBe retryCampaign.updatedAt.truncatedTo(ChronoUnit.SECONDS)
+    assertRetryCampaign(getCampaignOk(retryCampaignId), failureCode, mainCampaign.update, mainCampaignId)
+  }
+
+  "POST /campaigns/:campaign_id/retry-failed" should "create and launch a second retry-campaign when the device fails with a new code after the first retry" in {
+    val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk()
+    val deviceId = genDeviceId.generate
+
+    val deviceUpdates = Gen.listOfN(2, Gen.alphaNumStr).generate.map { failureCode =>
+      DeviceUpdate(mainCampaignId, mainCampaign.update, deviceId, DeviceStatus.accepted, Some(failureCode))
+    }
+    deviceUpdateRepo.persistMany(deviceUpdates).futureValue
+
+    val failureCode1 :: failureCode2 :: Nil = deviceUpdates.map(_.resultCode.get)
+
+    campaigns.failDevices(mainCampaignId, deviceId :: Nil, failureCode1, Gen.alphaNumStr.generate).futureValue
+    val retryCampaignId1 = createAndLaunchRetryCampaign(mainCampaignId, RetryFailedDevices(failureCode1)) ~> routes ~> check {
+      status shouldBe Created
+      responseAs[CampaignId]
+    }
+
+    assertRetryCampaign(getCampaignOk(retryCampaignId1), failureCode1, mainCampaign.update, mainCampaignId)
+
+    campaigns.failDevices(mainCampaignId, deviceId :: Nil, failureCode2, Gen.alphaNumStr.generate).futureValue
+    val retryCampaignId2 = createAndLaunchRetryCampaign(mainCampaignId, RetryFailedDevices(failureCode2)) ~> routes ~> check {
+      status shouldBe Created
+      responseAs[CampaignId]
+    }
+
+    assertRetryCampaign(getCampaignOk(retryCampaignId2), failureCode2, mainCampaign.update, mainCampaignId)
   }
 
   "POST /campaigns/:campaign_id/retry-failed" should "fail if there are no failed devices for the given failure code" in {
@@ -472,4 +485,25 @@ class CampaignResourceSpec
     val elemsWithGroupNumAssigned = seq.groupBy(_ => Gen.choose(0, n - 1).generate)
     0.until(n).map(groupNum => elemsWithGroupNumAssigned.getOrElse(groupNum, Seq.empty))
   }
+
+  private def assertRetryCampaign(retryCampaign: GetCampaign, failureCode: String, updateId: UpdateId, mainCampaignId: CampaignId): Assertion = {
+    eventually {
+      retryCampaign shouldBe GetCampaign(
+        testNs,
+        retryCampaign.id,
+        s"retryCampaignWith-mainCampaign-${mainCampaignId.uuid}-failureCode-$failureCode",
+        updateId,
+        CampaignStatus.launched,
+        retryCampaign.createdAt,
+        retryCampaign.updatedAt,
+        Some(mainCampaignId),
+        Set.empty,
+        Set.empty,
+        Nil,
+        autoAccept = true
+      )
+      retryCampaign.createdAt shouldBe retryCampaign.updatedAt
+    }
+  }
+
 }

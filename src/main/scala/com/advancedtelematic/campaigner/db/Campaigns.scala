@@ -107,22 +107,14 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   }
 
   /**
-    * Returns the IDs of all the devices that were processed in the campaign with `campaignId` and failed with
-    * the code `failureCode`.
+    * Returns the most recent device updates that have failed with the code `failureCode` in the campaign with ID
+    * `mainCampaignId` or any of its retry-campaigns.
     */
-  def fetchFailedDevices(campaignId: CampaignId, failureCode: String): Future[Set[DeviceId]] =
-    deviceUpdateRepo.findFailedByFailureCode(campaignId, failureCode)
-
-  /**
-    * Returns all the devices that are now failed with the code `failureCode` as a result of running the campaign
-    * with ID `campaignId` or any of its retry-campaigns.
-    */
-  def fetchFailureCodes(campaignId: CampaignId, failureCode: String): Future[Set[(DeviceId, String, String)]] = db.run {
+  def findLatestFailedUpdates(mainCampaignId: CampaignId, failureCode: String): Future[Set[DeviceUpdate]] = db.run {
     campaignRepo
-      .findRetryCampaignsOfAction(campaignId)
-      .flatMap(cids => findFailedDeviceUpdatesAction(cids.map(_.id) + campaignId))
+      .findRetryCampaignsOfAction(mainCampaignId)
+      .flatMap(cids => findFailedDeviceUpdatesAction(cids.map(_.id) + mainCampaignId))
       .map(_.filter(_.resultCode.contains(failureCode)))
-      .map(_.map(du => (du.device, du.resultCode.getOrElse(""), du.resultDescription.getOrElse(""))))
   }
 
   def countByStatus: Future[Map[CampaignStatus, Int]] =
@@ -268,22 +260,25 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     * any such devices in `mainCampaign`, an exception is thrown.
     */
   def retryCampaign(ns: Namespace, mainCampaign: Campaign, failureCode: String): Future[CampaignId] =
-    fetchFailedDevices(mainCampaign.id, failureCode).flatMap {
-      case deviceIds if deviceIds.isEmpty =>
-        Future.failed(MissingFailedDevices(failureCode))
-      case deviceIds =>
-        val retryCampaign = Campaign(
-          ns,
-          CampaignId.generate(),
-          s"retryCampaignWith-mainCampaign-${mainCampaign.id.uuid}-failureCode-$failureCode",
-          mainCampaign.updateId,
-          CampaignStatus.prepared,
-          Instant.now(),
-          Instant.now(),
-          Some(mainCampaign.id),
-          Some(failureCode)
-        )
-        create(retryCampaign, Set.empty, deviceIds, Nil)
+    findLatestFailedUpdates(mainCampaign.id, failureCode)
+      .map(_.map(_.device))
+      .flatMap {
+        case deviceIds if deviceIds.isEmpty =>
+          Future.failed(MissingFailedDevices(failureCode))
+
+        case deviceIds =>
+          val retryCampaign = Campaign(
+            ns,
+            CampaignId.generate(),
+            s"retryCampaignWith-mainCampaign-${mainCampaign.id.uuid}-failureCode-$failureCode",
+            mainCampaign.updateId,
+            CampaignStatus.prepared,
+            Instant.now(),
+            Instant.now(),
+            Some(mainCampaign.id),
+            Some(failureCode)
+          )
+          create(retryCampaign, Set.empty, deviceIds, Nil)
     }
     .map { cid => launch(cid); cid }
 
