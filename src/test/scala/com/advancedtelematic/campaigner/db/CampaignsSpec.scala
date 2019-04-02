@@ -5,15 +5,14 @@ import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.util.CampaignerSpecUtil
-import com.advancedtelematic.campaigner.util.DatabaseUpdateSpecUtil
+import com.advancedtelematic.campaigner.util.{CampaignerSpecUtil, DatabaseUpdateSpecUtil}
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.time.SpanSugar._
 import org.scalatest.{AsyncFlatSpec, Matchers}
-import org.scalatest.time.{Seconds, Span}
 import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.Future
@@ -75,40 +74,37 @@ final class CampaignsFindFailedDevicesSpec extends AsyncFlatSpec
   with DatabaseUpdateSpecUtil
   with CampaignerSpecUtil {
 
-  import Arbitrary._
-
   val campaigns = Campaigns()
-  implicit val defaultPatience = PatienceConfig(timeout = Span(2, Seconds))
+  implicit val defaultPatience = PatienceConfig(timeout = 2 seconds)
 
   "findFailedDeviceUpdates" should "find all failed device update from all the given campaigns and return only the most recent ones" in {
-    val nCampaigns = Gen.choose(1, 4).generate
-    val campaignIds = Gen.listOfN(nCampaigns, genCampaignId).generate
-    val resultCodes = Seq("RC1", "RC2", "RC3")
 
+    val campaignIds = Gen.choose(3, 6).flatMap(Gen.listOfN(_, genCampaignId)).generate
     val updateId = createDbUpdate(UpdateId.generate()).futureValue
-    val campaignObjects = campaignIds.map(cid =>
-        arbitrary[Campaign].generate.copy(id = cid, updateId = updateId))
+    val campaignObjects = campaignIds.map(cid => genCampaign.generate.copy(id = cid, updateId = updateId))
 
-    val nUpdates = Gen.choose(10, 20).generate
-    val updates = Gen.listOfN(nUpdates, genDeviceUpdate(
-      genCampaignId = Gen.oneOf(campaignIds),
-      genResultCode = Gen.oneOf(resultCodes),
-    )).generate
+    val deviceIds = Gen.choose(2, 8).flatMap(Gen.listOfN(_, genDeviceId)).generate
+    val updates = campaignIds.flatMap(cid => deviceIds.map { did =>
+      genDeviceUpdate().map(_.copy(campaign = cid, update = updateId, device = did)).generate
+    })
 
-    val byUpdatedAtDesc = Ordering.by[DeviceUpdate, Long](_.updatedAt.getEpochSecond)
     val expectedFailures = updates
+      .filter { du =>
+        du.status == DeviceStatus.rejected || du.status == DeviceStatus.successful ||
+          du.status == DeviceStatus.cancelled || du.status == DeviceStatus.failed
+      }
       .groupBy(_.device)
-      .mapValues(_.sorted(ord = byUpdatedAtDesc).head)
+      .mapValues(_.maxBy(_.updatedAt))
       .values
       .filter(_.status == DeviceStatus.failed)
       .toSet
 
-    db.run(for {
+    val resultAction = for {
       _ <- Schema.campaigns ++= campaignObjects
       _ <- Schema.deviceUpdates ++= updates
       failures <- campaigns.findFailedDeviceUpdatesAction(campaignIds.toSet)
-    } yield failures).flatMap { actualFailures =>
-      actualFailures should contain theSameElementsAs expectedFailures
-    }
+    } yield failures
+
+    db.run(resultAction).flatMap(_ should contain theSameElementsAs expectedFailures)
   }
 }
