@@ -76,7 +76,15 @@ object Generators {
       cid <- genCampaignId
       uid <- genUpdateId
       did <- genDeviceId
-      st <- Gen.oneOf(DeviceStatus.values.toSeq)
+      st <- Gen.frequency(
+        1 -> DeviceStatus.accepted,
+        1 -> DeviceStatus.scheduled,
+        1 -> DeviceStatus.requested,
+        1 -> DeviceStatus.rejected,
+        1 -> DeviceStatus.cancelled,
+        1 -> DeviceStatus.successful,
+        3 -> DeviceStatus.failed
+      )
       rc <- Gen.option(genResultCode)
       rd <- Gen.option(genResultDescription)
       upAt <- Gen.posNum[Long].map(Instant.ofEpochSecond)

@@ -153,12 +153,16 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
    * these campaigns, selects the most recent failures and returns them.
    */
   protected[db] def findFailedDeviceUpdatesAction(campaignIds: Set[CampaignId]): DBIO[Set[DeviceUpdate]] = {
-    Schema.deviceUpdates
-      .join(Schema.deviceUpdates
-      .filter(upd => upd.campaignId.inSet(campaignIds))
+    val latestFinishedUpdates =
+      Schema.deviceUpdates
+        .filter(_.status inSet Set(DeviceStatus.rejected, DeviceStatus.successful, DeviceStatus.cancelled, DeviceStatus.failed))
+        .filter(_.campaignId inSet campaignIds)
         .groupBy(_.deviceId)
-        .map { case (id, upd) => (id, upd.map(_.updatedAt).max) })
-        .on { (fst, snd) => fst.deviceId === snd._1 && fst.updatedAt === snd._2 }
+        .map { case (id, upd) => (id, upd.map(_.updatedAt).max) }
+
+    Schema.deviceUpdates
+      .join(latestFinishedUpdates)
+      .on { (fst, snd) => fst.deviceId === snd._1 && fst.updatedAt === snd._2 }
       .map(_._1)
       .filter(_.status === DeviceStatus.failed)
       .result
@@ -166,7 +170,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   }
 
   /**
-   * Calculates campaign-wide statistic counters, also taking retry campaings
+   * Calculates campaign-wide statistic counters, also taking retry campaigns
    * into account if any exist.
    */
   def campaignStats(campaignId: CampaignId): Future[CampaignStats] = db.run {
@@ -217,7 +221,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       mainCnt <- deviceUpdateRepo.countByStatus(Set(campaignId)).map(processCounts)
       retryCnt <- deviceUpdateRepo.countByStatus(retryCampaignIds).map(processCounts)
     } yield {
-      val finished = mainCnt.finished  - (retryCnt.rejected + retryCnt.cancelled)
+      val finished = mainCnt.finished - retryCnt.rejected - retryCnt.cancelled
       val failed = failedDevices.size.toLong
       val failures = processFailures(failedDevices, retryCampaigns)
 
