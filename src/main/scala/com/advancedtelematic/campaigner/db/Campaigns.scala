@@ -133,9 +133,8 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def findClientCampaign(campaignId: CampaignId): Future[GetCampaign] = for {
     c <- campaignRepo.find(campaignId)
     retryIds <- campaignRepo.findRetryCampaignsOf(campaignId).map(_.map(_.id))
-    groups <- db.run(findGroupsAction(c.id))
     metadata <- campaignMetadataRepo.findFor(campaignId)
-  } yield GetCampaign(c, retryIds, groups, metadata)
+  } yield GetCampaign(c, retryIds, metadata)
 
   def findCampaignsByUpdate(update: UpdateId): Future[Seq[Campaign]] =
     db.run(campaignRepo.findByUpdateAction(update))
@@ -284,16 +283,6 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 
   def update(id: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
     campaignRepo.update(id, name, metadata)
-
-  // TODO (OTA-2377) remove when FE is not dependent on this information anymore
-  private def findGroupsAction(campaignId: CampaignId): DBIO[Set[GroupId]] =
-    campaignRepo.findAction(campaignId).flatMap { _ =>
-        Schema.campaignGroups
-          .filter(_.campaignId === campaignId)
-          .map(_.groupId)
-          .result
-          .map(_.toSet)
-    }
 
   /**
    * Given a campaign and sets of accepted, scheduled and rejected

@@ -98,14 +98,12 @@ object DataType {
     updatedAt: Instant,
     mainCampaignId: Option[CampaignId],
     retryCampaignIds: Set[CampaignId],
-    // TODO (OTA-2377) remove the field when FE is not dependent on it anymore
-    groups: Set[GroupId],
     metadata: Seq[CreateCampaignMetadata],
     autoAccept: Boolean
   )
 
   object GetCampaign {
-    def apply(c: Campaign, retryCampaignIds: Set[CampaignId], groups: Set[GroupId], metadata: Seq[CampaignMetadata]): GetCampaign =
+    def apply(c: Campaign, retryCampaignIds: Set[CampaignId], metadata: Seq[CampaignMetadata]): GetCampaign =
       GetCampaign(
         c.namespace,
         c.id,
@@ -116,7 +114,6 @@ object DataType {
         c.updatedAt,
         c.mainCampaignId,
         retryCampaignIds,
-        groups,
         metadata.map(m => CreateCampaignMetadata(m.`type`, m.value)),
         c.autoAccept
       )

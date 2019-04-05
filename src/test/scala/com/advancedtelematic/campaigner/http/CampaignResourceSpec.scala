@@ -76,7 +76,6 @@ class CampaignResourceSpec
       campaign.updatedAt,
       None,
       Set.empty,
-      request.groups.toList.toSet,
       request.metadata.toList.flatten,
       autoAccept = true
     )
@@ -103,7 +102,6 @@ class CampaignResourceSpec
       campaign.updatedAt,
       None,
       Set.empty,
-      request.groups.toList.toSet,
       request.metadata.toList.flatten,
       autoAccept = true
     )
@@ -497,7 +495,6 @@ class CampaignResourceSpec
         retryCampaign.createdAt,
         retryCampaign.updatedAt,
         Some(mainCampaignId),
-        Set.empty,
         Set.empty,
         Nil,
         autoAccept = true
