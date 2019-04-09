@@ -67,14 +67,15 @@ object DataType {
                                   approvalNeeded: Option[Boolean] = Some(false))
   {
     def mkCampaign(ns: Namespace): Campaign = {
+      val now = Instant.now
       Campaign(
         ns,
         CampaignId.generate(),
         name,
         update,
         CampaignStatus.prepared,
-        Instant.now(),
-        Instant.now(),
+        now,
+        now,
         None,
         None,
         !approvalNeeded.getOrElse(false)

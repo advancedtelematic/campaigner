@@ -62,11 +62,13 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
     * return them as a CSV file.
     */
   def fetchFailureCodes(ns: Namespace, campaignId: CampaignId, failureCode: String): Route = {
-    val f = campaigns.fetchFailureCodes(campaignId, failureCode).flatMap {
-      Future.traverse(_) { case (did, fc, fd) =>
-        deviceRegistry.fetchOemId(ns, did).map((_, fc, fd))
-      }
-      .map(_.toSeq)
+    val f = campaigns
+      .findLatestFailedUpdates(campaignId, failureCode)
+      .map(_.map(du => (du.device, du.resultCode.getOrElse(""), du.resultDescription.getOrElse(""))))
+      .flatMap {
+        Future.traverse(_) { case (did, fc, fd) =>
+          deviceRegistry.fetchOemId(ns, did).map((_, fc, fd))
+        }.map(_.toSeq)
     }
     implicit val marshaller = installationFailureCsvMarshaller(campaignId)
     complete(f)
