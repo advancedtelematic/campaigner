@@ -292,20 +292,20 @@ class CampaignResourceSpec
     getCampaignsOk(CampaignStatus.launched.some).values shouldNot contain(id)
   }
 
-  "GET all campaigns" should "get all campaigns sorted by name when no sorting is given" in {
+  "GET all campaigns sorted by name" should "get all campaigns sorted alphabetically by name" in {
     val requests = Gen.listOfN(10, genCreateCampaign(Gen.alphaNumStr.retryUntil(_.nonEmpty))).generate
     val sortedNames = requests.map(_.name).sortBy(_.toLowerCase)
     requests.map(createCampaignWithUpdateOk(_))
 
-    val campaignNames = getCampaignsOk().values.map(getCampaignOk).map(_.name).filter(sortedNames.contains)
+    val campaignNames = getCampaignsOk(sortBy = Some(SortBy.Name)).values.map(getCampaignOk).map(_.name).filter(sortedNames.contains)
     campaignNames shouldBe sortedNames
   }
 
-  "GET all campaigns sorted by creation time" should "sort the campaigns from newest to oldest" in {
+  "GET all campaigns" should "get all campaigns sorted from newest to oldest when no sorting is given" in {
     val requests = Gen.listOfN(10, genCreateCampaign()).generate
     requests.map(createCampaignWithUpdateOk(_))
 
-    val campaignsNewestToOldest = getCampaignsOk(sortBy = Some(SortBy.CreatedAt)).values.map(getCampaignOk)
+    val campaignsNewestToOldest = getCampaignsOk().values.map(getCampaignOk)
     campaignsNewestToOldest.reverse.map(_.createdAt) shouldBe sorted
   }
 

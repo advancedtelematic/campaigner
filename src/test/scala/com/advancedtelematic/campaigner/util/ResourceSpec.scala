@@ -77,7 +77,7 @@ trait ResourceSpec extends ScalatestRouteTest
 
     Get(apiUri("campaigns").withQuery(Query(m))).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
-      responseAs[PaginationResult[CampaignId]]
+      responseAs[PaginationResult[Campaign]].map(_.id)
     }
   }
 
