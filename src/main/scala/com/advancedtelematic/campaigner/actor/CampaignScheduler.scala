@@ -1,6 +1,7 @@
 package com.advancedtelematic.campaigner.actor
 
 import akka.actor.{Actor, ActorLogging, Props, Status}
+import akka.stream.ActorMaterializer
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateProcess}
@@ -41,6 +42,8 @@ class CampaignScheduler(director: DirectorClient,
   private val campaigns = Campaigns()
   private val deviceUpdateProcess = new DeviceUpdateProcess(director)
 
+  implicit val materializer = ActorMaterializer.create(context)
+
   override def preStart(): Unit =
     self ! NextBatch
 
@@ -54,9 +57,10 @@ class CampaignScheduler(director: DirectorClient,
   def receive: Receive = {
     case NextBatch =>
       log.debug("Requesting next batch")
-      // TODO (OTA-2383) limit or stream device IDs from DB
-      campaigns.requestedDevices(campaign.id)
-        .map(deviceIds => BatchToSchedule(deviceIds.take(batchSize)))
+      campaigns.requestedDevicesStream(campaign.id)
+        .take(batchSize.toLong)
+        .runFold(Set.empty[DeviceId])(_ + _)
+        .map(BatchToSchedule)
         .pipeTo(self)
 
     case BatchToSchedule(devices) if devices.nonEmpty =>
