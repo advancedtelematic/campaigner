@@ -3,7 +3,7 @@ package com.advancedtelematic.campaigner.db
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.client.DirectorClient
 import com.advancedtelematic.campaigner.data.DataType.{Campaign, CampaignId, UpdateType}
-import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId, Namespace}
+import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription, CampaignId => CampaignCorrelationId}
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
@@ -70,7 +70,7 @@ class DeviceUpdateProcess(director: DirectorClient)(implicit db: Database, ec: E
           _logger.warn(s"Could not start mtu update for device $deviceId after device accepted, device is no longer affected")
 
           campaigns.scheduleDevices(campaignId, campaign.update, deviceId).flatMap { _ =>
-            campaigns.failDevice(campaign.update, deviceId, "DEVICE_UPDATE_PROCESS_FAILED", "DeviceUpdateProcess#processDeviceAcceptedUpdate failed")
+            campaigns.failDevice(campaign.update, deviceId, ResultCode("DEVICE_UPDATE_PROCESS_FAILED"), ResultDescription("DeviceUpdateProcess#processDeviceAcceptedUpdate failed"))
           }
       }
     } yield ()

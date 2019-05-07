@@ -7,12 +7,9 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil}
-import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId, CampaignId => CampaignCorrelationId}
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId, ResultCode, ResultDescription, CampaignId => CampaignCorrelationId}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, InstallationResult}
-import com.advancedtelematic.libats.messaging_datatype.Messages.{
-  DeviceUpdateEvent,
-  DeviceUpdateCanceled,
-  DeviceUpdateCompleted}
+import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceUpdateCanceled, DeviceUpdateCompleted, DeviceUpdateEvent}
 import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.Arbitrary._
 
@@ -62,7 +59,7 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
 
     listener.apply(report).futureValue shouldBe (())
     deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.failed).futureValue should contain(deviceUpdate.device)
-    campaigns.findLatestFailedUpdates(campaign.id, "FAILURE").map(_.map(_.device)).futureValue should contain(deviceUpdate.device)
+    campaigns.findLatestFailedUpdates(campaign.id, ResultCode("FAILURE")).map(_.map(_.device)).futureValue should contain(deviceUpdate.device)
   }
 
   "Listener" should "mark a device as failed using campaign CorrelationId" in {
@@ -75,7 +72,7 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
 
     listener.apply(report).futureValue shouldBe (())
     deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.failed).futureValue should contain(deviceUpdate.device)
-    campaigns.findLatestFailedUpdates(campaign.id, "FAILURE").map(_.map(_.device)).futureValue should contain(deviceUpdate.device)
+    campaigns.findLatestFailedUpdates(campaign.id, ResultCode("FAILURE")).map(_.map(_.device)).futureValue should contain(deviceUpdate.device)
   }
 
   "Listener" should "mark a device as canceled using campaign CorrelationId" in {
@@ -112,9 +109,9 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
 
     val installationResult =
       if (isSuccessful) {
-        InstallationResult(true, "SUCCESS", "Successful update")
+        InstallationResult(true, ResultCode("SUCCESS"), ResultDescription("Successful update"))
       } else {
-        InstallationResult(false, "FAILURE", "Failed update")
+        InstallationResult(false, ResultCode("FAILURE"), ResultDescription("Failed update"))
       }
 
     DeviceUpdateCompleted(

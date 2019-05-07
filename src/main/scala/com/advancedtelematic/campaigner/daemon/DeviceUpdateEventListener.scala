@@ -4,12 +4,9 @@ import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
 import com.advancedtelematic.campaigner.http.Errors
-import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId, MultiTargetUpdateId}
+import com.advancedtelematic.libats.data.DataType.{MultiTargetUpdateId, CampaignId => CampaignCorrelationId}
 import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
-import com.advancedtelematic.libats.messaging_datatype.Messages.{
-  DeviceUpdateEvent,
-  DeviceUpdateCanceled,
-  DeviceUpdateCompleted}
+import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceUpdateCanceled, DeviceUpdateCompleted, DeviceUpdateEvent}
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
 

@@ -3,8 +3,9 @@ package com.advancedtelematic.campaigner.http
 import akka.http.scaladsl.marshalling.{Marshaller, ToResponseMarshaller}
 import akka.http.scaladsl.model.headers.{ContentDispositionTypes, `Content-Disposition`}
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusCodes}
-import akka.http.scaladsl.server.{Directive1, Route}
 import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.{Directive1, Route}
+import akka.http.scaladsl.unmarshalling.{FromStringUnmarshaller, Unmarshaller}
 import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, DirectorClient}
@@ -16,7 +17,7 @@ import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.auth.AuthedNamespaceScope
-import com.advancedtelematic.libats.data.DataType.{CorrelationId, Namespace}
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, Namespace, ResultCode, ResultDescription}
 import com.advancedtelematic.libats.http.UUIDKeyAkka._
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
@@ -30,6 +31,8 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
                       (implicit db: Database, ec: ExecutionContext) extends Settings {
 
   val campaigns = Campaigns()
+
+  implicit val resultCodeUnmarshaller: FromStringUnmarshaller[ResultCode] = Unmarshaller.strict(ResultCode)
 
   def createCampaign(ns: Namespace, request: CreateCampaign): Future[CampaignId] = {
     val campaign = request.mkCampaign(ns)
@@ -59,7 +62,7 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
     campaigns.retryCampaign(ns, mainCampaign, request.failureCode)
 
 
-  def installationFailureCsvMarshaller(campaignId: CampaignId): ToResponseMarshaller[Seq[(String, String, String)]] =
+  def installationFailureCsvMarshaller(campaignId: CampaignId): ToResponseMarshaller[Seq[(String, ResultCode, ResultDescription)]] =
     Marshaller.withFixedContentType(ContentTypes.`text/csv(UTF-8)`) { t =>
       val csv = CsvSerializer.asCsv(Seq("Device ID", "Failure Code", "Failure Description"), t)
       val e = HttpEntity(ContentTypes.`text/csv(UTF-8)`, csv)
@@ -72,10 +75,10 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
     * or any of its retry-campaigns, calculate the triplets (DeviceOemId, ResultCode, ResultDescription) and
     * return them as a CSV file.
     */
-  def fetchFailureCodes(ns: Namespace, campaignId: CampaignId, failureCode: String): Route = {
+  def fetchFailureCodes(ns: Namespace, campaignId: CampaignId, failureCode: ResultCode): Route = {
     val f = campaigns
       .findLatestFailedUpdates(campaignId, failureCode)
-      .map(_.map(du => (du.device, du.resultCode.getOrElse(""), du.resultDescription.getOrElse(""))))
+      .map(_.map(du => (du.device, du.resultCode.getOrElse(ResultCode("")), du.resultDescription.getOrElse(ResultDescription("")))))
       .flatMap {
         Future.traverse(_) { case (did, fc, fd) =>
           deviceRegistry.fetchOemId(ns, did).map((_, fc, fd))
@@ -135,7 +138,7 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
             path("stats") {
               complete(campaigns.campaignStats(campaign.id))
             } ~
-            (path("failed-installations.csv") & parameter('failureCode.as[String])) {
+            (path("failed-installations.csv") & parameter('failureCode.as[ResultCode])) {
               failureCode => fetchFailureCodes(ns, campaign.id, failureCode)
             }
           }

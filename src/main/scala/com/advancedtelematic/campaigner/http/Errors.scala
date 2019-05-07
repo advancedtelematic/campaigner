@@ -2,6 +2,7 @@ package com.advancedtelematic.campaigner.http
 
 import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.campaigner.data.DataType._
+import com.advancedtelematic.libats.data.DataType.ResultCode
 import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.{Error, MissingEntity, RawError}
 import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
@@ -28,10 +29,10 @@ object Errors {
 
   case class MissingExternalUpdate(externalUpdateId: ExternalUpdateId) extends Error(ErrorCodes.MissingUpdate, StatusCodes.NotFound, s"Missing $externalUpdateId")
 
-  case class MissingFailedDevices(failureCode: String) extends Error(
+  case class MissingFailedDevices(failureCode: ResultCode) extends Error(
     ErrorCodes.MissingFailedDevices,
     StatusCodes.PreconditionFailed,
-    s"You are attempting to retry failed devices, but no devices failed with the code '$failureCode'."
+    s"You are attempting to retry failed devices, but no devices failed with the code '${failureCode.value}'."
   )
 
   val MissingUpdateSource = RawError(
