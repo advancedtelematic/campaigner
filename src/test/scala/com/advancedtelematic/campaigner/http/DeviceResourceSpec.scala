@@ -21,7 +21,7 @@ class DeviceResourceSpec
     val (campaignId,request) = createCampaignWithUpdateOk(arbitrary[CreateCampaign].retryUntil(_.metadata.nonEmpty))
     val device = DeviceId.generate()
 
-    campaigns.scheduleDevices(campaignId, request.update, device).futureValue
+    campaigns.scheduleDevices(campaignId, Seq(device)).futureValue
 
     Get(apiUri(s"device/${device.uuid}/campaigns")).withHeaders(header) ~> routes ~> check {
       status shouldBe StatusCodes.OK
