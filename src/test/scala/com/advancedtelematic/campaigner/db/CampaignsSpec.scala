@@ -1,12 +1,10 @@
 package com.advancedtelematic.campaigner.db
 
-import akka.http.scaladsl.util.FastFuture
-import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.util.{CampaignerSpecUtil, DatabaseUpdateSpecUtil}
-import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
+import com.advancedtelematic.libats.data.DataType.{ResultCode, ResultDescription}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.{Arbitrary, Gen}
@@ -39,27 +37,13 @@ class CampaignsSpec extends AsyncFlatSpec
     } yield res shouldBe Map(prepared -> 0, launched -> 1, finished -> 2, cancelled -> 3)
   }
 
-  "finishing one device" should "work with several campaigns" in {
-    val ns = arbitrary[Namespace].generate
-    val group = NonEmptyList.one(GroupId.generate())
-    val device = DeviceId.generate()
-
-    for {
-      update <- createDbUpdate(UpdateId.generate())
-      newCampaigns <- FastFuture.traverse(arbitrary[Seq[Int]].generate)(_ => createDbCampaign(ns, update, group))
-      _ <- FastFuture.traverse(newCampaigns)(c => campaigns.scheduleDevices(c.id, update, device))
-      _ <- campaigns.succeedDevice(update, device, ResultCode("success-code-1"), ResultDescription("success-description-1"))
-      stats <- campaigns.campaignStats(newCampaigns.head.id)
-    } yield stats.finished shouldBe 1
-  }
-
   "finishing devices" should "work with one campaign" in {
     val devices  = arbitrary[Seq[DeviceId]].generate
 
     for {
       campaign <- createDbCampaignWithUpdate()
-      _ <- FastFuture.traverse(devices)(d => campaigns.scheduleDevices(campaign.id, campaign.updateId, d))
-      _ <- FastFuture.traverse(devices)(d => campaigns.failDevice(campaign.updateId, d, ResultCode("failure-code-1"), ResultDescription("failure-description-1")))
+      _ <- campaigns.scheduleDevices(campaign.id, campaign.updateId, devices:_*)
+      _ <- campaigns.failDevices(campaign.id, devices, ResultCode("failure-code-1"), ResultDescription("failure-description-1"))
       stats <- campaigns.campaignStats(campaign.id)
     } yield stats.finished shouldBe devices.length
   }

@@ -103,17 +103,6 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
       .map(_.toSet)
   }
 
-  protected [db] def setUpdateStatusAction(update: UpdateId, device: DeviceId, status: DeviceStatus, resultCode: Option[ResultCode], resultDescription: Option[ResultDescription]): DBIO[Unit] =
-    Schema.deviceUpdates
-      .filter(_.updateId === update)
-      .filter(_.deviceId === device)
-      .map(du => (du.status, du.resultCode, du.resultDescription))
-      .update((status, resultCode, resultDescription))
-      .flatMap {
-        case 0 => DBIO.failed(DeviceNotScheduled)
-        case _ => DBIO.successful(())
-      }.map(_ => ())
-
   protected [db] def setUpdateStatusAction(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[ResultCode], resultDescription: Option[ResultDescription]): DBIO[Unit] =
     Schema.deviceUpdates
       .filter(_.campaignId === campaign)
