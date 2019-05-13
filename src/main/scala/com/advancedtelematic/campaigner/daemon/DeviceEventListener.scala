@@ -2,9 +2,9 @@ package com.advancedtelematic.campaigner.daemon
 
 import akka.Done
 import akka.http.scaladsl.util.FastFuture
-import com.advancedtelematic.campaigner.client.DirectorClient
 import com.advancedtelematic.campaigner.data.DataType.CampaignId
 import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns, DeviceUpdateProcess}
+import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libats.messaging_datatype.DataType.EventType
 import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceEventMessage
 import org.slf4j.LoggerFactory
@@ -24,7 +24,10 @@ object DeviceEventListener {
   implicit val acceptedCampaignDecoder: Decoder[AcceptedCampaign] = deriveDecoder
 }
 
-class DeviceEventListener(directorClient: DirectorClient)(implicit db: Database, ec: ExecutionContext)
+class DeviceEventListener()(
+    implicit db: Database,
+    ec: ExecutionContext,
+    messageBusPublisher: MessageBusPublisher)
   extends (DeviceEventMessage => Future[Done]) with CampaignSupport {
 
   import DeviceEventListener._
@@ -33,14 +36,14 @@ class DeviceEventListener(directorClient: DirectorClient)(implicit db: Database,
 
   val campaigns = Campaigns()
 
-  val deviceUpdateProcess = new DeviceUpdateProcess(directorClient)
+  val deviceUpdateProcess = new DeviceUpdateProcess()
 
   def apply(msg: DeviceEventMessage): Future[Done] =
     msg.event.eventType match {
       case CampaignAcceptedEventType =>
         for {
           acceptedCampaign <- Future.fromTry(msg.event.payload.as[AcceptedCampaign].toTry)
-          _ <- deviceUpdateProcess.processDeviceAcceptedUpdate(msg.namespace, acceptedCampaign.campaignId, msg.event.deviceUuid)
+          _ <- deviceUpdateProcess.processDeviceAcceptedUpdate(acceptedCampaign.campaignId, msg.event.deviceUuid)
         } yield Done
 
       case e @ EventType(CampaignAcceptedEventType.id, version) =>

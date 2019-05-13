@@ -176,9 +176,9 @@ object DataType {
    *   to `processed` state in the UI until a device goes to the Director)
    * - `rejected` when a device is rejected by Director and is not a part of the
    *    campaign anymore (corresponds to `not impacted` state in the UI)
-   * - `scheduled` when a device is approved by Director and is scheduled for
-   *    an update (partly corresponds to `queued` state in the UI)
-   * - `accepted` when an update was accepted on a device and is about to be
+   * - `scheduled` when a device is scheduled for an approval by user and
+   *    Director (partly corresponds to `queued` state in the UI)
+   * - `accepted` when an update was accepted by the user and is about to be
    *    installed (partly corresponds to `queued` state in the UI)
    * - `successful` when a device update was applied successfully
    * - `cancelled` when a device update was cancelled

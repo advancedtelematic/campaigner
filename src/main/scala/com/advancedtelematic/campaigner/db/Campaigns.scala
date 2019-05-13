@@ -95,6 +95,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       _ <- deviceUpdateRepo.persistManyAction(deviceIds.map(deviceId =>
         DeviceUpdate(campaign.id, campaign.updateId, deviceId, status)
       ))
+      _ <- campaignStatusTransition.updateToCalculatedStatus(campaignId)
     } yield ()
   }
 
@@ -275,30 +276,6 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 
   def update(id: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
     campaignRepo.update(id, name, metadata)
-
-  /**
-   * Given a campaign and sets of accepted, scheduled and rejected
-   * devices, calculates and updates campaign and devices statuses in the database.
-   */
-  def updateCampaignAndDevicesStatuses(
-      campaign: Campaign,
-      acceptedDeviceIds: Set[DeviceId],
-      scheduledDeviceIds: Set[DeviceId],
-      rejectedDeviceIds: Set[DeviceId]): Future[Unit] = {
-    def persistDeviceUpdates(deviceIds: Set[DeviceId], status: DeviceStatus): DBIO[Unit] =
-      deviceUpdateRepo.persistManyAction(deviceIds.toSeq.map(deviceId =>
-        DeviceUpdate(campaign.id, campaign.updateId, deviceId, status)
-      ))
-
-    val action = for {
-      _ <- persistDeviceUpdates(acceptedDeviceIds, DeviceStatus.accepted)
-      _ <- persistDeviceUpdates(scheduledDeviceIds, DeviceStatus.scheduled)
-      _ <- persistDeviceUpdates(rejectedDeviceIds, DeviceStatus.rejected)
-      _ <- campaignStatusTransition.updateToCalculatedStatus(campaign.id)
-    } yield ()
-
-    db.run(action.transactionally)
-  }
 }
 
 // TODO (OTA-2384) refactor and get rid of this class

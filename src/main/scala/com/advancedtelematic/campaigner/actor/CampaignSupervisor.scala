@@ -3,10 +3,10 @@ package com.advancedtelematic.campaigner.actor
 import akka.actor.{Actor, ActorLogging, ActorRef, Props, Status}
 import akka.pattern.{Backoff, BackoffSupervisor}
 import akka.stream.Materializer
-import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.messaging.MessageBusPublisher
 
 import scala.concurrent.duration._
 import slick.jdbc.MySQLProfile.api._
@@ -23,20 +23,22 @@ object CampaignSupervisor {
   final case class CampaignsScheduled(campaigns: Set[CampaignId])
   final case class CampaignsCancelled(campaigns: Set[CampaignId])
 
-  def props(director: DirectorClient,
-            pollingTimeout: FiniteDuration,
+  def props(pollingTimeout: FiniteDuration,
             delay: FiniteDuration,
             batchSize: Int)
-           (implicit db: Database, mat: Materializer): Props =
-    Props(new CampaignSupervisor(director, pollingTimeout, delay, batchSize))
+           (implicit db: Database,
+            mat: Materializer,
+            messageBusPublisher: MessageBusPublisher): Props =
+    Props(new CampaignSupervisor(pollingTimeout, delay, batchSize))
 
 }
 
-class CampaignSupervisor(director: DirectorClient,
-                         pollingTimeout: FiniteDuration,
+class CampaignSupervisor(pollingTimeout: FiniteDuration,
                          delay: FiniteDuration,
                          batchSize: Int)
-                        (implicit db: Database, mat: Materializer) extends Actor
+                        (implicit db: Database,
+                         mat: Materializer,
+                         messageBusPublisher: MessageBusPublisher) extends Actor
   with ActorLogging {
 
   import CampaignScheduler._
@@ -70,14 +72,13 @@ class CampaignSupervisor(director: DirectorClient,
 
   def cancelCampaign(ns: Namespace, campaign: CampaignId): ActorRef =
     context.actorOf(CampaignCanceler.props(
-      director,
       campaign,
       ns,
       batchSize
     ))
 
   def scheduleCampaign(campaign: Campaign): ActorRef = {
-    val childProps = CampaignScheduler.props(director, campaign, delay, batchSize)
+    val childProps = CampaignScheduler.props(campaign, delay, batchSize)
 
     val props = BackoffSupervisor.props(
       Backoff.onFailure(

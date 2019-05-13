@@ -1,14 +1,16 @@
 package com.advancedtelematic.campaigner.actor
 
-import akka.http.scaladsl.util.FastFuture
+import java.time.Instant
+
 import akka.testkit.TestProbe
-import com.advancedtelematic.campaigner.client._
+import com.advancedtelematic.campaigner.daemon.DeviceUpdateEventListener
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
-import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec, DatabaseUpdateSpecUtil}
-import com.advancedtelematic.libats.data.DataType.{CorrelationId, Namespace}
+import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec, DatabaseUpdateSpecUtil, TestMessageBus}
+import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId}
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
+import com.advancedtelematic.libats.messaging_datatype.Messages._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
 
@@ -34,40 +36,20 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
     val n = Gen.choose(batch, batch * 2).generate
     val devices = Gen.listOfN(n, genDeviceId).generate.toSet
 
-    var actualDevices = Set.empty[DeviceId]
-    val director = new DirectorClient {
-      override def setMultiUpdateTarget(
-        ns: Namespace,
-        update: ExternalUpdateId,
-        devices: Seq[DeviceId],
-        correlationId: CorrelationId
-      ): Future[Seq[DeviceId]] = {
-        actualDevices = actualDevices ++ devices.toSet
-        FastFuture.successful(devices)
-      }
-
-      override def cancelUpdate(
-        ns: Namespace,
-        devs: Seq[DeviceId]
-      ): Future[Seq[DeviceId]] = FastFuture.successful(Seq.empty)
-
-      override def cancelUpdate(
-        ns: Namespace,
-        device: DeviceId): Future[Unit] = FastFuture.successful(())
-
-      override def findAffected(ns: Namespace, updateId: ExternalUpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] =
-        Future.successful(Seq.empty)
-    }
+    implicit val msgBus = new TestMessageBus()
 
     campaigns.create(campaign, Set.empty, devices, Seq.empty).futureValue
 
     parent.childActorOf(CampaignScheduler.props(
-      director,
       campaign,
       schedulerDelay,
       schedulerBatchSize
     ))
     parent.expectMsg(1.minute, CampaignComplete(campaign.id))
+
+    val actualDevices = msgBus.messages.map {
+      case msg: DeviceUpdateAssignmentRequested => msg.deviceUuid
+    }.toSet
 
     actualDevices shouldBe devices
   }
@@ -78,37 +60,35 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
     val n = Gen.choose(batch, batch * 2).generate
     val devices = Gen.listOfN(n, genDeviceId).generate.toSet
 
-    val director = new DirectorClient {
-      override def setMultiUpdateTarget(
-        ns: Namespace,
-        update: ExternalUpdateId,
-        devices: Seq[DeviceId],
-        correlationId: CorrelationId
-      ): Future[Seq[DeviceId]] = FastFuture.successful(Seq.empty)
-
-      override def cancelUpdate(
-        ns: Namespace,
-        devs: Seq[DeviceId]
-      ): Future[Seq[DeviceId]] = FastFuture.successful(Seq.empty)
-
-      override def cancelUpdate(
-        ns: Namespace,
-        device: DeviceId): Future[Unit] = FastFuture.successful(())
-
-      override def findAffected(ns: Namespace, updateId: ExternalUpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] =
-        Future.successful(Seq.empty)
-    }
+    implicit val msgBus = new TestMessageBus()
 
     campaigns.create(campaign, Set.empty, devices, Seq.empty).futureValue
 
     parent.childActorOf(CampaignScheduler.props(
-      director,
       campaign,
       schedulerDelay,
       schedulerBatchSize
     ))
     parent.expectMsg(20.seconds, CampaignComplete(campaign.id))
 
+    val actualDevices = msgBus.messages.map {
+      case msg: DeviceUpdateAssignmentRequested => msg.deviceUuid
+    }
+
+    emulateRejectionByDirector(campaign, actualDevices).futureValue
+
     campaigns.campaignStats(campaign.id).futureValue.status shouldBe CampaignStatus.finished
+  }
+
+  private def emulateRejectionByDirector(campaign: Campaign, devices: Seq[DeviceId]): Future[Unit] = {
+    val listener = new DeviceUpdateEventListener()
+    Future.traverse(devices) { deviceId =>
+      val msg = DeviceUpdateAssignmentRejected(
+        campaign.namespace,
+        Instant.now(),
+        CampaignCorrelationId(campaign.id.uuid),
+        deviceId)
+      listener(msg)
+    }.map(_ => ())
   }
 }

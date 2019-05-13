@@ -1,78 +1,59 @@
 package com.advancedtelematic.campaigner.db
 
-import akka.http.scaladsl.util.FastFuture
-import com.advancedtelematic.campaigner.client.DirectorClient
-import com.advancedtelematic.campaigner.data.DataType.{Campaign, CampaignId, UpdateType}
-import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription, CampaignId => CampaignCorrelationId}
-import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
-import org.slf4j.LoggerFactory
+import java.time.Instant
+
+import com.advancedtelematic.campaigner.data.DataType.{Campaign, CampaignId, Update}
+import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId}
+import com.advancedtelematic.libats.messaging.MessageBusPublisher
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, SourceUpdateId}
+import com.advancedtelematic.libats.messaging_datatype.Messages._
 import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-object DeviceUpdateProcess {
-  final case class StartUpdateResult(
-    acceptedDevices: Set[DeviceId],
-    scheduledDevices: Set[DeviceId],
-    rejectedDevices: Set[DeviceId])
-}
-
-class DeviceUpdateProcess(director: DirectorClient)(implicit db: Database, ec: ExecutionContext) extends UpdateSupport {
-
-  import DeviceUpdateProcess._
-
-  private val _logger = LoggerFactory.getLogger(this.getClass)
+class DeviceUpdateProcess()(
+    implicit db: Database,
+    ec: ExecutionContext,
+    messageBusPublisher: MessageBusPublisher)
+    extends UpdateSupport
+    with CampaignSupport {
 
   val campaigns = Campaigns()
 
-  def startUpdateFor(devices: Set[DeviceId], campaign: Campaign): Future[StartUpdateResult] = {
+  /**
+   * For a given campaign and a set of devices, sets statuses of these devices
+   * in the campaign to `scheduled` and update the overall status of the
+   * campaign. Additionally, if the campaign is automatically accepted,
+   * publishes an update assignment request message for each device.
+   */
+  def startUpdateFor(campaign: Campaign, devices: Set[DeviceId]): Future[Unit] =
     updateRepo.findById(campaign.updateId).flatMap { update =>
-      val acceptDevices: Future[Set[DeviceId]] = {
-        if (campaign.autoAccept) {
-          director
-            .setMultiUpdateTarget(campaign.namespace, update.source.id,
-              devices.toSeq, CampaignCorrelationId(campaign.id.uuid))
-            .map(_.toSet)
-        } else {
-          FastFuture.successful(Set.empty)
-        }
-      }
-
-      val scheduleDevices: Future[Set[DeviceId]] = {
-        if (campaign.autoAccept) {
-          FastFuture.successful(Set.empty)
-        } else if (update.source.sourceType == UpdateType.external) {
-          FastFuture.successful(devices)
-        } else {
-          director
-            .findAffected(campaign.namespace, update.source.id, devices.toSeq)
-            .map(_.toSet)
-        }
-      }
-
       for {
-        accepted <- acceptDevices
-        scheduled <- scheduleDevices
-        rejected = devices -- accepted -- scheduled
-      } yield StartUpdateResult(accepted, scheduled, rejected)
+        _ <- campaigns.scheduleDevices(campaign.id, devices.toSeq)
+        _ <- if (campaign.autoAccept) requestDevicesUpdateAssignment(campaign, update, devices) else Future.successful(())
+        _ <- campaigns.updateStatus(campaign.id)
+      } yield ()
     }
-  }
 
-  def processDeviceAcceptedUpdate(ns: Namespace, campaignId: CampaignId, deviceId: DeviceId): Future[Unit] = {
-    for {
-      campaign <- campaigns.findClientCampaign(campaignId)
-      update <- updateRepo.findById(campaign.update)
-      affected <- director.setMultiUpdateTarget(ns, update.source.id, Seq(deviceId), CampaignCorrelationId(campaignId.uuid))
-      _ <- affected.find(_ == deviceId) match {
-        case Some(_) =>
-          campaigns.markDevicesAccepted(campaignId, Seq(deviceId))
-        case None =>
-          _logger.warn(s"Could not start mtu update for device $deviceId after device accepted, device is no longer affected")
+  /**
+   * For given campaign and device publishes an update assignment request
+   * message
+   */
+  def processDeviceAcceptedUpdate(campaignId: CampaignId, deviceId: DeviceId): Future[Unit] = for {
+    campaign <- campaignRepo.find(campaignId)
+    update <- updateRepo.findById(campaign.updateId)
+    _ <- requestUpdateAssignment(campaign, update, deviceId)
+  } yield ()
 
-          campaigns.scheduleDevices(campaignId, Seq(deviceId)).flatMap { _ =>
-            campaigns.failDevices(campaignId, Seq(deviceId), ResultCode("DEVICE_UPDATE_PROCESS_FAILED"), ResultDescription("DeviceUpdateProcess#processDeviceAcceptedUpdate failed"))
-          }
-      }
-    } yield ()
-  }
+  private def requestDevicesUpdateAssignment(campaign: Campaign, update: Update, devices: Set[DeviceId]): Future[Unit] =
+    Future.traverse(devices)(deviceId => requestUpdateAssignment(campaign, update, deviceId)).map(_ => ())
+
+  private def requestUpdateAssignment(campaign: Campaign, update: Update, deviceId: DeviceId): Future[Unit] =
+    messageBusPublisher.publish(DeviceUpdateAssignmentRequested(
+      campaign.namespace,
+      Instant.now(),
+      CampaignCorrelationId(campaign.id.uuid),
+      deviceId,
+      SourceUpdateId(update.source.id.value)
+    ).asInstanceOf[DeviceUpdateEvent])
 }

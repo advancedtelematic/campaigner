@@ -5,6 +5,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
+import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 
@@ -16,6 +17,7 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
   import CampaignSupervisor._
 
   val campaigns = Campaigns()
+  implicit val msgBus = MessageBusPublisher.ignore
 
   def buildCampaignWithUpdate: Campaign = {
     val update = genMultiTargetUpdate.generate
@@ -52,7 +54,6 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
       partiallyScheduledCampaignDevices.take(nScheduled).toSeq).futureValue
 
     parent.childActorOf(CampaignSupervisor.props(
-      director,
       schedulerPollingTimeout,
       schedulerDelay,
       schedulerBatchSize
@@ -73,6 +74,7 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
   import org.scalacheck.Arbitrary._
 
   val campaigns = Campaigns()
+  implicit val msgBus = MessageBusPublisher.ignore
 
   def buildCampaignWithUpdate: Campaign = {
     val update = genMultiTargetUpdate.generate
@@ -89,7 +91,6 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
     campaigns.create(campaign, Set.empty, devs, Seq.empty).futureValue
 
     parent.childActorOf(CampaignSupervisor.props(
-      director,
       schedulerPollingTimeout,
       10.seconds,
       schedulerBatchSize

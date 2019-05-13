@@ -4,14 +4,14 @@ import java.time.Instant
 
 import akka.Done
 import com.advancedtelematic.campaigner.daemon.DeviceEventListener.AcceptedCampaign
-import com.advancedtelematic.campaigner.data.DataType.{Campaign, DeviceStatus, DeviceUpdate}
+import com.advancedtelematic.campaigner.data.DataType.{Campaign}
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, UpdateSupport}
-import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil, FakeDirectorClient}
-import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil, TestMessageBus}
+import com.advancedtelematic.libats.data.DataType.{Namespace, CampaignId => CampaignCorrelationId}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, Event, EventType}
 import com.advancedtelematic.libats.messaging_datatype.Messages
-import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceEventMessage
+import com.advancedtelematic.libats.messaging_datatype.Messages._
 import com.advancedtelematic.libats.test.DatabaseSpec
 import io.circe.Json
 import io.circe.syntax._
@@ -20,9 +20,8 @@ import org.scalacheck.Arbitrary._
 import scala.concurrent.ExecutionContext.Implicits.global
 
 class DeviceEventListenerSpec extends CampaignerSpec with DatabaseSpec with DeviceUpdateSupport with UpdateSupport with DatabaseUpdateSpecUtil {
-  lazy val director = new FakeDirectorClient()
-
-  val listener = new DeviceEventListener(director)
+  implicit val msgBus = new TestMessageBus()
+  val listener = new DeviceEventListener()
 
   val campaigns = Campaigns()
 
@@ -46,32 +45,12 @@ class DeviceEventListenerSpec extends CampaignerSpec with DatabaseSpec with Devi
 
     listener.apply(msg).futureValue shouldBe Done
 
-    director.updates.get(update.source.id) shouldBe Set(device)
-  }
-
-  it should "set device update status to accepted" in {
-    val campaign = createDbCampaignWithUpdate().futureValue
-    val device = arbitrary[DeviceId].generate
-
-    deviceUpdateRepo.persistMany(Seq(DeviceUpdate(campaign.id, campaign.updateId, device, DeviceStatus.scheduled))).futureValue
-
-    val msg = mkDeviceEvent(campaign, device)
-
-    listener.apply(msg).futureValue shouldBe Done
-
-    deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.accepted).futureValue shouldBe Set(device)
-  }
-
-  it should "set device to failed if device is no longer affected" in {
-    val campaign = createDbCampaignWithUpdate().futureValue
-    val device = arbitrary[DeviceId].generate
-    val msg = mkDeviceEvent(campaign, device)
-
-    director.cancelled.add(device)
-
-    listener.apply(msg).futureValue shouldBe Done
-
-    deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.failed).futureValue shouldBe Set(device)
+    msgBus.messages.length shouldBe 1
+    val assignmentRequest = msgBus.messages(0).asInstanceOf[DeviceUpdateAssignmentRequested]
+    assignmentRequest.namespace shouldBe campaign.namespace
+    assignmentRequest.deviceUuid shouldBe device
+    assignmentRequest.correlationId shouldBe CampaignCorrelationId(campaign.id.uuid)
+    assignmentRequest.sourceUpdateId.value shouldBe update.source.id.value
   }
 
   it should "raise IllegalArgumentException if the message is of non-acceptable type" in {

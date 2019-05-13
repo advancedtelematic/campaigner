@@ -5,7 +5,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
 import com.advancedtelematic.campaigner.http.Errors
 import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId}
-import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceUpdateCanceled, DeviceUpdateCompleted, DeviceUpdateEvent}
+import com.advancedtelematic.libats.messaging_datatype.Messages._
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
 
@@ -23,12 +23,13 @@ class DeviceUpdateEventListener()(implicit db: Database, ec: ExecutionContext)
     case _ => Future.successful(())
   }
 
-  private def dispatch(campaignId: CampaignId, event: DeviceUpdateEvent): Future[Unit] =
-    event match {
-      case msg: DeviceUpdateCanceled  => handleUpdateCanceled(campaignId, msg)
-      case msg: DeviceUpdateCompleted => handleUpdateCompleted(campaignId, msg)
-      case _ => Future.successful(())
-    }
+  private def dispatch(campaignId: CampaignId, event: DeviceUpdateEvent): Future[Unit] = event match {
+    case msg: DeviceUpdateCanceled  => handleUpdateCanceled(campaignId, msg)
+    case msg: DeviceUpdateCompleted => handleUpdateCompleted(campaignId, msg)
+    case msg: DeviceUpdateAssigned  => handleUpdateAssigned(campaignId, msg)
+    case msg: DeviceUpdateAssignmentRejected => handleUpdateAssignmentRejected(campaignId, msg)
+    case _ => Future.successful(())
+  }
 
   private def handleUpdateCanceled(campaignId: CampaignId, msg: DeviceUpdateCanceled): Future[Unit] =
     campaigns.cancelDevices(campaignId, Seq(msg.deviceUuid))
@@ -48,4 +49,10 @@ class DeviceUpdateEventListener()(implicit db: Database, ec: ExecutionContext)
         _log.info(s"Got DeviceUpdateEvent for device ${msg.deviceUuid.show} which is not scheduled by campaigner, ignoring this message.")
     }
   }
+
+  private def handleUpdateAssigned(campaignId: CampaignId, msg: DeviceUpdateAssigned): Future[Unit] =
+    campaigns.markDevicesAccepted(campaignId, Seq(msg.deviceUuid))
+
+  private def handleUpdateAssignmentRejected(campaignId: CampaignId, msg: DeviceUpdateAssignmentRejected): Future[Unit] =
+    campaigns.rejectDevices(campaignId, Seq(msg.deviceUuid))
 }

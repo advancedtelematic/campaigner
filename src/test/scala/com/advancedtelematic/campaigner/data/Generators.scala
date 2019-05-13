@@ -17,7 +17,7 @@ object Generators {
   val genDeviceId: Gen[DeviceId] = Gen.uuid.map(DeviceId(_))
   val genGroupId: Gen[GroupId] = Gen.uuid.map(GroupId(_))
   val genUpdateId: Gen[UpdateId] = Gen.uuid.map(UpdateId(_))
-  val genNamespace: Gen[Namespace] = arbitrary[String].map(Namespace)
+  val genNamespace: Gen[Namespace] = arbitrary[String].map(Namespace(_))
   val genUpdateType: Gen[UpdateType] = Gen.oneOf(UpdateType.values.toSeq)
   val genMetadataType: Gen[MetadataType] = Gen.oneOf(MetadataType.values.toSeq)
   val genNonEmptyGroupIdList: Gen[NonEmptyList[GroupId]] = Gen.nonEmptyListOf(genGroupId).map(NonEmptyList.fromListUnsafe)
