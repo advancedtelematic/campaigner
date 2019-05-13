@@ -65,12 +65,12 @@ class DeviceUpdateProcess(director: DirectorClient)(implicit db: Database, ec: E
       affected <- director.setMultiUpdateTarget(ns, update.source.id, Seq(deviceId), CampaignCorrelationId(campaignId.uuid))
       _ <- affected.find(_ == deviceId) match {
         case Some(_) =>
-          campaigns.markDevicesAccepted(campaignId, campaign.update, deviceId)
+          campaigns.markDevicesAccepted(campaignId, Seq(deviceId))
         case None =>
           _logger.warn(s"Could not start mtu update for device $deviceId after device accepted, device is no longer affected")
 
-          campaigns.scheduleDevices(campaignId, campaign.update, deviceId).flatMap { _ =>
-            campaigns.failDevice(campaign.update, deviceId, ResultCode("DEVICE_UPDATE_PROCESS_FAILED"), ResultDescription("DeviceUpdateProcess#processDeviceAcceptedUpdate failed"))
+          campaigns.scheduleDevices(campaignId, Seq(deviceId)).flatMap { _ =>
+            campaigns.failDevices(campaignId, Seq(deviceId), ResultCode("DEVICE_UPDATE_PROCESS_FAILED"), ResultDescription("DeviceUpdateProcess#processDeviceAcceptedUpdate failed"))
           }
       }
     } yield ()

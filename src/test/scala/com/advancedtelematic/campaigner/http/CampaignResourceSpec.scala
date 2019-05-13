@@ -243,7 +243,7 @@ class CampaignResourceSpec
       status shouldBe OK
     }
 
-    campaigns.scheduleDevices(campaignId, updateId, device).futureValue
+    campaigns.scheduleDevices(campaignId, Seq(device)).futureValue
 
     val correlationId: CorrelationId = MultiTargetUpdateId(updateId.uuid)
     val entity = Json.obj("correlationId" -> correlationId.asJson, "device" -> device.asJson)
@@ -363,10 +363,9 @@ class CampaignResourceSpec
 
     val testCase = Gen.listOfN(20, genExportCase).generate
     val (campaignId, _) = createCampaignWithUpdateOk()
-    val campaign = campaigns.findNamespaceCampaign(testNs, campaignId).futureValue
 
     fakeRegistry.setOemIds(testCase.map(_._1).zip(testCase.map(_._2)): _*)
-    campaigns.scheduleDevices(campaignId, campaign.updateId, testCase.map(_._1): _*).futureValue
+    campaigns.scheduleDevices(campaignId, testCase.map(_._1)).futureValue
 
     failInstallationsAndCheckExport(campaignId, testCase)
   }
@@ -397,9 +396,9 @@ class CampaignResourceSpec
       notAffectedDevices <- Gen.listOf(genDeviceId)
     } yield CampaignCase(successfulDevices, failedDevices, cancelledDevices, notAffectedDevices)
 
-    def conductCampaign(campaignId: CampaignId, updateId: UpdateId, campaignCase: CampaignCase, failureCode: ResultCode): Future[Unit] = for {
-      _ <- campaigns.scheduleDevices(campaignId, updateId, campaignCase.affectedDevices:_*)
-      _ <- campaigns.rejectDevices(campaignId, updateId, campaignCase.notAffectedDevices)
+    def conductCampaign(campaignId: CampaignId, campaignCase: CampaignCase, failureCode: ResultCode): Future[Unit] = for {
+      _ <- campaigns.scheduleDevices(campaignId, campaignCase.affectedDevices)
+      _ <- campaigns.rejectDevices(campaignId, campaignCase.notAffectedDevices)
       _ <- campaigns.cancelDevices(campaignId, campaignCase.cancelledDevices)
       _ <- campaigns.failDevices(campaignId, campaignCase.failedDevices, failureCode, ResultDescription("failure-description-1"))
       _ <- campaigns.succeedDevices(campaignId, campaignCase.successfulDevices, ResultCode("success-code-1"), ResultDescription("success-description-1"))
@@ -412,7 +411,7 @@ class CampaignResourceSpec
       val mainCampaignFailureCode = ResultCode("failure-code-main")
       campaigns
         .launch(mainCampaignId)
-        .flatMap(_ => conductCampaign(mainCampaignId, mainCampaign.update, mainCase, mainCampaignFailureCode))
+        .flatMap(_ => conductCampaign(mainCampaignId, mainCase, mainCampaignFailureCode))
         .futureValue
 
       Get(apiUri(s"campaigns/${mainCampaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
@@ -447,7 +446,7 @@ class CampaignResourceSpec
 
         val retryCampaignFailureCode = ResultCode("failure-code-retry")
         val retryCampaignId = createAndLaunchRetryCampaignOk(mainCampaignId, RetryFailedDevices(mainCampaignFailureCode))
-        conductCampaign(retryCampaignId, mainCampaign.update, retryCase, retryCampaignFailureCode).futureValue
+        conductCampaign(retryCampaignId, retryCase, retryCampaignFailureCode).futureValue
 
         Get(apiUri(s"campaigns/${mainCampaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
           status shouldBe OK

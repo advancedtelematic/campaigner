@@ -64,46 +64,36 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
    * Sets status of each given device to `rejected` for a given campaign and
    * update.
    */
-  def rejectDevices(campaignId: CampaignId, updateId: UpdateId, deviceIds: Seq[DeviceId]): Future[Unit] =
-    deviceUpdateRepo.persistMany(deviceIds.map(deviceId =>
-      DeviceUpdate(campaignId, updateId, deviceId, DeviceStatus.rejected)
-    ))
+  def rejectDevices(campaignId: CampaignId, deviceIds: Seq[DeviceId]): Future[Unit] =
+    updateDevicesStatus(campaignId, deviceIds, DeviceStatus.rejected)
 
-  def scheduleDevices(campaign: CampaignId, update: UpdateId, devices: DeviceId*): Future[Unit] =
-    deviceUpdateRepo.persistMany(devices.map { d => DeviceUpdate(campaign, update, d, DeviceStatus.scheduled) })
+  def scheduleDevices(campaignId: CampaignId, deviceIds: Seq[DeviceId]): Future[Unit] =
+    updateDevicesStatus(campaignId, deviceIds, DeviceStatus.scheduled)
 
-  def markDevicesAccepted(campaign: CampaignId, update: UpdateId, devices: DeviceId*): Future[Unit] =
-    deviceUpdateRepo.persistMany(devices.map { d => DeviceUpdate(campaign, update, d, DeviceStatus.accepted) })
-
-  def succeedDevice(updateId: UpdateId, deviceId: DeviceId, successCode: ResultCode, successDescription: ResultDescription): Future[Unit] =
-    finishDevice(updateId, deviceId, DeviceStatus.successful, Some(successCode), Some(successDescription))
+  def markDevicesAccepted(campaignId: CampaignId, deviceIds: Seq[DeviceId]): Future[Unit] =
+    updateDevicesStatus(campaignId, deviceIds, DeviceStatus.accepted)
 
   def succeedDevices(campaignId: CampaignId, devices: Seq[DeviceId], successCode: ResultCode, successDescription: ResultDescription): Future[Unit] =
     finishDevices(campaignId, devices, DeviceStatus.successful, Some(successCode), Some(successDescription))
 
-  def failDevice(updateId: UpdateId, deviceId: DeviceId, failureCode: ResultCode, failureDescription: ResultDescription): Future[Unit] =
-    finishDevice(updateId, deviceId, DeviceStatus.failed, Some(failureCode), Some(failureDescription))
-
   def failDevices(campaignId: CampaignId, devices: Seq[DeviceId], failureCode: ResultCode, failureDescription: ResultDescription): Future[Unit] =
     finishDevices(campaignId, devices, DeviceStatus.failed, Some(failureCode), Some(failureDescription))
-
-  def cancelDevice(updateId: UpdateId, deviceId: DeviceId): Future[Unit] =
-    finishDevice(updateId, deviceId, DeviceStatus.cancelled, None, None)
 
   def cancelDevices(campaignId: CampaignId, devices: Seq[DeviceId]): Future[Unit] =
     finishDevices(campaignId, devices, DeviceStatus.cancelled, None, None)
 
-  private def finishDevice(updateId: UpdateId, device: DeviceId, status: DeviceStatus, resultCode: Option[ResultCode], resultDescription: Option[ResultDescription]): Future[Unit] = db.run {
-    for {
-      _ <- deviceUpdateRepo.setUpdateStatusAction(updateId, device, status, resultCode, resultDescription)
-      campaigns <- campaignRepo.findByUpdateAction(updateId)
-      _ <- DBIO.sequence(campaigns.map(c => campaignStatusTransition.devicesFinished(c.id)))
-    } yield ()
-  }
-
   private def finishDevices(campaignId: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[ResultCode], resultDescription: Option[ResultDescription]): Future[Unit] = db.run {
     deviceUpdateRepo.setUpdateStatusAction(campaignId, devices, status, resultCode, resultDescription)
       .andThen(campaignStatusTransition.devicesFinished(campaignId))
+  }
+
+  private def updateDevicesStatus(campaignId: CampaignId, deviceIds: Seq[DeviceId], status: DeviceStatus): Future[Unit] = db.run {
+    for {
+      campaign <- campaignRepo.findAction(campaignId)
+      _ <- deviceUpdateRepo.persistManyAction(deviceIds.map(deviceId =>
+        DeviceUpdate(campaign.id, campaign.updateId, deviceId, status)
+      ))
+    } yield ()
   }
 
   /**

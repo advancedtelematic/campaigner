@@ -7,7 +7,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil}
-import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId, ResultCode, ResultDescription, CampaignId => CampaignCorrelationId}
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, ResultCode, ResultDescription, CampaignId => CampaignCorrelationId}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, InstallationResult}
 import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceUpdateCanceled, DeviceUpdateCompleted, DeviceUpdateEvent}
 import com.advancedtelematic.libats.test.DatabaseSpec
@@ -25,18 +25,6 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
 
   val campaigns = Campaigns()
 
-  "Listener" should "mark a device as successful using external update id" in {
-    val (updateSource, campaign, deviceUpdate) = prepareTest()
-    val report = makeReport(
-      campaign,
-      deviceUpdate,
-      MultiTargetUpdateId(UUID.fromString(updateSource.id.value)),
-      isSuccessful = true)
-
-    listener.apply(report).futureValue shouldBe (())
-    deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.successful).futureValue should contain(deviceUpdate.device)
-  }
-
   "Listener" should "mark a device as successful using campaign CorrelationId" in {
     val (_, campaign, deviceUpdate) = prepareTest()
     val report = makeReport(
@@ -47,19 +35,6 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
 
     listener.apply(report).futureValue shouldBe (())
     deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.successful).futureValue should contain(deviceUpdate.device)
-  }
-
-  "Listener" should "mark a device as failed using external update id" in {
-    val (updateSource, campaign, deviceUpdate) = prepareTest()
-    val report = makeReport(
-      campaign,
-      deviceUpdate,
-      MultiTargetUpdateId(UUID.fromString(updateSource.id.value)),
-      isSuccessful = false)
-
-    listener.apply(report).futureValue shouldBe (())
-    deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.failed).futureValue should contain(deviceUpdate.device)
-    campaigns.findLatestFailedUpdates(campaign.id, ResultCode("FAILURE")).map(_.map(_.device)).futureValue should contain(deviceUpdate.device)
   }
 
   "Listener" should "mark a device as failed using campaign CorrelationId" in {
