@@ -38,8 +38,7 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
       Seq.empty).futureValue
     campaigns.scheduleDevices(
       scheduledCampaign.id,
-      scheduledCampaign.updateId,
-      scheduledCampaignDevices.toSeq:_*).futureValue
+      scheduledCampaignDevices.toSeq).futureValue
 
     val partiallyScheduledCampaignDevices = Gen.listOfN(n, genDeviceId).generate.toSet
     val nScheduled = Gen.choose(1, n - 1).generate
@@ -50,8 +49,7 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
       Seq.empty).futureValue
     campaigns.scheduleDevices(
       partiallyScheduledCampaign.id,
-      partiallyScheduledCampaign.updateId,
-      partiallyScheduledCampaignDevices.take(nScheduled).toSeq:_*).futureValue
+      partiallyScheduledCampaignDevices.take(nScheduled).toSeq).futureValue
 
     parent.childActorOf(CampaignSupervisor.props(
       director,

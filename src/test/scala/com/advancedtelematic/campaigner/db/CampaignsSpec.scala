@@ -42,7 +42,7 @@ class CampaignsSpec extends AsyncFlatSpec
 
     for {
       campaign <- createDbCampaignWithUpdate()
-      _ <- campaigns.scheduleDevices(campaign.id, campaign.updateId, devices:_*)
+      _ <- campaigns.scheduleDevices(campaign.id, devices)
       _ <- campaigns.failDevices(campaign.id, devices, ResultCode("failure-code-1"), ResultDescription("failure-description-1"))
       stats <- campaigns.campaignStats(campaign.id)
     } yield stats.finished shouldBe devices.length
