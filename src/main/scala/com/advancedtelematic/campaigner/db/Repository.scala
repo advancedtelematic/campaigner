@@ -86,6 +86,7 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
           .filter(_.status.inSet(status))
           .map(_.deviceId)
           .result
+          .withStatementParameters(fetchSize = 1024)
       }
     }
 
