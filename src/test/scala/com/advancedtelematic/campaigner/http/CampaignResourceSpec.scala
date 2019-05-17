@@ -27,6 +27,7 @@ import org.scalactic.source
 import org.scalatest._
 import org.scalatest.concurrent.Eventually
 import org.scalatest.prop.PropertyChecks
+import org.scalatest.time.SpanSugar._
 
 import scala.annotation.tailrec
 import scala.concurrent.Future
@@ -40,6 +41,8 @@ class CampaignResourceSpec
     with Eventually
     with GivenWhenThen
     with PropertyChecks {
+
+  implicit val defaultPatience = PatienceConfig(timeout = 5 seconds)
 
   val campaigns = Campaigns()
 

@@ -2,6 +2,8 @@ package com.advancedtelematic.campaigner.db
 
 import java.time.Instant
 
+import akka.NotUsed
+import akka.stream.scaladsl.Source
 import cats.syntax.either._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
@@ -42,8 +44,8 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
    * Given a campaign ID, returns IDs of all devices that are in `requested`
    * state
    */
-  def requestedDevices(campaign: CampaignId): Future[Set[DeviceId]] =
-    deviceUpdateRepo.findByCampaign(campaign, DeviceStatus.requested)
+  def requestedDevicesStream(campaign: CampaignId): Source[DeviceId, NotUsed] =
+    deviceUpdateRepo.findByCampaignStream(campaign, DeviceStatus.requested)
 
   /**
    * Re-calculates the status of the campaign and updates the table
