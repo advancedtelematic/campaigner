@@ -1,5 +1,6 @@
 package com.advancedtelematic.campaigner.http
 
+import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.ContentTypes
 import akka.http.scaladsl.model.StatusCodes._
 import akka.util.ByteString
@@ -7,13 +8,14 @@ import cats.data.NonEmptyList
 import cats.syntax.either._
 import cats.syntax.option._
 import cats.syntax.show._
+import com.advancedtelematic.campaigner.client.DeviceRegistryHttpClient
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns, DeviceUpdateSupport}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec, UpdateResourceSpecUtil}
-import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId, ResultCode, ResultDescription}
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId, ResultCode, ResultDescription, Namespace}
 import com.advancedtelematic.libats.data.ErrorCodes.InvalidEntity
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
@@ -88,6 +90,36 @@ class CampaignResourceSpec
     campaigns.values should contain (id)
 
     checkStats(id, CampaignStatus.prepared)
+  }
+
+  "POST /campaigns" should "create a campaign and populate it with all the devices in groups" in {
+    val createUpdateReq = genCreateUpdate().map(cu => cu.copy(updateSource = UpdateSource(cu.updateSource.id, UpdateType.multi_target))).generate
+    val updateId = createUpdateOk(createUpdateReq)
+    val groupIds = arbitrary[NonEmptyList[GroupId]].generate
+    val devicesInGroups = groupIds.toList.take(5).map(gid => (gid, arbitrary[Seq[DeviceId]].generate.take(100))).toMap
+
+    def failingHttpClient(req: HttpRequest): Future[HttpResponse] =
+      Future.failed(new Error("Not supposed to be called ever"))
+
+    val testDeviceRegistry = new DeviceRegistryHttpClient(Uri("http://whatever.com"), failingHttpClient) {
+      override def devicesInGroup(namespace: Namespace, groupId: GroupId, offset: Long, limit: Long): Future[Seq[DeviceId]] = {
+        val response = devicesInGroups.getOrElse(groupId, Seq.empty).drop(offset.toInt).take(limit.toInt)
+        Future.successful(response)
+      }
+    }
+    val routes = new Routes(fakeDirector, testDeviceRegistry, fakeResolver, fakeUserProfile).routes
+
+    val request = genCreateCampaign().map(_.copy(update = updateId, groups = groupIds)).generate
+    val id = createCampaign(request) ~> routes ~> check {
+      status shouldBe Created
+      responseAs[CampaignId]
+    }
+
+    val campaigns = getCampaignsOk()
+    campaigns.values should contain (id)
+
+    val devices = deviceUpdateRepo.findAllByCampaign(id).futureValue
+    devices.toSet shouldBe devicesInGroups.values.flatten.toSet
   }
 
   "POST/GET autoAccept campaign" should "create and return the created campaign" in {

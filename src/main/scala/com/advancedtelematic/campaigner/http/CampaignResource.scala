@@ -96,7 +96,7 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
   private def fetchDevicesInGroups(ns: Namespace, groups: NonEmptyList[GroupId]): Future[Set[DeviceId]] = {
     val groupSet = groups.toList.toSet
     // TODO (OTA-2385) review the retrieval logic and 'limit' parameter
-    Future.traverse(groupSet)(gid => deviceRegistry.devicesInGroup(ns, gid, 0, 50)).map(_.flatten)
+    Future.traverse(groupSet)(gid => deviceRegistry.allDevicesInGroup(ns, gid)).map(_.flatten)
   }
 
   val route: Route =

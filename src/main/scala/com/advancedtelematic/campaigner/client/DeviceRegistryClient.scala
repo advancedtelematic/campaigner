@@ -2,6 +2,7 @@ package com.advancedtelematic.campaigner.client
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model._
+import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
 import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.DataType._
@@ -12,13 +13,36 @@ import com.advancedtelematic.libats.http.ServiceHttpClient
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import io.circe.Decoder
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future, TimeoutException}
 
 trait DeviceRegistryClient {
   def devicesInGroup(namespace: Namespace,
                      groupId: GroupId,
                      offset: Long,
                      limit: Long): Future[Seq[DeviceId]]
+
+  def allDevicesInGroup(namespace: Namespace,
+                         groupId: GroupId,
+                         patience: Duration = 10.seconds)
+                        (implicit ec: ExecutionContext) : Future[Seq[DeviceId]] = {
+    val start = System.currentTimeMillis
+
+    def fetchDevices(groupId: GroupId, offset: Long, limit: Long): Future[Seq[DeviceId]] = {
+       devicesInGroup(namespace, groupId, offset, limit)
+        .flatMap { ds =>
+          val spent = (System.currentTimeMillis - start).millis
+          ds match {
+            case Nil => FastFuture.successful(Seq.empty[DeviceId])
+            case _ if patience - spent < 0.millis => FastFuture.failed(new TimeoutException)
+            case _ => fetchDevices(groupId, offset + ds.length.toLong, limit).map(ds ++ _)
+          }
+        }
+    }
+
+    fetchDevices(groupId, offset = 0, limit = 1024)
+  }
+
   def fetchOemId(ns: Namespace, deviceIds: DeviceId): Future[String]
 }
 
