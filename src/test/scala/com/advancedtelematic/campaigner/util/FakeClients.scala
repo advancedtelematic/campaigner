@@ -6,52 +6,20 @@ import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, DirectorClient, ExternalUpdate, ResolverClient, UserProfileClient}
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.libats.data.DataType.{CorrelationId, Namespace}
+import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
-import org.scalacheck.Gen
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
 
 class FakeDirectorClient extends DirectorClient with CampaignerSpecUtil {
-
-  val updates = new ConcurrentHashMap[ExternalUpdateId, Set[DeviceId]]()
-  val affected = new ConcurrentHashMap[ExternalUpdateId, Set[DeviceId]]()
   val cancelled = ConcurrentHashMap.newKeySet[DeviceId]()
-
-  override def setMultiUpdateTarget(namespace: Namespace,
-                                    update: ExternalUpdateId,
-                                    devices: Seq[DeviceId],
-                                    correlationId: CorrelationId): Future[Seq[DeviceId]] = {
-    val affected = devices.filterNot(cancelled.asScala.contains)
-
-    updates.compute(update, (_, existing) => {
-      if(existing != null)
-        existing ++ affected
-      else
-        devices.toSet
-    })
-
-    FastFuture.successful(affected)
-  }
-
-  override def cancelUpdate(
-    ns: Namespace,
-    devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
-    val devs = Gen.someOf(devices).generate
-    cancelled.addAll(devs.asJava)
-    FastFuture.successful(devs)
-  }
 
   override def cancelUpdate(
     ns: Namespace,
     device: DeviceId): Future[Unit] = {
     cancelled.add(device)
     FastFuture.successful(())
-  }
-
-  override def findAffected(ns: Namespace, updateId: ExternalUpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
-    FastFuture.successful(affected.asScala.get(updateId).toSeq.flatten)
   }
 }
 

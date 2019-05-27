@@ -33,19 +33,6 @@ object AssignUpdateRequest {
 }
 
 trait DirectorClient {
-
-  def setMultiUpdateTarget(
-    ns: Namespace,
-    updateId: ExternalUpdateId,
-    devices: Seq[DeviceId],
-    correlationId: CorrelationId): Future[Seq[DeviceId]]
-
-  def findAffected(ns: Namespace, updateId: ExternalUpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]]
-
-  def cancelUpdate(
-    ns: Namespace,
-    devices: Seq[DeviceId]): Future[Seq[DeviceId]]
-
   def cancelUpdate(
     ns: Namespace,
     device: DeviceId): Future[Unit]
@@ -56,33 +43,6 @@ class DirectorHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespons
     extends ServiceHttpClient(httpClient) with DirectorClient {
 
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-  import io.circe.syntax._
-
-  override def setMultiUpdateTarget(
-    ns: Namespace,
-    updateId: ExternalUpdateId,
-    devices: Seq[DeviceId],
-    correlationId: CorrelationId): Future[Seq[DeviceId]] = {
-    val path   = uri.path / "api" / "v1" / "assignments"
-    val entity = HttpEntity(
-      ContentTypes.`application/json`,
-      AssignUpdateRequest(correlationId, devices, updateId).asJson.noSpaces)
-    val req = HttpRequest(
-      HttpMethods.POST,
-      uri.withPath(path),
-      entity = entity).withNs(ns)
-    execHttp[Seq[DeviceId]](req)()
-  }
-
-  override def cancelUpdate(
-    ns: Namespace,
-    devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
-
-    val path   = uri.path / "api" / "v1" / "assignments"
-    val entity = HttpEntity(ContentTypes.`application/json`, devices.asJson.noSpaces)
-    val req = HttpRequest(HttpMethods.PATCH, uri.withPath(path), entity = entity).withNs(ns)
-    execHttp[Seq[DeviceId]](req)()
-  }
 
   override def cancelUpdate(
     ns: Namespace,
@@ -91,14 +51,5 @@ class DirectorHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespons
     val path = uri.path / "api" / "v1" / "assignments" / device.show
     val req = HttpRequest(HttpMethods.DELETE, uri.withPath(path)).withNs(ns)
     execHttp[Unit](req)()
-  }
-
-  override def findAffected(ns: Namespace, updateId: ExternalUpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
-    val path   = uri.path / "api" / "v1" / "assignments"
-    val entity = HttpEntity(
-      ContentTypes.`application/json`,
-      AssignUpdateRequest(devices, updateId, true).asJson.noSpaces)
-    val req = HttpRequest(HttpMethods.POST, uri.withPath(path), entity = entity).withNs(ns)
-    execHttp[Seq[DeviceId]](req)()
   }
 }
