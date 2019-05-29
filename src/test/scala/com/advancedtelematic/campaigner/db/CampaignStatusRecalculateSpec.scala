@@ -89,7 +89,7 @@ final class CampaignStatusRecalculateSpec
     def genNonEmptyListOf: Gen[NonEmptyList[GroupWithDevices]] = {
       val genGroup = for {
         gid <- genGroupId
-        devicesNum <- Gen.chooseNum(0, 5)
+        devicesNum <- Gen.chooseNum(1, 5)
       } yield GroupWithDevices(gid, devicesNum)
 
       Gen.nonEmptyListOf(genGroup).map(NonEmptyList.fromListUnsafe)
