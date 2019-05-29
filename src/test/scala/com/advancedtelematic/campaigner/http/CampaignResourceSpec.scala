@@ -519,7 +519,7 @@ class CampaignResourceSpec
   }
 
   private def assertRetryCampaign(retryCampaign: GetCampaign, failureCode: ResultCode, updateId: UpdateId, mainCampaignId: CampaignId): Assertion = {
-    eventually {
+    eventually(timeout(10 seconds)) {
       retryCampaign shouldBe GetCampaign(
         testNs,
         retryCampaign.id,
