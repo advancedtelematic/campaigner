@@ -15,6 +15,8 @@ scalacOptions := Seq(
   "-Ywarn-unused-import"
 )
 
+wartremoverErrors ++= Warts.unsafe
+
 // allow imports in the console on a single line
 scalacOptions in (Compile, console) ~= (_ filterNot (_ == "-Ywarn-unused-import"))
 
