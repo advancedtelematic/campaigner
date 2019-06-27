@@ -48,6 +48,7 @@ libraryDependencies ++= {
     "com.advancedtelematic" %% "libats-metrics-akka" % libatsV,
     "com.advancedtelematic" %% "libats-metrics-prometheus" % libatsV,
     "com.advancedtelematic" %% "libats-slick" % libatsV,
+    "com.advancedtelematic" %% "libats-logging" % libatsV,
     "com.advancedtelematic" %% "libtuf" % libtufV,
     "com.advancedtelematic" %% "libtuf-server" % libtufV,
     "org.scalacheck" %% "scalacheck" % "1.13.5" % Test,
