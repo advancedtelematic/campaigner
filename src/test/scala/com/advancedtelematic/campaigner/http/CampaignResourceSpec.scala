@@ -4,6 +4,7 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.ContentTypes
 import akka.http.scaladsl.model.StatusCodes._
 import akka.util.ByteString
+import cats.Eval
 import cats.data.NonEmptyList
 import cats.syntax.either._
 import cats.syntax.option._
@@ -15,7 +16,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns, DeviceUpdateSupport}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec, UpdateResourceSpecUtil}
-import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId, ResultCode, ResultDescription, Namespace}
+import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId, Namespace, ResultCode, ResultDescription}
 import com.advancedtelematic.libats.data.ErrorCodes.InvalidEntity
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
@@ -187,7 +188,7 @@ class CampaignResourceSpec
       responseAs[CampaignId]
     }
 
-    assertRetryCampaign(getCampaignOk(retryCampaignId), failureCode, mainCampaign.update, mainCampaignId)
+    assertRetryCampaign(Eval.later(getCampaignOk(retryCampaignId)), failureCode, mainCampaign.update, mainCampaignId)
   }
 
   "POST /campaigns/:campaign_id/retry-failed" should "create and launch a second retry-campaign when the device fails with a new code after the first retry" in {
@@ -207,7 +208,7 @@ class CampaignResourceSpec
       responseAs[CampaignId]
     }
 
-    assertRetryCampaign(getCampaignOk(retryCampaignId1), failureCode1, mainCampaign.update, mainCampaignId)
+    assertRetryCampaign(Eval.always(getCampaignOk(retryCampaignId1)), failureCode1, mainCampaign.update, mainCampaignId)
 
     campaigns.failDevices(mainCampaignId, deviceId :: Nil, failureCode2, Gen.alphaNumStr.map(ResultDescription).generate).futureValue
     val retryCampaignId2 = createAndLaunchRetryCampaign(mainCampaignId, RetryFailedDevices(failureCode2)) ~> routes ~> check {
@@ -215,7 +216,7 @@ class CampaignResourceSpec
       responseAs[CampaignId]
     }
 
-    assertRetryCampaign(getCampaignOk(retryCampaignId2), failureCode2, mainCampaign.update, mainCampaignId)
+    assertRetryCampaign(Eval.later(getCampaignOk(retryCampaignId2)), failureCode2, mainCampaign.update, mainCampaignId)
   }
 
   "POST /campaigns/:campaign_id/retry-failed" should "fail if there are no failed devices for the given failure code" in {
@@ -518,22 +519,24 @@ class CampaignResourceSpec
     0.until(n).map(groupNum => elemsWithGroupNumAssigned.getOrElse(groupNum, Seq.empty))
   }
 
-  private def assertRetryCampaign(retryCampaign: GetCampaign, failureCode: ResultCode, updateId: UpdateId, mainCampaignId: CampaignId): Assertion = {
+  private def assertRetryCampaign(retryCampaign: Eval[GetCampaign], failureCode: ResultCode, updateId: UpdateId, mainCampaignId: CampaignId): Assertion = {
     eventually(timeout(10 seconds)) {
-      retryCampaign shouldBe GetCampaign(
+      val retry = retryCampaign.value
+
+      retry shouldBe GetCampaign(
         testNs,
-        retryCampaign.id,
+        retry.id,
         s"retryCampaignWith-mainCampaign-${mainCampaignId.uuid}-failureCode-$failureCode",
         updateId,
         CampaignStatus.launched,
-        retryCampaign.createdAt,
-        retryCampaign.updatedAt,
+        retry.createdAt,
+        retry.updatedAt,
         Some(mainCampaignId),
         Set.empty,
         Nil,
         autoAccept = true
       )
-      retryCampaign.createdAt shouldBe retryCampaign.updatedAt
+      retry.createdAt shouldBe retry.updatedAt
     }
   }
 
