@@ -23,15 +23,15 @@ resolvers += "ATS Releases" at "http://nexus.advancedtelematic.com:8081/content/
 resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content/repositories/snapshots"
 
 libraryDependencies ++= {
-  val akkaV = "2.5.13"
-  val akkaHttpV = "10.1.1"
-  val libatsV = "0.2.1-13-g4a34692"
-  val libtufV = "0.6.0-5-g06e4bdd"
+  val akkaV = "2.5.20"
+  val akkaHttpV = "10.1.7"
+  val libatsV = "0.3.0-16-gaa02547"
+  val libtufV = "0.7.0-9-g3300750"
   val scalaTestV = "3.0.0"
   val slickV = "3.2.0"
 
   Seq(
-    "ch.qos.logback" % "logback-classic" % "1.1.3",
+    "ch.qos.logback" % "logback-classic" % "1.2.3",
     "com.typesafe.akka" %% "akka-actor" % akkaV,
     "com.typesafe.akka" %% "akka-http" % akkaHttpV,
     "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV,
@@ -52,7 +52,8 @@ libraryDependencies ++= {
     "com.advancedtelematic" %% "libtuf" % libtufV,
     "com.advancedtelematic" %% "libtuf-server" % libtufV,
     "org.scalacheck" %% "scalacheck" % "1.13.5" % Test,
-    "org.scalatest" %% "scalatest" % scalaTestV % Test
+    "org.scalatest" %% "scalatest" % scalaTestV % Test,
+    "com.typesafe.akka" %% "akka-testkit" % akkaV % Test
   )
 }
 
