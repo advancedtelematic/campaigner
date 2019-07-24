@@ -30,7 +30,7 @@ class CampaignStatusRecalculate()(implicit db: Database, ec: ExecutionContext, m
     Source.fromPublisher(source).mapAsyncUnordered(3) { campaignId =>
       db.run {
         statusTransition.calculateCampaignStatus(campaignId).map {
-          case Right(status) => status
+          case Some(status) => status
           case _ => CampaignStatus.launched
         }.flatMap { newStatus =>
           campaignRepo.setStatusAction(campaignId, newStatus).map(_ => newStatus)

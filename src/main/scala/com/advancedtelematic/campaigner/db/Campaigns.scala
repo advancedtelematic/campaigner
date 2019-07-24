@@ -4,7 +4,7 @@ import java.time.Instant
 
 import akka.NotUsed
 import akka.stream.scaladsl.Source
-import cats.syntax.either._
+import cats.syntax.option._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
@@ -321,7 +321,7 @@ protected [db] class CampaignStatusTransition(implicit db: Database, ec: Executi
       campaign <- campaignRepo.findAction(campaignId)
       maybeStatus <- calculateCampaignStatus(campaignId, Some(campaign.status))
       _ <-  maybeStatus match {
-        case Right(status) =>
+        case Some(status) =>
           campaignRepo.setStatusAction(campaignId, status)
         case _ =>
           DBIO.successful(())
@@ -329,7 +329,7 @@ protected [db] class CampaignStatusTransition(implicit db: Database, ec: Executi
     } yield ()
 
   protected [db] def calculateCampaignStatus(
-      campaign: CampaignId, currentCampaignStatus: Option[CampaignStatus] = None): DBIO[Either[Unit, CampaignStatus]] = {
+      campaign: CampaignId, currentCampaignStatus: Option[CampaignStatus] = None): DBIO[Option[CampaignStatus]] = {
     def devicesWithStatus(statuses: Set[DeviceStatus]): DBIO[Long] =
       campaignRepo.countDevices(Set(campaign))(_.inSet(statuses))
 
@@ -342,9 +342,9 @@ protected [db] class CampaignStatusTransition(implicit db: Database, ec: Executi
       wasCampaignCancelled = currentCampaignStatus.exists(_ == CampaignStatus.cancelled)
     } yield {
       if (requested == 0 && affected == finished && !wasCampaignCancelled) {
-        CampaignStatus.finished.asRight
+        CampaignStatus.finished.some
       } else {
-        ().asLeft
+        None
       }
     }
   }
