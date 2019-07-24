@@ -47,6 +47,18 @@ class CampaignsSpec extends AsyncFlatSpec
       stats <- campaigns.campaignStats(campaign.id)
     } yield stats.finished shouldBe devices.length
   }
+
+  "finishing devices" should "not change the status if the campaign was cancelled" in {
+    val devices  = arbitrary[Seq[DeviceId]].generate
+
+    for {
+      campaign <- createDbCampaignWithUpdate()
+      _ <- campaigns.scheduleDevices(campaign.id, devices)
+      _ <- campaigns.cancel(campaign.id)
+      _ <- campaigns.failDevices(campaign.id, devices, ResultCode("failure-code-1"), ResultDescription("failure-description-1"))
+      finalStatus <- db.run(campaignRepo.findAction(campaign.id).map(_.status))
+    } yield finalStatus shouldBe CampaignStatus.cancelled
+  }
 }
 
 final class CampaignsFindFailedDevicesSpec extends AsyncFlatSpec

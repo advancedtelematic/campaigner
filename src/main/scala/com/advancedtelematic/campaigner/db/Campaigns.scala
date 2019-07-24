@@ -318,7 +318,8 @@ protected [db] class CampaignStatusTransition(implicit db: Database, ec: Executi
 
   protected[db] def updateToCalculatedStatus(campaignId: CampaignId): DBIO[Unit] =
     for {
-      maybeStatus <- calculateCampaignStatus(campaignId)
+      campaign <- campaignRepo.findAction(campaignId)
+      maybeStatus <- calculateCampaignStatus(campaignId, Some(campaign.status))
       _ <-  maybeStatus match {
         case Right(status) =>
           campaignRepo.setStatusAction(campaignId, status)
@@ -327,7 +328,8 @@ protected [db] class CampaignStatusTransition(implicit db: Database, ec: Executi
       }
     } yield ()
 
-  protected [db] def calculateCampaignStatus(campaign: CampaignId): DBIO[Either[Unit, CampaignStatus]] = {
+  protected [db] def calculateCampaignStatus(
+      campaign: CampaignId, currentCampaignStatus: Option[CampaignStatus] = None): DBIO[Either[Unit, CampaignStatus]] = {
     def devicesWithStatus(statuses: Set[DeviceStatus]): DBIO[Long] =
       campaignRepo.countDevices(Set(campaign))(_.inSet(statuses))
 
@@ -337,10 +339,13 @@ protected [db] class CampaignStatusTransition(implicit db: Database, ec: Executi
       cancelled <- devicesWithStatus(Set(DeviceStatus.cancelled))
       requested <- devicesWithStatus(Set(DeviceStatus.requested))
       total <- devicesWithStatus(DeviceStatus.values)
-      status = (total, requested, cancelled, affected, finished) match {
-        case (t, 0, _, a, f) if a == f => CampaignStatus.finished.asRight
-        case _                         => ().asLeft
+      wasCampaignCancelled = currentCampaignStatus.exists(_ == CampaignStatus.cancelled)
+    } yield {
+      if (requested == 0 && affected == finished && !wasCampaignCancelled) {
+        CampaignStatus.finished.asRight
+      } else {
+        ().asLeft
       }
-    } yield status
+    }
   }
 }
