@@ -19,6 +19,7 @@ object ErrorCodes {
   val DeviceNotScheduled = ErrorCode("device_not_scheduled")
   val ConflictingUpdate = ErrorCode("update_already_exists")
   val TimeoutFetchingUpdates = ErrorCode("timeout_fetching_updates")
+  val CampaignDoesNotRequireApproval = ErrorCode("campaign_does_not_require_approval")
 }
 
 object Errors {
@@ -77,4 +78,10 @@ object Errors {
     ErrorCodes.TimeoutFetchingUpdates,
     StatusCodes.GatewayTimeout,
     "It took too long to retrieve all the devices in the given groups.")
+
+  val UpdateNotCancellable = RawError(
+    ErrorCodes.CampaignDoesNotRequireApproval,
+    StatusCodes.MethodNotAllowed,
+    "This device update cannot be canceled because it does not come from a campaign that requires approval."
+  )
 }

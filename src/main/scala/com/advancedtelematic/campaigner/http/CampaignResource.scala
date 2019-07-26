@@ -99,6 +99,13 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
     Future.traverse(groupSet)(gid => deviceRegistry.allDevicesInGroup(ns, gid)).map(_.flatten)
   }
 
+  private def cancelDeviceUpdate(campaign: Campaign, deviceId: DeviceId): Future[Unit] =
+    if (campaign.autoAccept)
+      // In this case we should call director at /api/v1/assignments/:deviceId
+      Future.failed(Errors.UpdateNotCancellable)
+    else
+      campaigns.cancelDevices(campaign.id, Seq(deviceId))
+
   val route: Route =
     extractAuth { auth =>
       val ns = auth.namespace
@@ -141,13 +148,12 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
             (path("failed-installations.csv") & parameter('failureCode.as[ResultCode])) {
               failureCode => fetchFailureCodes(ns, campaign.id, failureCode)
             }
+          } ~
+          delete {
+            path("devices" / DeviceId.Path) { deviceId =>
+              complete(cancelDeviceUpdate(campaign, deviceId))
+            }
           }
-        }
-      } ~
-      extractLog { implicit log =>
-        (post & path("cancel_device_update_campaign") & entity(as[CancelDeviceUpdateCampaign])) { cancelDevice =>
-          // Deprecated
-          complete(director.cancelUpdate(ns, cancelDevice.device))
         }
       }
     }
