@@ -10,6 +10,8 @@ import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.http.HttpOps.HttpRequestOps
 import com.advancedtelematic.libats.http.ServiceHttpClient
+import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
+import com.advancedtelematic.libats.http.tracing.TracingHttpClient
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import io.circe.Decoder
 
@@ -47,8 +49,8 @@ trait DeviceRegistryClient {
 }
 
 class DeviceRegistryHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResponse])
-    (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer)
-    extends ServiceHttpClient(httpClient) with DeviceRegistryClient {
+    (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer, tracing: ServerRequestTracing)
+    extends TracingHttpClient(httpClient, "device-registry") with DeviceRegistryClient {
 
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 

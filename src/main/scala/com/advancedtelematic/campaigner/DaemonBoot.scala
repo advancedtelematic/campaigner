@@ -6,6 +6,7 @@ import com.advancedtelematic.campaigner.actor._
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.daemon._
 import com.advancedtelematic.libats.http.monitoring.MetricsSupport
+import com.advancedtelematic.libats.http.tracing.NullServerRequestTracing
 import com.advancedtelematic.libats.http.{BootApp, ServiceHttpClientSupport}
 import com.advancedtelematic.libats.messaging.{BusListenerMetrics, MessageListenerSupport}
 import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceEventMessage, DeviceUpdateEvent}
@@ -30,6 +31,8 @@ object DaemonBoot extends BootApp
   implicit val _db = db
 
   log.info("Starting campaigner daemon")
+
+  implicit val tracing = new NullServerRequestTracing
 
   val deviceRegistry = new DeviceRegistryHttpClient(deviceRegistryUri, defaultHttpClient)
   val director = new DirectorHttpClient(directorUri, defaultHttpClient)

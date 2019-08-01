@@ -10,8 +10,10 @@ import com.advancedtelematic.libats.http.HttpOps.HttpRequestOps
 import com.advancedtelematic.libats.http.ServiceHttpClient
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import com.advancedtelematic.libats.codecs.CirceAnyVal._
-
 import java.util.UUID
+
+import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
+import com.advancedtelematic.libats.http.tracing.TracingHttpClient
 import io.circe._
 import io.circe.generic.semiauto._
 
@@ -52,8 +54,8 @@ trait DirectorClient {
 }
 
 class DirectorHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResponse])
-    (implicit system: ActorSystem, mat: Materializer)
-    extends ServiceHttpClient(httpClient) with DirectorClient {
+    (implicit system: ActorSystem, mat: Materializer, tracing: ServerRequestTracing)
+    extends TracingHttpClient(httpClient, "director") with DirectorClient {
 
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
   import io.circe.syntax._

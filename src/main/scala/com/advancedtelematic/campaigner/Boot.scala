@@ -8,6 +8,7 @@ import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.http.tracing.Tracing
+import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
 import com.advancedtelematic.libats.http.{BootApp, ServiceHttpClientSupport}
 import com.advancedtelematic.libats.slick.db.DatabaseConfig
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
@@ -54,9 +55,9 @@ object Boot extends BootApp
 
   log.info(s"Starting $version on http://$host:$port")
 
-  val deviceRegistry = new DeviceRegistryHttpClient(deviceRegistryUri, defaultHttpClient)
-  val director = new DirectorHttpClient(directorUri, defaultHttpClient)
-  val userProfile = new UserProfileHttpClient(userProfileUri, defaultHttpClient)
+  def deviceRegistry(implicit tracing: ServerRequestTracing) = new DeviceRegistryHttpClient(deviceRegistryUri, defaultHttpClient)
+  def director(implicit tracing: ServerRequestTracing) = new DirectorHttpClient(directorUri, defaultHttpClient)
+  def userProfile(implicit tracing: ServerRequestTracing) = new UserProfileHttpClient(userProfileUri, defaultHttpClient)
   val resolver = new ResolverHttpClient(defaultHttpClient)
 
   val tracing = Tracing.fromConfig(config, projectName)
@@ -64,7 +65,7 @@ object Boot extends BootApp
   val routes: Route =
     (versionHeaders(version) & requestMetrics(metricRegistry) & logResponseMetrics(projectName)) {
       prometheusMetricsRoutes ~
-        tracing.traceRequests { _ =>
+        tracing.traceRequests { implicit serverRequestTracing =>
           new Routes(director, deviceRegistry, resolver, userProfile).routes
         }
     }
