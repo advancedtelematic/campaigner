@@ -16,14 +16,12 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns, DeviceUpdateSupport}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec, UpdateResourceSpecUtil}
-import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId, Namespace, ResultCode, ResultDescription}
+import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
 import com.advancedtelematic.libats.data.ErrorCodes.InvalidEntity
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-import io.circe.Json
 import io.circe.parser.parse
-import io.circe.syntax._
 import org.scalacheck.Arbitrary._
 import org.scalacheck.Gen
 import org.scalactic.source
@@ -270,9 +268,8 @@ class CampaignResourceSpec
     checkStats(campaignId, CampaignStatus.cancelled)
   }
 
-  "POST /cancel_device_update_campaign" should "cancel a single device update" in {
-    val (campaignId, campaign) = createCampaignWithUpdateOk()
-    val updateId = campaign.update
+  "DELETE an update from a campaign" should "fail with 'MethodNotAllowed' if the campaign does not require approval" in {
+    val (campaignId, _) = createCampaignWithUpdateOk()
     val device = DeviceId.generate()
 
     Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header) ~> routes ~> check {
@@ -281,23 +278,24 @@ class CampaignResourceSpec
 
     campaigns.scheduleDevices(campaignId, Seq(device)).futureValue
 
-    val correlationId: CorrelationId = MultiTargetUpdateId(updateId.uuid)
-    val entity = Json.obj("correlationId" -> correlationId.asJson, "device" -> device.asJson)
-    Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
-      status shouldBe OK
-      fakeDirector.cancelled.contains(device) shouldBe true
+    Delete(apiUri(s"campaigns/${campaignId.show}/devices/${device.show}")).withHeaders(header) ~> routes ~> check {
+      status shouldBe MethodNotAllowed
     }
   }
 
-  it should "accept request to cancel device if no campaign is associated" in {
-    val update = UpdateId.generate()
+  "DELETE an update from a campaign" should "cancel a single device update" in {
+    val createCampaignWithApprovalNeeded = genCreateCampaign().map(_.copy(approvalNeeded = Some(true)))
+    val (campaignId, _) = createCampaignWithUpdateOk(createCampaignWithApprovalNeeded)
     val device = DeviceId.generate()
 
-    val correlationId: CorrelationId = MultiTargetUpdateId(update.uuid)
-    val entity = Json.obj("correlationId" -> correlationId.asJson, "device" -> device.asJson)
-    Post(apiUri("cancel_device_update_campaign"), entity).withHeaders(header) ~> routes ~> check {
+    Post(apiUri(s"campaigns/${campaignId.show}/launch")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
-      fakeDirector.cancelled.contains(device) shouldBe true
+    }
+
+    campaigns.scheduleDevices(campaignId, Seq(device)).futureValue
+
+    Delete(apiUri(s"campaigns/${campaignId.show}/devices/${device.show}")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
     }
   }
 
