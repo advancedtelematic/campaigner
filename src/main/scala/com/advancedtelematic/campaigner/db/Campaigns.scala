@@ -4,7 +4,7 @@ import java.time.Instant
 
 import akka.NotUsed
 import akka.stream.scaladsl.Source
-import cats.syntax.either._
+import cats.syntax.option._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
@@ -318,16 +318,18 @@ protected [db] class CampaignStatusTransition(implicit db: Database, ec: Executi
 
   protected[db] def updateToCalculatedStatus(campaignId: CampaignId): DBIO[Unit] =
     for {
-      maybeStatus <- calculateCampaignStatus(campaignId)
+      campaign <- campaignRepo.findAction(campaignId)
+      maybeStatus <- calculateCampaignStatus(campaignId, Some(campaign.status))
       _ <-  maybeStatus match {
-        case Right(status) =>
+        case Some(status) =>
           campaignRepo.setStatusAction(campaignId, status)
         case _ =>
           DBIO.successful(())
       }
     } yield ()
 
-  protected [db] def calculateCampaignStatus(campaign: CampaignId): DBIO[Either[Unit, CampaignStatus]] = {
+  protected [db] def calculateCampaignStatus(
+      campaign: CampaignId, currentCampaignStatus: Option[CampaignStatus] = None): DBIO[Option[CampaignStatus]] = {
     def devicesWithStatus(statuses: Set[DeviceStatus]): DBIO[Long] =
       campaignRepo.countDevices(Set(campaign))(_.inSet(statuses))
 
@@ -337,10 +339,13 @@ protected [db] class CampaignStatusTransition(implicit db: Database, ec: Executi
       cancelled <- devicesWithStatus(Set(DeviceStatus.cancelled))
       requested <- devicesWithStatus(Set(DeviceStatus.requested))
       total <- devicesWithStatus(DeviceStatus.values)
-      status = (total, requested, cancelled, affected, finished) match {
-        case (t, 0, _, a, f) if a == f => CampaignStatus.finished.asRight
-        case _                         => ().asLeft
+      wasCampaignCancelled = currentCampaignStatus.exists(_ == CampaignStatus.cancelled)
+    } yield {
+      if (requested == 0 && affected == finished && !wasCampaignCancelled) {
+        CampaignStatus.finished.some
+      } else {
+        None
       }
-    } yield status
+    }
   }
 }
