@@ -15,6 +15,7 @@ import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode}
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.http.HttpOps._
+import com.advancedtelematic.libats.http.tracing.NullServerRequestTracing
 import com.advancedtelematic.libats.test.DatabaseSpec
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
@@ -25,6 +26,8 @@ import org.scalatest.time.{Seconds, Span}
 trait ResourceSpec extends ScalatestRouteTest
   with DatabaseSpec {
   self: Suite with CampaignerSpec =>
+
+  implicit val tracing = new NullServerRequestTracing
 
   implicit val defaultTimeout: RouteTestTimeout = RouteTestTimeout(Span(5, Seconds))
 

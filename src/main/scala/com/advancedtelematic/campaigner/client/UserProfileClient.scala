@@ -8,6 +8,8 @@ import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.http.Errors.RemoteServiceError
 import com.advancedtelematic.libats.http.HttpOps.HttpRequestOps
 import com.advancedtelematic.libats.http.ServiceHttpClient
+import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
+import com.advancedtelematic.libats.http.tracing.TracingHttpClient
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -26,8 +28,8 @@ object UserProfileClient {
 }
 
 class UserProfileHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResponse])
-                           (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer)
-  extends ServiceHttpClient(httpClient) with UserProfileClient {
+                           (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer, tracing: ServerRequestTracing)
+  extends TracingHttpClient(httpClient, "user-profile") with UserProfileClient {
 
   override def externalResolverUri(ns: Namespace): Future[Option[Uri]] = {
     val path = uri.path / "api" / "v1" / "namespace_settings" / ns.get
