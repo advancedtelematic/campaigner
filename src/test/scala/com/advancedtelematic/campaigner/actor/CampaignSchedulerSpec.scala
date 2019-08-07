@@ -111,4 +111,20 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
 
     campaigns.campaignStats(campaign.id).futureValue.status shouldBe CampaignStatus.finished
   }
+
+  "OTA-3153: campaign with 0 requested devices" should "yield a `finished` status" in {
+    val campaign = buildCampaignWithUpdate
+    val parent   = TestProbe()
+    campaigns.create(campaign, Set.empty, Set.empty, Seq.empty).futureValue
+
+    parent.childActorOf(CampaignScheduler.props(
+      director,
+      campaign,
+      schedulerDelay,
+      schedulerBatchSize
+    ))
+    parent.expectMsg(20.seconds, CampaignComplete(campaign.id))
+
+    campaigns.campaignStats(campaign.id).futureValue.status shouldBe CampaignStatus.finished
+  }
 }

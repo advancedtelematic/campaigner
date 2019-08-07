@@ -10,6 +10,7 @@ import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.Success
 
 object CampaignScheduler {
 
@@ -68,13 +69,18 @@ class CampaignScheduler(director: DirectorClient,
       schedule(devices).pipeTo(self)
 
     case BatchToSchedule(devices) if devices.isEmpty =>
-      parent ! CampaignComplete(campaign.id)
-      // TODO: Should move to finished
-      context.stop(self)
+      campaigns.updateStatus(campaign.id)
+        .transform(_ => Success(CampaignComplete(campaign.id)))
+        .pipeTo(self)
 
     case BatchComplete(affectedDevices, rejectedDevices) =>
       log.debug(s"Completed a batch. Affected: ${affectedDevices.size}. Rejected: ${rejectedDevices.size}.")
       scheduler.scheduleOnce(delay, self, NextBatch)
+
+    case msg @ CampaignComplete(campaignId) =>
+      log.debug(s"Completed campaign: ${campaignId}")
+      parent ! msg
+      context.stop(self)
 
     case Status.Failure(ex) =>
       log.error(ex, s"An Error occurred ${ex.getMessage}")
