@@ -233,21 +233,6 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
     .result
     .map(_.toMap)
 
-  /**
-   * Returns the number of devices that took part in the given campaigns and
-   * matched the filter expression.
-   */
-  protected[db] def countDevices(campaignIds: Set[CampaignId])(filterExpr: Rep[DeviceStatus] => Rep[Boolean]): DBIO[Long] =
-    Schema.campaigns
-      .filter(_.id.inSet(campaignIds))
-      .join(Schema.deviceUpdates)
-      .on { case (c, u) => c.update === u.updateId && c.id === u.campaignId }
-      .filter { case (_, update) => filterExpr(update.status) }
-      .distinct
-      .length
-      .result
-      .map(_.toLong)
-
   def setStatusAction(campaignId: CampaignId, status: CampaignStatus): DBIO[CampaignId] =
     Schema.campaigns
       .filter(_.id === campaignId).map(_.status).update(status).map(_ => campaignId)

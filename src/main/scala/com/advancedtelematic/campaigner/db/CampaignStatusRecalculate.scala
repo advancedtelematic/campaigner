@@ -29,9 +29,9 @@ class CampaignStatusRecalculate()(implicit db: Database, ec: ExecutionContext, m
 
     Source.fromPublisher(source).mapAsyncUnordered(3) { campaignId =>
       db.run {
-        statusTransition.calculateCampaignStatus(campaignId).map {
-          case Some(status) => status
-          case _ => CampaignStatus.launched
+        statusTransition.isFinished(campaignId).map {
+          case true => CampaignStatus.finished
+          case false => CampaignStatus.launched
         }.flatMap { newStatus =>
           campaignRepo.setStatusAction(campaignId, newStatus).map(_ => newStatus)
         }

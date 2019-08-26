@@ -1,13 +1,7 @@
-
-import com.typesafe.sbt.SbtGit.GitKeys._
-import com.typesafe.sbt.packager.SettingsHelper._
-import sbtrelease._
-import sbtrelease.ReleaseStateTransformations.{setReleaseVersion => _, _}
-import sbt.Keys._
-import sbt._
 import com.typesafe.sbt.SbtNativePackager.Docker
-
+import sbt.Keys._
 import sbtrelease.ReleasePlugin.autoImport._
+import sbtrelease.ReleaseStateTransformations.checkSnapshotDependencies
 
 object Release {
 

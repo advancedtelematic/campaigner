@@ -4,7 +4,6 @@ import java.time.Instant
 
 import akka.NotUsed
 import akka.stream.scaladsl.Source
-import cats.syntax.option._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
@@ -319,33 +318,31 @@ protected [db] class CampaignStatusTransition(implicit db: Database, ec: Executi
   protected[db] def updateToCalculatedStatus(campaignId: CampaignId): DBIO[Unit] =
     for {
       campaign <- campaignRepo.findAction(campaignId)
-      maybeStatus <- calculateCampaignStatus(campaignId, Some(campaign.status))
-      _ <-  maybeStatus match {
-        case Some(status) =>
-          campaignRepo.setStatusAction(campaignId, status)
-        case _ =>
-          DBIO.successful(())
-      }
+      campaignedFinished <- isFinished(campaignId, Some(campaign.status))
+      _ <- if (campaignedFinished) campaignRepo.setStatusAction(campaignId, CampaignStatus.finished)
+           else DBIO.successful(())
     } yield ()
 
-  protected [db] def calculateCampaignStatus(
-      campaign: CampaignId, currentCampaignStatus: Option[CampaignStatus] = None): DBIO[Option[CampaignStatus]] = {
-    def devicesWithStatus(statuses: Set[DeviceStatus]): DBIO[Long] =
-      campaignRepo.countDevices(Set(campaign))(_.inSet(statuses))
+  protected[db] def isFinished(campaignId: CampaignId,
+                               currentCampaignStatus: Option[CampaignStatus] = None): DBIO[Boolean] = {
+    val deviceCountByStatus = Schema.deviceUpdates
+      .filter(_.campaignId === campaignId)
+      .groupBy(_.status)
+      .map(t => t._1 -> t._2.length)
+      .result
+      .map(_.toMap)
 
     for {
-      affected <- devicesWithStatus(DeviceStatus.values - DeviceStatus.requested - DeviceStatus.rejected)
-      finished <- devicesWithStatus(Set(DeviceStatus.successful, DeviceStatus.failed, DeviceStatus.cancelled))
-      cancelled <- devicesWithStatus(Set(DeviceStatus.cancelled))
-      requested <- devicesWithStatus(Set(DeviceStatus.requested))
-      total <- devicesWithStatus(DeviceStatus.values)
-      wasCampaignCancelled = currentCampaignStatus.exists(_ == CampaignStatus.cancelled)
-    } yield {
-      if (requested == 0 && affected == finished && !wasCampaignCancelled) {
-        CampaignStatus.finished.some
-      } else {
-        None
-      }
-    }
+      affected <- deviceCountByStatus
+        .map(_.filterKeys(k => k != DeviceStatus.requested && k != DeviceStatus.rejected))
+        .map(_.values.sum)
+      finished <- deviceCountByStatus
+        .map(_.filterKeys(k => k == DeviceStatus.successful || k == DeviceStatus.failed || k == DeviceStatus.cancelled))
+        .map(_.values.sum)
+      requested <- deviceCountByStatus
+        .map(_.filterKeys(k => k == DeviceStatus.requested))
+        .map(_.values.sum)
+      wasCampaignCancelled = currentCampaignStatus.contains(CampaignStatus.cancelled)
+    } yield !wasCampaignCancelled && requested == 0 && affected == finished
   }
 }

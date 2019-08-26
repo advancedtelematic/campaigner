@@ -27,7 +27,6 @@ import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.parser.parse
 import org.scalacheck.Arbitrary._
 import org.scalacheck.Gen
-import org.scalactic.source
 import org.scalatest._
 import org.scalatest.concurrent.Eventually
 import org.scalatest.prop.PropertyChecks
@@ -51,8 +50,7 @@ class CampaignResourceSpec
   val campaigns = Campaigns()
 
   def checkStats(id: CampaignId, campaignStatus: CampaignStatus, processed: Long = 0, affected: Long = 0,
-                 finished: Long = 0, failed: Long = 0, cancelled: Long = 0, successful: Long = 0)
-                (implicit pos: source.Position): Unit =
+                 finished: Long = 0, failed: Long = 0, cancelled: Long = 0, successful: Long = 0): Unit =
     Get(apiUri(s"campaigns/${id.show}/stats")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
       val campaignStats = responseAs[CampaignStats]
@@ -121,7 +119,7 @@ class CampaignResourceSpec
     campaigns.values should contain (id)
 
     val devices = deviceUpdateRepo.findAllByCampaign(id).futureValue
-    devices.toSet shouldBe devicesInGroups.values.flatten.toSet
+    devices shouldBe devicesInGroups.values.flatten.toSet
   }
 
   "POST/GET autoAccept campaign" should "create and return the created campaign" in {
