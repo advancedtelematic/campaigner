@@ -1,5 +1,8 @@
 package com.advancedtelematic.campaigner.http
 
+import java.time.Duration
+import java.time.temporal.ChronoUnit
+
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.ContentTypes
 import akka.http.scaladsl.model.StatusCodes._
@@ -534,7 +537,7 @@ class CampaignResourceSpec
         Nil,
         autoAccept = true
       )
-      retry.createdAt shouldBe retry.updatedAt
+      ChronoUnit.SECONDS.between(retry.createdAt, retry.updatedAt) should be <= Duration.ofSeconds(2).getSeconds
     }
   }
 
