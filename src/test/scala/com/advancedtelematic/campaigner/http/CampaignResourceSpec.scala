@@ -3,9 +3,8 @@ package com.advancedtelematic.campaigner.http
 import java.time.Duration
 import java.time.temporal.ChronoUnit
 
-import akka.http.scaladsl.model._
-import akka.http.scaladsl.model.ContentTypes
 import akka.http.scaladsl.model.StatusCodes._
+import akka.http.scaladsl.model.{ContentTypes, _}
 import akka.util.ByteString
 import cats.Eval
 import cats.data.NonEmptyList
@@ -49,7 +48,7 @@ class CampaignResourceSpec
 
   val campaigns = Campaigns()
 
-  def checkStats(id: CampaignId, campaignStatus: CampaignStatus, processed: Long = 0, affected: Long = 0,
+  def checkStats(id: CampaignId, campaignStatus: CampaignStatus, processed: Long = 1, affected: Long = 1,
                  finished: Long = 0, failed: Long = 0, cancelled: Long = 0, successful: Long = 0): Unit =
     Get(apiUri(s"campaigns/${id.show}/stats")).withHeaders(header) ~> routes ~> check {
       status shouldBe OK
@@ -152,6 +151,16 @@ class CampaignResourceSpec
     createCampaign(request) ~> routes ~> check {
       status shouldBe BadRequest
       responseAs[ErrorRepresentation].code shouldBe InvalidEntity
+    }
+  }
+
+  "POST /campaigns with groups that don't contain devices" should "fail with CampaignWithoutDevices" in {
+    val createUpdate = genCreateUpdate(genType = Gen.const(UpdateType.multi_target)).generate
+    val updateId = createUpdateOk(createUpdate)
+    val request = genCreateCampaign().map(_.copy(update = updateId)).generate
+    createCampaign(request) ~> routes ~> check {
+      status shouldBe BadRequest
+      responseAs[ErrorRepresentation].code shouldBe ErrorCodes.CampaignWithoutDevices
     }
   }
 
@@ -311,6 +320,7 @@ class CampaignResourceSpec
     val updateId = createUpdateOk(arbitrary[CreateUpdate].generate)
     val metadata = Seq(CreateCampaignMetadata(MetadataType.DESCRIPTION, "desc"), CreateCampaignMetadata(MetadataType.DESCRIPTION, "desc 2"))
     val createRequest = arbitrary[CreateCampaign].map(_.copy(update = updateId, metadata = Some(metadata))).generate
+    fakeRegistry.setGroup(createRequest.groups.head, Seq(arbitrary[DeviceId].generate))
 
     Post(apiUri("campaigns"), createRequest).withHeaders(header) ~> routes ~> check {
       status shouldBe Conflict
@@ -349,7 +359,7 @@ class CampaignResourceSpec
     val campaignsIdNames = names
       .map(Gen.const)
       .map(genCreateCampaign)
-      .map(createCampaignWithUpdateOk)
+      .map(createCampaignWithUpdateOk(_))
       .map(_._1)
       .map(getCampaignOk)
       .map(c => c.id -> c.name)
@@ -440,73 +450,76 @@ class CampaignResourceSpec
     } yield ()
 
     forAll(genCampaignCase) { mainCase =>
-      val (mainCampaignId, mainCampaign) = createCampaignWithUpdateOk(
-        genCreateCampaign().map(_.copy(groups = NonEmptyList.one(mainCase.groupId)))
-      )
-      val mainCampaignFailureCode = ResultCode("failure-code-main")
-      campaigns
-        .launch(mainCampaignId)
-        .flatMap(_ => conductCampaign(mainCampaignId, mainCase, mainCampaignFailureCode))
-        .futureValue
-
-      Get(apiUri(s"campaigns/${mainCampaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
-        status shouldBe OK
-
-        val campaignStats = responseAs[CampaignStats]
-        campaignStats.status shouldBe CampaignStatus.finished
-        campaignStats.finished shouldBe (mainCase.successfulDevices.size + mainCase.failedCount)
-        campaignStats.failed shouldBe mainCase.failedCount
-        campaignStats.cancelled shouldBe mainCase.cancelledDevices.size
-        campaignStats.processed shouldBe mainCase.processedCount
-        campaignStats.affected shouldBe mainCase.affectedCount
-
-        if (mainCase.failedDevices.nonEmpty) {
-          campaignStats.failures shouldBe Set(CampaignFailureStats(
-            code = mainCampaignFailureCode,
-            count = mainCase.failedCount,
-            retryStatus = RetryStatus.not_launched,
-          ))
-        }
-      }
-
-      if (mainCase.failedDevices.nonEmpty) {
-        val Seq(retriedS, retriedF, retriedC, notAffectedDevices) =
-          splitIntoGroupsRandomly(mainCase.failedDevices, 4)
-        val retryCase = CampaignCase(
-          successfulDevices = retriedS,
-          failedDevices = retriedF,
-          cancelledDevices = retriedC,
-          notAffectedDevices = notAffectedDevices
+      whenever(mainCase.processedCount > 0) {
+        val (mainCampaignId, _) = createCampaignWithUpdateOk(
+          genCreateCampaign().map(_.copy(groups = NonEmptyList.one(mainCase.groupId))),
+          Gen.const(mainCase.affectedDevices ++ mainCase.notAffectedDevices)
         )
-
-        val retryCampaignFailureCode = ResultCode("failure-code-retry")
-        val retryCampaignId = createAndLaunchRetryCampaignOk(mainCampaignId, RetryFailedDevices(mainCampaignFailureCode))
-        conductCampaign(retryCampaignId, retryCase, retryCampaignFailureCode).futureValue
+        val mainCampaignFailureCode = ResultCode("failure-code-main")
+        campaigns
+          .launch(mainCampaignId)
+          .flatMap(_ => conductCampaign(mainCampaignId, mainCase, mainCampaignFailureCode))
+          .futureValue
 
         Get(apiUri(s"campaigns/${mainCampaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
           status shouldBe OK
 
           val campaignStats = responseAs[CampaignStats]
           campaignStats.status shouldBe CampaignStatus.finished
-          campaignStats.finished shouldBe (
-            mainCase.successfulDevices.size + mainCase.failedDevices.size -
-              (retryCase.processedCount - retryCase.affectedCount + retryCase.cancelledDevices.size)
-            )
-          campaignStats.cancelled shouldBe (mainCase.cancelledDevices.size + retryCase.cancelledDevices.size)
+          campaignStats.finished shouldBe (mainCase.successfulDevices.size + mainCase.failedCount)
+          campaignStats.failed shouldBe mainCase.failedCount
+          campaignStats.cancelled shouldBe mainCase.cancelledDevices.size
           campaignStats.processed shouldBe mainCase.processedCount
-          campaignStats.affected shouldBe (
-            mainCase.affectedCount - (retryCase.processedCount - retryCase.affectedCount)
-          )
-          campaignStats.failed shouldBe (
-            mainCase.failedCount - retryCase.processedCount + retryCase.failedCount
+          campaignStats.affected shouldBe mainCase.affectedCount
+
+          if (mainCase.failedDevices.nonEmpty) {
+            campaignStats.failures shouldBe Set(CampaignFailureStats(
+              code = mainCampaignFailureCode,
+              count = mainCase.failedCount,
+              retryStatus = RetryStatus.not_launched
+            ))
+          }
+        }
+
+        if (mainCase.failedDevices.nonEmpty) {
+          val Seq(retriedS, retriedF, retriedC, notAffectedDevices) =
+            splitIntoGroupsRandomly(mainCase.failedDevices, 4)
+          val retryCase = CampaignCase(
+            successfulDevices = retriedS,
+            failedDevices = retriedF,
+            cancelledDevices = retriedC,
+            notAffectedDevices = notAffectedDevices
           )
 
-          if (retryCase.failedDevices.nonEmpty) {
-            campaignStats.failures shouldBe Set(CampaignFailureStats(
-              code = retryCampaignFailureCode,
-              count = retryCase.failedCount,
-              retryStatus = RetryStatus.not_launched,
-            ))
+          val retryCampaignFailureCode = ResultCode("failure-code-retry")
+          val retryCampaignId = createAndLaunchRetryCampaignOk(mainCampaignId, RetryFailedDevices(mainCampaignFailureCode))
+          conductCampaign(retryCampaignId, retryCase, retryCampaignFailureCode).futureValue
+
+          Get(apiUri(s"campaigns/${mainCampaignId.show}/stats")).withHeaders(header) ~> routes ~> check {
+            status shouldBe OK
+
+            val campaignStats = responseAs[CampaignStats]
+            campaignStats.status shouldBe CampaignStatus.finished
+            campaignStats.finished shouldBe (
+              mainCase.successfulDevices.size + mainCase.failedDevices.size -
+                (retryCase.processedCount - retryCase.affectedCount + retryCase.cancelledDevices.size)
+              )
+            campaignStats.cancelled shouldBe (mainCase.cancelledDevices.size + retryCase.cancelledDevices.size)
+            campaignStats.processed shouldBe mainCase.processedCount
+            campaignStats.affected shouldBe (
+              mainCase.affectedCount - (retryCase.processedCount - retryCase.affectedCount)
+              )
+            campaignStats.failed shouldBe (
+              mainCase.failedCount - retryCase.processedCount + retryCase.failedCount
+              )
+
+            if (retryCase.failedDevices.nonEmpty) {
+              campaignStats.failures shouldBe Set(CampaignFailureStats(
+                code = retryCampaignFailureCode,
+                count = retryCase.failedCount,
+                retryStatus = RetryStatus.not_launched,
+              ))
+            }
           }
         }
       }

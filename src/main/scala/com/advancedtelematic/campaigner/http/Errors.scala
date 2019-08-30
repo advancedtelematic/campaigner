@@ -20,6 +20,7 @@ object ErrorCodes {
   val ConflictingUpdate = ErrorCode("update_already_exists")
   val TimeoutFetchingUpdates = ErrorCode("timeout_fetching_updates")
   val CampaignDoesNotRequireApproval = ErrorCode("campaign_does_not_require_approval")
+  val CampaignWithoutDevices = ErrorCode("campaign_without_devices")
 }
 
 object Errors {
@@ -83,5 +84,11 @@ object Errors {
     ErrorCodes.CampaignDoesNotRequireApproval,
     StatusCodes.MethodNotAllowed,
     "This device update cannot be canceled because it does not come from a campaign that requires approval."
+  )
+
+  val CampaignWithoutDevices = RawError(
+    ErrorCodes.CampaignWithoutDevices,
+    StatusCodes.BadRequest,
+    "None of the groups selected for the campaign contains any device."
   )
 }

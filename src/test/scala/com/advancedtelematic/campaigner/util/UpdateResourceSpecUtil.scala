@@ -5,7 +5,7 @@ import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
-import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.test.DatabaseSpec
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import org.scalacheck.Arbitrary._
@@ -28,11 +28,16 @@ trait UpdateResourceSpecUtil {
     }
   }
 
-  def createCampaignWithUpdateOk(gen: Gen[CreateCampaign] = genCreateCampaign()) = {
-    val createUpdate = genCreateUpdate().map(cu => cu.copy(updateSource = UpdateSource(cu.updateSource.id, UpdateType.multi_target))).generate
-    val updateId = createUpdateOk(createUpdate)
-    val createCampaign = gen.map(_.copy(update = updateId)).generate
-    createCampaignOk(createCampaign) -> createCampaign
+  def createCampaignWithUpdateOk(createCampaignGen: Gen[CreateCampaign] = genCreateCampaign(),
+                                 devicesGen: Gen[Seq[DeviceId]] = arbitrary[DeviceId].map(Seq(_))): (CampaignId, CreateCampaign) = {
+    val createCampaign = for {
+      createUpdate <- genCreateUpdate(genType = Gen.const(UpdateType.multi_target))
+      updateId = createUpdateOk(createUpdate)
+      createCampaign <- createCampaignGen.map(_.copy(update = updateId))
+      devices <- devicesGen
+      _ = fakeRegistry.setGroup(createCampaign.groups.head, devices)
+    } yield createCampaign
+    createCampaign.map(cc => createCampaignOk(cc) -> cc).generate
   }
 }
 

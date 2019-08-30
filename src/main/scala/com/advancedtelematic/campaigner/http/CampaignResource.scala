@@ -37,10 +37,12 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
   def createCampaign(ns: Namespace, request: CreateCampaign): Future[CampaignId] = {
     val campaign = request.mkCampaign(ns)
     val metadata = request.mkCampaignMetadata(campaign.id)
-    for {
-      devices <- fetchDevicesInGroups(ns, request.groups)
-      campaignId <- campaigns.create(campaign, request.groups.toList.toSet, devices, metadata)
-    } yield campaignId
+    fetchDevicesInGroups(ns, request.groups).flatMap {
+      case devices if devices.isEmpty =>
+        Future.failed(Errors.CampaignWithoutDevices)
+      case devices =>
+        campaigns.create(campaign, request.groups.toList.toSet, devices, metadata)
+    }
   }
 
   def searchCampaigns(ns: Namespace): Route =
