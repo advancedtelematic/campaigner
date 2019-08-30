@@ -9,7 +9,6 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.http.HttpOps.HttpRequestOps
-import com.advancedtelematic.libats.http.ServiceHttpClient
 import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
 import com.advancedtelematic.libats.http.tracing.TracingHttpClient
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId

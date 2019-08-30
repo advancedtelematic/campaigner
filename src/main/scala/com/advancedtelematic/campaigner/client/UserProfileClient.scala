@@ -7,7 +7,6 @@ import com.advancedtelematic.campaigner.data.Codecs.uriDecoder
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.http.Errors.RemoteServiceError
 import com.advancedtelematic.libats.http.HttpOps.HttpRequestOps
-import com.advancedtelematic.libats.http.ServiceHttpClient
 import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
 import com.advancedtelematic.libats.http.tracing.TracingHttpClient
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._

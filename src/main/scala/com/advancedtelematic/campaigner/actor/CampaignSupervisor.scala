@@ -58,7 +58,7 @@ class CampaignSupervisor(director: DirectorClient,
     // pick up campaigns where they left
     campaigns
       .remainingCampaigns()
-      .map(x => ResumeCampaigns(x.toSet))
+      .map(ResumeCampaigns)
       .pipeTo(self)
 
     // pick up cancelled campaigns where they left
@@ -102,7 +102,7 @@ class CampaignSupervisor(director: DirectorClient,
       log.debug(s"picking up campaigns")
       campaigns
         .freshCampaigns()
-        .map(x => ResumeCampaigns(x.toSet))
+        .map(ResumeCampaigns)
         .pipeTo(self)
 
     case CancelCampaigns(cs) if cs.nonEmpty =>

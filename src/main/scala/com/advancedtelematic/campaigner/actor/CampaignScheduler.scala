@@ -49,10 +49,8 @@ class CampaignScheduler(director: DirectorClient,
     self ! NextBatch
 
   private def schedule(deviceIds: Set[DeviceId]): Future[BatchComplete] = for {
-    StartUpdateResult(accepted, scheduled, rejected) <-
-      deviceUpdateProcess.startUpdateFor(deviceIds, campaign)
-    _ <- campaigns.updateCampaignAndDevicesStatuses(
-      campaign, accepted, scheduled, rejected)
+    StartUpdateResult(accepted, scheduled, rejected) <- deviceUpdateProcess.startUpdateFor(deviceIds, campaign)
+    _ <- campaigns.updateCampaignAndDevicesStatuses(campaign, accepted, scheduled, rejected)
   } yield BatchComplete(accepted ++ scheduled, rejected)
 
   def receive: Receive = {
@@ -69,7 +67,8 @@ class CampaignScheduler(director: DirectorClient,
       schedule(devices).pipeTo(self)
 
     case BatchToSchedule(devices) if devices.isEmpty =>
-      campaigns.updateStatus(campaign.id)
+      campaigns
+        .updateStatus(campaign.id)
         .transform(_ => Success(CampaignComplete(campaign.id)))
         .pipeTo(self)
 
@@ -78,7 +77,7 @@ class CampaignScheduler(director: DirectorClient,
       scheduler.scheduleOnce(delay, self, NextBatch)
 
     case msg @ CampaignComplete(campaignId) =>
-      log.debug(s"Completed campaign: ${campaignId}")
+      log.debug(s"Completed campaign: $campaignId")
       parent ! msg
       context.stop(self)
 

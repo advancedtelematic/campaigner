@@ -16,3 +16,5 @@ project/target
 .idea/
 
 campaigner_entrypoint.d
+
+.java-version

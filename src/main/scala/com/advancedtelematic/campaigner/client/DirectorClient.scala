@@ -7,7 +7,6 @@ import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.DataType.ExternalUpdateId
 import com.advancedtelematic.libats.data.DataType.{CorrelationId, MultiTargetUpdateId, Namespace}
 import com.advancedtelematic.libats.http.HttpOps.HttpRequestOps
-import com.advancedtelematic.libats.http.ServiceHttpClient
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import com.advancedtelematic.libats.codecs.CirceAnyVal._
 import java.util.UUID
