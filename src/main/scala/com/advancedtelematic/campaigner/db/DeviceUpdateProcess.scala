@@ -50,11 +50,13 @@ class DeviceUpdateProcess(director: DirectorClient)(implicit db: Database, ec: E
         }
       }
 
-      for {
+      val a = for {
         accepted <- acceptDevices
         scheduled <- scheduleDevices
-        rejected = devices -- accepted -- scheduled
+        rejected = devices -- accepted -- scheduled // HERE?!
       } yield StartUpdateResult(accepted, scheduled, rejected)
+      a.foreach(b => _logger.info(s"### [2] cid: ${campaign.id.uuid.toString} SUR: $b"))
+      a
     }
   }
 

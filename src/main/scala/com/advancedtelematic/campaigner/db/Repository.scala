@@ -21,6 +21,7 @@ import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import java.util.UUID
 
+import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
 import slick.jdbc.GetResult
 
@@ -124,18 +125,19 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
   def persistManyAction(updates: Seq[DeviceUpdate]): DBIO[Unit] =
     DBIO.sequence(updates.map(Schema.deviceUpdates.insertOrUpdate)).transactionally.map(_ => ())
 
+  private lazy val _log = LoggerFactory.getLogger(this.getClass)
+
   /**
    * Given a set of campaigns, finds device updates happened in them, groups them
    * by status and counts.
    */
-  def countByStatus(campaignIds: Set[CampaignId]): DBIO[Map[DeviceStatus, Int]] = {
+  def countByStatus(campaignIds: Set[CampaignId]): DBIO[Map[DeviceStatus, Int]] =
     Schema.deviceUpdates
       .filter(_.campaignId.inSet(campaignIds))
       .groupBy(_.status)
       .map { case (st, upds) => (st, upds.size) }
       .result
       .map(_.toMap)
-  }
 }
 
 protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext) {

@@ -15,6 +15,7 @@ import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
+import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -151,6 +152,8 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       .map(_.toSet)
   }
 
+  private lazy val _log = LoggerFactory.getLogger(this.getClass)
+
   /**
    * Calculates campaign-wide statistic counters, also taking retry campaigns
    * into account if any exist.
@@ -163,15 +166,18 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       cancelled: Long,
       finished: Long)
 
-    def processCounts(counts: Map[DeviceStatus, Int]): Counts = Counts(
-      processed = counts.values.sum.toLong,
-      affected = counts.filterKeys(_ != DeviceStatus.rejected).values.sum.toLong,
-      rejected = counts.getOrElse(DeviceStatus.rejected, 0).toLong,
-      cancelled = counts.getOrElse(DeviceStatus.cancelled, 0).toLong,
-      finished =
-        counts.getOrElse(DeviceStatus.successful, 0).toLong +
-        counts.getOrElse(DeviceStatus.failed, 0).toLong
-    )
+    def processCounts(counts: Map[DeviceStatus, Int]): Counts = {
+      _log.info(s"### [8] cid: ${campaignId.uuid.toString} - counts: $counts")
+      Counts(
+        processed = counts.values.sum.toLong,
+        affected = counts.filterKeys(_ != DeviceStatus.rejected).values.sum.toLong, // HERE?!
+        rejected = counts.getOrElse(DeviceStatus.rejected, 0).toLong,
+        cancelled = counts.getOrElse(DeviceStatus.cancelled, 0).toLong,
+        finished =
+          counts.getOrElse(DeviceStatus.successful, 0).toLong +
+            counts.getOrElse(DeviceStatus.failed, 0).toLong
+      )
+    }
 
     def processFailures(failedDevices: Set[DeviceUpdate], retryCampaigns: Set[Campaign]): Set[CampaignFailureStats] = {
       val missingErrorCode = ResultCode("MISSING_ERROR_CODE")
@@ -202,10 +208,13 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       failedDevices <- findFailedDeviceUpdatesAction(retryCampaignIds + campaignId)
       mainCnt <- deviceUpdateRepo.countByStatus(Set(campaignId)).map(processCounts)
       retryCnt <- deviceUpdateRepo.countByStatus(retryCampaignIds).map(processCounts)
+      _ = _log.info(s"### [3] cid: ${campaignId.uuid.toString} - mainCnt: $mainCnt")
+      _ = _log.info(s"### [4] cid: ${campaignId.uuid.toString} - retryCnt: $retryCnt")
     } yield {
       val finished = mainCnt.finished - retryCnt.rejected - retryCnt.cancelled
       val failed = failedDevices.size.toLong
       val failures = processFailures(failedDevices, retryCampaigns)
+      _log.info(s"### [5] cid: ${campaignId.uuid.toString} - finished: $finished - failed: $failed - failures: $failures")
 
       CampaignStats(
         campaign = campaignId,
@@ -284,10 +293,12 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
       acceptedDeviceIds: Set[DeviceId],
       scheduledDeviceIds: Set[DeviceId],
       rejectedDeviceIds: Set[DeviceId]): Future[Unit] = {
-    def persistDeviceUpdates(deviceIds: Set[DeviceId], status: DeviceStatus): DBIO[Unit] =
+    def persistDeviceUpdates(deviceIds: Set[DeviceId], status: DeviceStatus): DBIO[Unit] = {
+      _log.info(s"### [1] cid: ${campaign.id.uuid.toString} - status: $status - devices: $deviceIds")
       deviceUpdateRepo.persistManyAction(deviceIds.toSeq.map(deviceId =>
         DeviceUpdate(campaign.id, campaign.updateId, deviceId, status)
       ))
+    }
 
     val action = for {
       _ <- persistDeviceUpdates(acceptedDeviceIds, DeviceStatus.accepted)
@@ -304,6 +315,8 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
 protected [db] class CampaignStatusTransition(implicit db: Database, ec: ExecutionContext)
     extends CampaignSupport
     with CancelTaskSupport  {
+
+  private lazy val _log = LoggerFactory.getLogger(this.getClass)
 
   def devicesFinished(campaignId: CampaignId): DBIO[Unit] =
     updateToCalculatedStatus(campaignId)
@@ -343,6 +356,8 @@ protected [db] class CampaignStatusTransition(implicit db: Database, ec: Executi
         .map(_.filterKeys(k => k == DeviceStatus.requested))
         .map(_.values.sum)
       wasCampaignCancelled = currentCampaignStatus.contains(CampaignStatus.cancelled)
+      _ = _log.info(s"### [6] cid: ${campaignId.uuid.toString} - deviceCountByStatus: $deviceCountByStatus")
+      _ = _log.info(s"### [7] cid: ${campaignId.uuid.toString} - affected: $affected - finished: $finished - requested: $requested - isFinished: ${!wasCampaignCancelled && requested == 0 && affected == finished}")
     } yield !wasCampaignCancelled && requested == 0 && affected == finished
   }
 }
