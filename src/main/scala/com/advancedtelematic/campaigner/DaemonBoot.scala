@@ -12,7 +12,7 @@ import com.advancedtelematic.libats.messaging.{BusListenerMetrics, MessageListen
 import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceEventMessage, DeviceUpdateEvent}
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.slick.monitoring.{DatabaseMetrics, DbHealthResource}
-import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport
+import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
 
 object DaemonBoot extends BootApp
   with Settings
@@ -22,11 +22,12 @@ object DaemonBoot extends BootApp
   with MetricsSupport
   with DatabaseMetrics
   with MessageListenerSupport
-  with InfluxdbMetricsReporterSupport
+  with PrometheusMetricsSupport
   with ServiceHttpClientSupport {
 
   import com.advancedtelematic.libats.http.LogDirectives._
   import com.advancedtelematic.libats.http.VersionDirectives._
+  import akka.http.scaladsl.server.Directives._
 
   implicit val _db = db
 
@@ -49,6 +50,7 @@ object DaemonBoot extends BootApp
   startListener[DeviceEventMessage](new DeviceEventListener(director))
 
   val routes: Route = (versionHeaders(version) & logResponseMetrics(projectName)) {
+    prometheusMetricsRoutes ~
     DbHealthResource(versionMap, healthMetrics = Seq(new BusListenerMetrics(metricRegistry))).route
   }
 
