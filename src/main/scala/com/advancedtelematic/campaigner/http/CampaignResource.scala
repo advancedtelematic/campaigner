@@ -49,11 +49,17 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
     parameters((
       'status.as[CampaignStatus].?,
       'nameContains.as[String].?,
-      'sortBy.as[SortBy].?,
+      'withErrors.as[Boolean].?,
+      'sortBy.as[SortBy] ? (SortBy.CreatedAt : SortBy),
       'offset.as[Long] ? 0L,
-      'limit.as[Long] ? 50L)) {
-      (status, nameContains, sortBy, offset, limit) =>
-        complete(campaigns.allCampaigns(ns, sortBy.getOrElse(SortBy.CreatedAt), offset, limit, status, nameContains))
+      'limit.as[Long] ? 50L)).as(SearchCampaignParams) { params: SearchCampaignParams =>
+      val f = params.withErrors match {
+        case Some(true) =>
+          campaigns.findCampaignsWithErrors(ns, params.sortBy, params.offset, params.limit)
+        case _ =>
+          campaigns.findCampaigns(ns, params.sortBy, params.offset, params.limit, params.status, params.nameContains)
+      }
+      complete(f)
     }
 
   /**

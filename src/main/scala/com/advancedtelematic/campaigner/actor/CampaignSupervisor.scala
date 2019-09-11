@@ -1,7 +1,7 @@
 package com.advancedtelematic.campaigner.actor
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props, Status}
-import akka.pattern.{Backoff, BackoffSupervisor}
+import akka.pattern.{BackoffOpts, BackoffSupervisor}
 import akka.stream.Materializer
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
@@ -80,7 +80,7 @@ class CampaignSupervisor(director: DirectorClient,
     val childProps = CampaignScheduler.props(director, campaign, delay, batchSize)
 
     val props = BackoffSupervisor.props(
-      Backoff.onFailure(
+      BackoffOpts.onFailure(
         childProps,
         childName = s"campaignScheduler-${campaign.id.show}",
         minBackoff = 3.seconds,

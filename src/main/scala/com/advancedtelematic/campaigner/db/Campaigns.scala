@@ -115,7 +115,10 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
         CampaignStatus.values.map(s => s -> counts.getOrElse(s, 0)).toMap
       }
 
-  def allCampaigns(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, status: Option[CampaignStatus], nameContains: Option[String]): Future[PaginationResult[Campaign]] =
+  def findCampaignsWithErrors(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long): Future[PaginationResult[Campaign]] =
+    campaignRepo.allWithErrors(ns, sortBy, offset, limit)
+
+  def findCampaigns(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, status: Option[CampaignStatus], nameContains: Option[String]): Future[PaginationResult[Campaign]] =
     campaignRepo.all(ns, sortBy, offset, limit, status, nameContains)
 
   def findNamespaceCampaign(ns: Namespace, campaignId: CampaignId): Future[Campaign] =

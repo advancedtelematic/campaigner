@@ -35,12 +35,14 @@ object Generators {
     now      = Instant.now()
   } yield Campaign(ns, id, n, update, CampaignStatus.prepared, now, now, None, None)
 
-  def genCreateCampaign(genName: Gen[String] = arbitrary[String]): Gen[CreateCampaign] = for {
-    n   <- genName
-    update <- arbitrary[UpdateId]
-    gs <- arbitrary[NonEmptyList[GroupId]]
-    meta   <- Gen.option(genCampaignMetadata.map(List(_)))
-  } yield CreateCampaign(n, update, gs, meta)
+  def genCreateCampaign(genName: Gen[String] = arbitrary[String],
+                        genGroupId: Gen[NonEmptyList[GroupId]] = arbitrary[NonEmptyList[GroupId]]): Gen[CreateCampaign] =
+    for {
+      n   <- genName
+      update <- arbitrary[UpdateId]
+      gs <- genGroupId
+      meta   <- Gen.option(genCampaignMetadata.map(List(_)))
+    } yield CreateCampaign(n, update, gs, meta)
 
   val genUpdateCampaign: Gen[UpdateCampaign] = for {
     n   <- arbitrary[String].suchThat(!_.isEmpty)
@@ -97,6 +99,28 @@ object Generators {
     failureDescription <- Gen.alphaStr.map("FAILURE-DESCRIPTION-" + _).map(ResultDescription)
   } yield (deviceId, deviceOemId, failureCode, failureDescription)
 
+  case class CampaignCase(successfulDevices: Seq[DeviceId],
+                          failedDevices: Seq[DeviceId],
+                          cancelledDevices: Seq[DeviceId],
+                          notAffectedDevices: Seq[DeviceId]) {
+    val groupId = genGroupId.sample.get
+    val affectedDevices = successfulDevices ++ failedDevices ++ cancelledDevices
+    val affectedCount = affectedDevices.size.toLong
+    val notAffectedCount = notAffectedDevices.size.toLong
+    val processedCount = affectedCount + notAffectedCount
+    val failedCount = failedDevices.size.toLong
+
+    override def toString: String =
+      s"CampaignCase(s=${successfulDevices.size}, f=${failedDevices.size}, c=${cancelledDevices.size}, a=$affectedCount, n=$notAffectedCount, p=$processedCount)"
+  }
+
+  implicit val genCampaignCase: Gen[CampaignCase] = for {
+    successfulDevices <- Gen.listOf(genDeviceId)
+    failedDevices <- Gen.listOf(genDeviceId)
+    cancelledDevices <- Gen.listOf(genDeviceId)
+    notAffectedDevices <- Gen.listOf(genDeviceId)
+  } yield CampaignCase(successfulDevices, failedDevices, cancelledDevices, notAffectedDevices)
+
   implicit lazy val arbCampaignId: Arbitrary[CampaignId] = Arbitrary(genCampaignId)
   implicit lazy val arbGroupId: Arbitrary[GroupId] = Arbitrary(genGroupId)
   implicit lazy val arbDeviceId: Arbitrary[DeviceId] = Arbitrary(genDeviceId)
@@ -110,5 +134,6 @@ object Generators {
   implicit lazy val arbMetadataType: Arbitrary[MetadataType] = Arbitrary(genMetadataType)
   implicit lazy val arbCreateUpdate: Arbitrary[CreateUpdate] = Arbitrary(genCreateUpdate())
   implicit lazy val arbNonEmptyGroupIdList: Arbitrary[NonEmptyList[GroupId]] = Arbitrary(genNonEmptyGroupIdList)
+  implicit lazy val arbCampaignCase: Arbitrary[Seq[CampaignCase]] = Arbitrary(Gen.resize(10, Gen.listOf(genCampaignCase)))
 
 }
