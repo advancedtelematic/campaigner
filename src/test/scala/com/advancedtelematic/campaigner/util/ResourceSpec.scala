@@ -73,16 +73,29 @@ trait ResourceSpec extends ScalatestRouteTest
       responseAs[GetCampaign]
     }
 
-  def getCampaignsOk(campaignStatus: Option[CampaignStatus] = None, nameContains: Option[String] = None, sortBy: Option[SortBy] = None)
-                    (implicit pos: source.Position): PaginationResult[CampaignId] = {
-    val m = List("status" -> campaignStatus, "nameContains" -> nameContains, "sortBy" -> sortBy)
-      .collect { case (k, Some(v)) => k -> v.toString }.toMap
+  def getCampaigns(campaignStatus: Option[CampaignStatus] = None,
+                   nameContains: Option[String] = None,
+                   sortBy: Option[SortBy] = None,
+                   withErrors: Option[Boolean] = None,
+                  ): HttpRequest = {
+    val m = Seq(
+      "status" -> campaignStatus,
+      "nameContains" -> nameContains,
+      "sortBy" -> sortBy,
+      "withErrors" -> withErrors,
+    ).collect { case (k, Some(v)) => k -> v.toString }.toMap
+    Get(apiUri("campaigns").withQuery(Query(m))).withHeaders(header)
+  }
 
-    Get(apiUri("campaigns").withQuery(Query(m))).withHeaders(header) ~> routes ~> check {
+  def getCampaignsOk(campaignStatus: Option[CampaignStatus] = None,
+                     nameContains: Option[String] = None,
+                     sortBy: Option[SortBy] = None,
+                     withErrors: Option[Boolean] = None,
+                    ): PaginationResult[CampaignId] =
+    getCampaigns(campaignStatus, nameContains, sortBy, withErrors) ~> routes ~> check {
       status shouldBe OK
       responseAs[PaginationResult[Campaign]].map(_.id)
     }
-  }
 
   def getFailedExport(campaignId: CampaignId, failureCode: ResultCode): HttpRequest = {
     val q = Query("failureCode" -> failureCode.value)

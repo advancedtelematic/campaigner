@@ -9,6 +9,7 @@ import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTas
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
 import com.advancedtelematic.campaigner.data.DataType.RetryStatus.RetryStatus
+import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
@@ -120,6 +121,20 @@ object DataType {
   }
 
   final case class UpdateCampaign(name: String, metadata: Option[Seq[CreateCampaignMetadata]] = None)
+
+  final case class SearchCampaignParams(status: Option[CampaignStatus],
+                                        nameContains: Option[String],
+                                        withErrors: Option[Boolean],
+                                        sortBy: SortBy,
+                                        offset: Long,
+                                        limit: Long,
+                                       ) {
+    if (withErrors.isDefined) {
+      require(withErrors.get, "Invalid parameters: only value 'true' is supported for parameter 'withErrors'.")
+      require(status.isEmpty, "Invalid parameters: 'status' must be empty when searching by 'withErrors'.")
+      require(nameContains.isEmpty, "Invalid parameters: 'nameContains' must be empty when searching by 'withErrors'.")
+    }
+  }
 
   final case class CampaignStats(
     campaign: CampaignId,

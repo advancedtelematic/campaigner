@@ -20,7 +20,7 @@ import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns, DeviceUp
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec, UpdateResourceSpecUtil}
 import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
 import com.advancedtelematic.libats.data.ErrorCodes.InvalidEntity
-import com.advancedtelematic.libats.data.ErrorRepresentation
+import com.advancedtelematic.libats.data.{ErrorRepresentation, PaginationResult}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.parser.parse
@@ -46,7 +46,15 @@ class CampaignResourceSpec
 
   implicit val defaultPatience = PatienceConfig(timeout = 5 seconds)
 
-  val campaigns = Campaigns()
+  private val campaigns = Campaigns()
+
+  def conductCampaign(campaignId: CampaignId, campaignCase: CampaignCase, failureCode: ResultCode): Future[Unit] = for {
+    _ <- campaigns.scheduleDevices(campaignId, campaignCase.affectedDevices)
+    _ <- campaigns.rejectDevices(campaignId, campaignCase.notAffectedDevices)
+    _ <- campaigns.cancelDevices(campaignId, campaignCase.cancelledDevices)
+    _ <- campaigns.failDevices(campaignId, campaignCase.failedDevices, failureCode, ResultDescription("failure-description-1"))
+    _ <- campaigns.succeedDevices(campaignId, campaignCase.successfulDevices, ResultCode("success-code-1"), ResultDescription("success-description-1"))
+  } yield ()
 
   def checkStats(id: CampaignId, campaignStatus: CampaignStatus, processed: Long = 1, affected: Long = 1,
                  finished: Long = 0, failed: Long = 0, cancelled: Long = 0, successful: Long = 0): Unit =
@@ -358,7 +366,7 @@ class CampaignResourceSpec
     val names = Seq("aabb", "baaxbc", "a123ba", "cba3b")
     val campaignsIdNames = names
       .map(Gen.const)
-      .map(genCreateCampaign)
+      .map(genCreateCampaign(_))
       .map(createCampaignWithUpdateOk(_))
       .map(_._1)
       .map(getCampaignOk)
@@ -372,6 +380,55 @@ class CampaignResourceSpec
       val resultNames = campaignsIdNames.filterKeys(resultIds.contains).values
       resultNames.size shouldBe expected.size
       resultNames should contain allElementsOf expected
+    }
+  }
+
+  "GET /campaigns?withErrors=true" should "return only campaigns with errors" in {
+    forAll { campaignCases: Seq[CampaignCase] =>
+
+      val campaignIdsAndCases = campaignCases.map { cc =>
+        val (cid, _) = createCampaignWithUpdateOk(
+          genCreateCampaign(genGroupId = Gen.const(NonEmptyList.one(cc.groupId))),
+          Gen.const(cc.affectedDevices ++ cc.notAffectedDevices)
+        )
+        cid -> cc
+      }
+
+      val failureCode = ResultCode("failure-code")
+      campaignIdsAndCases.foreach { case (cid, cc) =>
+        campaigns
+          .launch(cid)
+          .flatMap(_ => conductCampaign(cid, cc, failureCode))
+          .futureValue
+      }
+
+      getCampaigns(withErrors = Some(true)) ~> routes ~> check {
+        status shouldBe OK
+        val cids = responseAs[PaginationResult[Campaign]].values.map(_.id)
+        cids should contain allElementsOf campaignIdsAndCases.filter(_._2.failedCount > 0).map(_._1)
+        cids should contain noElementsOf campaignIdsAndCases.filter(_._2.failedCount == 0).map(_._1)
+      }
+    }
+  }
+
+  "GET /campaigns?withErrors=false" should "fail with a BadRequest" in {
+    getCampaigns(withErrors = Some(false)) ~> routes ~> check {
+      status shouldBe BadRequest
+      responseAs[ErrorRepresentation].description should include ("only value 'true' is supported for parameter 'withErrors'")
+    }
+  }
+
+  "GET /campaigns?status=<string>&withErrors=<string>" should "fail with a BadRequest" in {
+    getCampaigns(campaignStatus = Some(CampaignStatus.prepared), withErrors = Some(true)) ~> routes ~> check {
+      status shouldBe BadRequest
+      responseAs[ErrorRepresentation].description should include ("'status' must be empty when searching by 'withErrors'")
+    }
+  }
+
+  "GET /campaigns?nameContains=<string>&withErrors=<string>" should "fail with a BadRequest" in {
+    getCampaigns(nameContains = Gen.some(Gen.alphaNumStr).generate, withErrors = Some(true)) ~> routes ~> check {
+      status shouldBe BadRequest
+      responseAs[ErrorRepresentation].description should include ("'nameContains' must be empty when searching by 'withErrors'")
     }
   }
 
@@ -416,39 +473,6 @@ class CampaignResourceSpec
   }
 
   "GET /campaigns/:id/stats" should "return correct statistics" in {
-    val campaigns = Campaigns()
-
-    case class CampaignCase(
-        successfulDevices: Seq[DeviceId],
-        failedDevices: Seq[DeviceId],
-        cancelledDevices: Seq[DeviceId],
-        notAffectedDevices: Seq[DeviceId]) {
-      val groupId = genGroupId.generate
-      val affectedDevices = successfulDevices ++ failedDevices ++ cancelledDevices
-      val affectedCount = affectedDevices.size.toLong
-      val notAffectedCount = notAffectedDevices.size.toLong
-      val processedCount = affectedCount + notAffectedCount
-      val failedCount = failedDevices.size.toLong
-
-      override def toString: String =
-        s"CampaignCase(s=${successfulDevices.size}, f=${failedDevices.size}, c=${cancelledDevices.size}, a=$affectedCount, n=$notAffectedCount, p=$processedCount)"
-    }
-
-    def genCampaignCase: Gen[CampaignCase] = for {
-      successfulDevices <- Gen.listOf(genDeviceId)
-      failedDevices <- Gen.listOf(genDeviceId)
-      cancelledDevices <- Gen.listOf(genDeviceId)
-      notAffectedDevices <- Gen.listOf(genDeviceId)
-    } yield CampaignCase(successfulDevices, failedDevices, cancelledDevices, notAffectedDevices)
-
-    def conductCampaign(campaignId: CampaignId, campaignCase: CampaignCase, failureCode: ResultCode): Future[Unit] = for {
-      _ <- campaigns.scheduleDevices(campaignId, campaignCase.affectedDevices)
-      _ <- campaigns.rejectDevices(campaignId, campaignCase.notAffectedDevices)
-      _ <- campaigns.cancelDevices(campaignId, campaignCase.cancelledDevices)
-      _ <- campaigns.failDevices(campaignId, campaignCase.failedDevices, failureCode, ResultDescription("failure-description-1"))
-      _ <- campaigns.succeedDevices(campaignId, campaignCase.successfulDevices, ResultCode("success-code-1"), ResultDescription("success-description-1"))
-    } yield ()
-
     forAll(genCampaignCase) { mainCase =>
       whenever(mainCase.processedCount > 0) {
         val (mainCampaignId, _) = createCampaignWithUpdateOk(

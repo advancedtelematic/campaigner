@@ -181,6 +181,22 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
   }
 
   /**
+   * Return all the failed campaigns, i.e campaigns with at least one failed device.
+   */
+  def allWithErrors(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long): Future[PaginationResult[Campaign]] =
+    db.run {
+      Schema.campaigns
+        .filter(_.namespace === ns)
+        .join(Schema.deviceUpdates)
+        .on(_.id === _.campaignId)
+        .filter(_._2.status === DeviceStatus.failed)
+        .map(_._1)
+        .distinct
+        .sortBy(sortBy)
+        .paginateResult(offset, limit)
+    }
+
+  /**
    * Returns all campaigns that have at least one device in `requested` state
    */
   def findAllWithRequestedDevices: DBIO[Set[Campaign]] =
