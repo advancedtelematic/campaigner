@@ -25,8 +25,8 @@ resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content
 libraryDependencies ++= {
   val akkaV = "2.5.20"
   val akkaHttpV = "10.1.7"
-  val libatsV = "0.3.0-30-g256438b"
-  val libtufV = "0.7.0-9-g3300750"
+  val libatsV = "0.3.0-38-g6acedb6"
+  val libtufV = "0.7.0-43-gf15f82b"
   val scalaTestV = "3.0.0"
   val slickV = "3.2.0"
 
@@ -74,7 +74,9 @@ dockerRepository := Some("advancedtelematic")
 
 packageName in Docker := packageName.value
 
-dockerUpdateLatest := true
+dockerUpdateLatest := false
+
+dockerAliases ++= Seq(dockerAlias.value.withTag(git.formattedShaVersion.value))
 
 defaultLinuxInstallLocation in Docker := s"/opt/${moduleName.value}"
 
