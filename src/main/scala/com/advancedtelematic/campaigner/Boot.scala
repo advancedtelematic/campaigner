@@ -10,10 +10,10 @@ import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.http.tracing.Tracing
 import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
 import com.advancedtelematic.libats.http.{BootApp, ServiceHttpClientSupport}
-import com.advancedtelematic.libats.slick.db.DatabaseConfig
+import com.advancedtelematic.libats.slick.db.{CheckMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
+import com.advancedtelematic.metrics.AkkaHttpRequestMetrics
 import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
-import com.advancedtelematic.metrics.{AkkaHttpRequestMetrics, InfluxdbMetricsReporterSupport}
 
 trait Settings {
   import java.util.concurrent.TimeUnit
@@ -46,7 +46,7 @@ object Boot extends BootApp
   with DatabaseConfig
   with MetricsSupport
   with DatabaseMetrics
-  with InfluxdbMetricsReporterSupport
+  with CheckMigrations
   with AkkaHttpRequestMetrics
   with PrometheusMetricsSupport
   with ServiceHttpClientSupport {

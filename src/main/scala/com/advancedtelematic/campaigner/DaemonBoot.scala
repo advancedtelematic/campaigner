@@ -10,7 +10,7 @@ import com.advancedtelematic.libats.http.tracing.NullServerRequestTracing
 import com.advancedtelematic.libats.http.{BootApp, ServiceHttpClientSupport}
 import com.advancedtelematic.libats.messaging.{BusListenerMetrics, MessageListenerSupport}
 import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceEventMessage, DeviceUpdateEvent}
-import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
+import com.advancedtelematic.libats.slick.db.{BootMigrations, CheckMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.slick.monitoring.{DatabaseMetrics, DbHealthResource}
 import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
 
@@ -21,6 +21,7 @@ object DaemonBoot extends BootApp
   with DatabaseConfig
   with MetricsSupport
   with DatabaseMetrics
+  with CheckMigrations
   with MessageListenerSupport
   with PrometheusMetricsSupport
   with ServiceHttpClientSupport {
