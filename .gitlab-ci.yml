@@ -1,7 +1,10 @@
 stages:
+  - prepare
   - test
   - build image
   - trigger deploy
+  - update deployment
+  - integration test
   - veracode scan
   - deps scan
   - generate pages
@@ -12,6 +15,7 @@ variables:
   MYSQL_USER: "campaigner"
   MYSQL_PASSWORD: "campaigner"
   VAULT_ADDR: "http://vault.sit-ota.aws.in.here.com"
+  SERVICE_IMAGE: "advancedtelematic/campaigner"
 
 default:
   services:
@@ -43,9 +47,13 @@ test:
 build docker image:
   stage: build image
   except:
-    - schedules
+    refs:
+      - schedules
+      - deploy/sit
   only:
-    - master
+    refs:
+      - master
+      - /^deploy/.*$/
   tags:
     - docker-sock
   image: advancedtelematic/gitlab-jobs:0.2.3
@@ -130,3 +138,7 @@ pages:
     paths:
       - public
     expire_in: 64 days
+
+include:
+  - project: olp/edge/ota/testing/dynamic-hats
+    file: /.gitlab-ci.yml
