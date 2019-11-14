@@ -76,7 +76,7 @@ packageName in Docker := packageName.value
 
 dockerUpdateLatest := true
 
-dockerAliases ++= Seq(dockerAlias.value.withTag(git.formattedShaVersion.value))
+dockerAlias := dockerAlias.value.withTag(git.gitHeadCommit.value)
 
 defaultLinuxInstallLocation in Docker := s"/opt/${moduleName.value}"
 
@@ -93,23 +93,4 @@ dockerCommands := Seq(
 
 enablePlugins(JavaAppPackaging)
 
-Versioning.settings
-
 Release.settings
-
-enablePlugins(Versioning.Plugin, FlywayPlugin)
-
-flywayTable := "schema_version"
-flywayLocations += "db/migration"
-flywayUrl := sys.env
-  .get("DB_URL")
-  .orElse(sys.props.get("campaigner.db.url"))
-  .getOrElse("jdbc:mysql://localhost:3306/campaigner")
-flywayUser := sys.env
-  .get("DB_USER")
-  .orElse(sys.props.get("campaigner.db.user"))
-  .getOrElse("campaigner")
-flywayPassword := sys.env
-  .get("DB_PASSWORD")
-  .orElse(sys.props.get("campaigner.db.password"))
-  .getOrElse("campaigner")
