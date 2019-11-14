@@ -73,7 +73,7 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
   def findByCampaign(campaign: CampaignId, status: DeviceStatus): Future[Set[DeviceId]] =
     db.run(findByCampaignAction(campaign, status))
 
-  protected [db] def findByCampaignAction(campaign: CampaignId, status: DeviceStatus): DBIO[Set[DeviceId]] =
+  protected[db] def findByCampaignAction(campaign: CampaignId, status: DeviceStatus): DBIO[Set[DeviceId]] =
     Schema.deviceUpdates
       .filter(_.campaignId === campaign)
       .filter(_.status === status)
@@ -94,10 +94,10 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
     }
 
   /**
-    * Returns the IDs of all the devices that were processed in the campaign with `campaignId` and failed with
-    * the code `failureCode`.
-    */
-  protected [db] def findFailedByFailureCode(campaignId: CampaignId, failureCode: ResultCode): Future[Set[DeviceId]] = db.run {
+   * Returns the IDs of all the devices that were processed in the campaign with `campaignId` and failed with
+   * the code `failureCode`.
+   */
+  protected[db] def findFailedByFailureCode(campaignId: CampaignId, failureCode: ResultCode): Future[Set[DeviceId]] = db.run {
     Schema.deviceUpdates
       .filter(_.campaignId === campaignId)
       .filter(_.status === DeviceStatus.failed)
@@ -107,16 +107,20 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
       .map(_.toSet)
   }
 
-  protected [db] def setUpdateStatusAction(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[ResultCode], resultDescription: Option[ResultDescription]): DBIO[Unit] =
+  protected[db] def setUpdateStatusAction(campaign: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[ResultCode], resultDescription: Option[ResultDescription]): DBIO[Unit] = {
+    val cappedResultDescription = resultDescription.map(rd => ResultDescription(rd.value.take(1024)))
+
     Schema.deviceUpdates
       .filter(_.campaignId === campaign)
       .filter(_.deviceId inSet devices)
       .map(du => (du.status, du.resultCode, du.resultDescription))
-      .update((status, resultCode, resultDescription))
+      .update((status, resultCode, cappedResultDescription))
       .flatMap {
         case n if devices.length == n => DBIO.successful(())
         case _ => DBIO.failed(DeviceNotScheduled)
       }.map(_ => ())
+  }
+
 
   def persistMany(updates: Seq[DeviceUpdate]): Future[Unit] =
     db.run(persistManyAction(updates))

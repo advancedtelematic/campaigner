@@ -3,6 +3,7 @@ package com.advancedtelematic.campaigner.daemon
 import java.time.Instant
 import java.util.UUID
 
+import org.scalatest.OptionValues._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, UpdateSupport}
@@ -12,6 +13,7 @@ import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, Insta
 import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceUpdateCanceled, DeviceUpdateCompleted, DeviceUpdateEvent}
 import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.Arbitrary._
+import org.scalacheck.Gen
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -50,6 +52,23 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
     campaigns.findLatestFailedUpdates(campaign.id, ResultCode("FAILURE")).map(_.map(_.device)).futureValue should contain(deviceUpdate.device)
   }
 
+  "Listener" should "save result descriptions to database, even if description is too big" in {
+    val longDescription = Gen.listOfN(2048, Gen.alphaChar).map(_.mkString).generate
+
+    val (_, campaign, deviceUpdate) = prepareTest()
+    val report = makeReport(
+      campaign,
+      deviceUpdate,
+      CampaignCorrelationId(campaign.id.uuid),
+      isSuccessful = false,
+      resultDescription = Option(ResultDescription(longDescription)))
+
+    listener.apply(report).futureValue shouldBe (())
+    deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.failed).futureValue should contain(deviceUpdate.device)
+    val latest = campaigns.findLatestFailedUpdates(campaign.id, ResultCode("FAILURE")).map(_.flatMap(_.resultDescription)).futureValue.headOption
+    longDescription should startWith(latest.value.value)
+  }
+
   "Listener" should "mark a device as canceled using campaign CorrelationId" in {
     val (_, campaign, deviceUpdate) = prepareTest()
     val event = DeviceUpdateCanceled(
@@ -80,13 +99,14 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
       campaign: Campaign,
       deviceUpdate: DeviceUpdate,
       correlationId: CorrelationId,
-      isSuccessful: Boolean): DeviceUpdateEvent = {
+      isSuccessful: Boolean,
+      resultDescription: Option[ResultDescription] = None): DeviceUpdateEvent = {
 
     val installationResult =
       if (isSuccessful) {
-        InstallationResult(true, ResultCode("SUCCESS"), ResultDescription("Successful update"))
+        InstallationResult(true, ResultCode("SUCCESS"), resultDescription.getOrElse(ResultDescription("Successful update")))
       } else {
-        InstallationResult(false, ResultCode("FAILURE"), ResultDescription("Failed update"))
+        InstallationResult(false, ResultCode("FAILURE"), resultDescription.getOrElse(ResultDescription("Failed update")))
       }
 
     DeviceUpdateCompleted(
