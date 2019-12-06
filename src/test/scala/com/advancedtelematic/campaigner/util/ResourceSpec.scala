@@ -19,7 +19,6 @@ import com.advancedtelematic.libats.http.tracing.NullServerRequestTracing
 import com.advancedtelematic.libats.test.DatabaseSpec
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
-import org.scalactic.source
 import org.scalatest.Suite
 import org.scalatest.time.{Seconds, Span}
 
