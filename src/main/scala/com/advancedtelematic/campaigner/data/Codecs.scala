@@ -18,8 +18,8 @@ object Codecs {
   implicit val campaignMetadataEncoder: Encoder[CampaignMetadata] = deriveEncoder
   implicit val campaignMetadataDecoder: Decoder[CampaignMetadata] = deriveDecoder
 
-  implicit val metadataTypeEncoder: Encoder[MetadataType] = Encoder.enumEncoder(MetadataType)
-  implicit val metadataTypeDecoder: Decoder[MetadataType] = Decoder.enumDecoder(MetadataType)
+  implicit val metadataTypeEncoder: Encoder[MetadataType] = Encoder.encodeEnumeration(MetadataType)
+  implicit val metadataTypeDecoder: Decoder[MetadataType] = Decoder.decodeEnumeration(MetadataType)
 
   implicit val decoderCampaign: Decoder[Campaign] = deriveDecoder
   implicit val encoderCampaign: Encoder[Campaign] = deriveEncoder
@@ -42,19 +42,19 @@ object Codecs {
   implicit val decoderGetCampaign: Decoder[GetCampaign] = deriveDecoder
   implicit val encoderGetCampaign: Encoder[GetCampaign] = deriveEncoder
 
-  implicit val updateTypeEncoder : Encoder[UpdateType] = Encoder.enumEncoder(UpdateType)
-  implicit val updateTypeDecoder : Decoder[UpdateType] = Decoder.enumDecoder(UpdateType)
+  implicit val updateTypeEncoder : Encoder[UpdateType] = Encoder.encodeEnumeration(UpdateType)
+  implicit val updateTypeDecoder : Decoder[UpdateType] = Decoder.decodeEnumeration(UpdateType)
 
   implicit val decoderUpdateCampaign: Decoder[UpdateCampaign] = deriveDecoder
   implicit val encoderUpdateCampaign: Encoder[UpdateCampaign] = deriveEncoder
 
-  implicit val decoderCampaignStatus: Decoder[CampaignStatus] = Decoder.enumDecoder(CampaignStatus)
-  implicit val encoderCampaignStatus: Encoder[CampaignStatus] = Encoder.enumEncoder(CampaignStatus)
+  implicit val decoderCampaignStatus: Decoder[CampaignStatus] = Decoder.decodeEnumeration(CampaignStatus)
+  implicit val encoderCampaignStatus: Encoder[CampaignStatus] = Encoder.encodeEnumeration(CampaignStatus)
 
   implicit val keyEncoderCampaignStatus: KeyEncoder[CampaignStatus] = KeyEncoder[String].contramap(_.toString)
 
-  implicit val decoderRetryStatus: Decoder[RetryStatus] = Decoder.enumDecoder(RetryStatus)
-  implicit val encoderRetryStatus: Encoder[RetryStatus] = Encoder.enumEncoder(RetryStatus)
+  implicit val decoderRetryStatus: Decoder[RetryStatus] = Decoder.decodeEnumeration(RetryStatus)
+  implicit val encoderRetryStatus: Encoder[RetryStatus] = Encoder.encodeEnumeration(RetryStatus)
 
   implicit val decoderCampaignFailureStats: Decoder[CampaignFailureStats] = deriveDecoder
   implicit val encoderCampaignFailureStats: Encoder[CampaignFailureStats] = deriveEncoder
