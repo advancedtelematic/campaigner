@@ -1,6 +1,6 @@
 name := "campaigner"
 organization := "com.advancedtelematic"
-scalaVersion := "2.12.5"
+scalaVersion := "2.12.10"
 
 scalacOptions := Seq(
   "-feature",
@@ -40,7 +40,7 @@ libraryDependencies ++= {
     "com.typesafe.akka" %% "akka-stream-testkit" % akkaV % Test,
     "com.typesafe.slick" %% "slick" % slickV,
     "com.typesafe.slick" %% "slick-hikaricp" % slickV,
-    "org.mariadb.jdbc" % "mariadb-java-client" % "2.2.5",
+    "org.mariadb.jdbc" % "mariadb-java-client" % "2.4.4",
     "com.advancedtelematic" %% "libats" % libatsV,
     "com.advancedtelematic" %% "libats-http" % libatsV,
     "com.advancedtelematic" %% "libats-http-tracing" % libatsV,
@@ -54,7 +54,7 @@ libraryDependencies ++= {
     "com.advancedtelematic" %% "libats-logging" % libatsV,
     "com.advancedtelematic" %% "libtuf" % libtufV,
     "com.advancedtelematic" %% "libtuf-server" % libtufV,
-    "org.scalacheck" %% "scalacheck" % "1.13.5" % Test,
+    "org.scalacheck" %% "scalacheck" % "1.14.1" % Test,
     "org.scalatest" %% "scalatest" % scalaTestV % Test,
     "com.typesafe.akka" %% "akka-testkit" % akkaV % Test
   )
