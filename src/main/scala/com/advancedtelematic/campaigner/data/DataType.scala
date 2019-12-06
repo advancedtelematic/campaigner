@@ -23,7 +23,7 @@ object DataType {
   final case class GroupId(uuid: UUID) extends UUIDKey
   object GroupId extends UUIDKeyObj[GroupId]
 
-  abstract class ACampaign(
+  final case class Campaign(
     namespace: Namespace,
     id: CampaignId,
     name: String,
@@ -35,33 +35,6 @@ object DataType {
     failureCode: Option[ResultCode],
     autoAccept: Boolean = true
   )
-
-  final case class Campaign(
-                             namespace: Namespace,
-                             id: CampaignId,
-                             name: String,
-                             updateId: UpdateId,
-                             status: CampaignStatus,
-                             createdAt: Instant,
-                             updatedAt: Instant,
-                             mainCampaignId: Option[CampaignId],
-                             failureCode: Option[ResultCode],
-                             autoAccept: Boolean = true
-                           ) extends ACampaign(namespace, id, name, updateId, status, createdAt, updatedAt, mainCampaignId, failureCode, autoAccept)
-
-  final case class CampaignWithCount(
-                                      namespace: Namespace,
-                                      id: CampaignId,
-                                      name: String,
-                                      updateId: UpdateId,
-                                      status: CampaignStatus,
-                                      deviceCount: Int,
-                                      createdAt: Instant,
-                                      updatedAt: Instant,
-                                      mainCampaignId: Option[CampaignId],
-                                      failureCode: Option[ResultCode],
-                                      autoAccept: Boolean = true
-                                    ) extends ACampaign(namespace, id, name, updateId, status, createdAt, updatedAt, mainCampaignId, failureCode, autoAccept)
 
   final case class ExternalUpdateId(value: String) extends AnyVal
 
