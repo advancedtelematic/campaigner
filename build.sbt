@@ -25,8 +25,8 @@ resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content
 libraryDependencies ++= {
   val akkaV = "2.5.25"
   val akkaHttpV = "10.1.10"
-  val libatsV = "0.3.0-64-gaba8100"
-  val libtufV = "0.7.0-43-gf15f82b"
+  val libatsV = "0.3.0-71-g061bbf2"
+  val libtufV = "0.7.0-61-g909b804"
   val scalaTestV = "3.0.8"
   val slickV = "3.2.0"
 
@@ -49,6 +49,7 @@ libraryDependencies ++= {
     "com.advancedtelematic" %% "libats-messaging-datatype" % libatsV,
     "com.advancedtelematic" %% "libats-metrics" % libatsV,
     "com.advancedtelematic" %% "libats-metrics-akka" % libatsV,
+    "com.advancedtelematic" %% "libats-metrics-kafka" % libatsV,
     "com.advancedtelematic" %% "libats-metrics-prometheus" % libatsV,
     "com.advancedtelematic" %% "libats-slick" % libatsV,
     "com.advancedtelematic" %% "libats-logging" % libatsV,
