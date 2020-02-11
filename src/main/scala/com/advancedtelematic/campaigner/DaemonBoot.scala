@@ -50,7 +50,7 @@ object DaemonBoot extends BootApp
   )
 
   startMonitoredListener[DeviceUpdateEvent](new DeviceUpdateEventListener)
-  startMonitoredListener[DeviceEventMessage](new DeviceEventListener(director))
+  startMonitoredListener[DeviceEventMessage](new DeviceEventListener(director), skipProcessingErrors = true)
 
   val routes: Route = (versionHeaders(version) & logResponseMetrics(projectName)) {
     prometheusMetricsRoutes ~
