@@ -6,13 +6,12 @@ import com.advancedtelematic.campaigner.client.{DeviceRegistryHttpClient, Direct
 import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.http.VersionDirectives._
-import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.http.tracing.Tracing
 import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
 import com.advancedtelematic.libats.http.{BootApp, ServiceHttpClientSupport}
 import com.advancedtelematic.libats.slick.db.{CheckMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
-import com.advancedtelematic.metrics.AkkaHttpRequestMetrics
+import com.advancedtelematic.metrics.{AkkaHttpRequestMetrics, MetricsSupport}
 import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
 
 trait Settings {

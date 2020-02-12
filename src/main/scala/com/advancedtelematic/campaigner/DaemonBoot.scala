@@ -5,14 +5,13 @@ import akka.http.scaladsl.server.Route
 import com.advancedtelematic.campaigner.actor._
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.daemon._
-import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.http.tracing.NullServerRequestTracing
 import com.advancedtelematic.libats.http.{BootApp, ServiceHttpClientSupport}
 import com.advancedtelematic.libats.messaging.MessageListenerSupport
 import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceEventMessage, DeviceUpdateEvent}
 import com.advancedtelematic.libats.slick.db.{BootMigrations, CheckMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.slick.monitoring.{DatabaseMetrics, DbHealthResource}
-import com.advancedtelematic.metrics.MonitoredBusListenerSupport
+import com.advancedtelematic.metrics.{MetricsSupport, MonitoredBusListenerSupport}
 import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
 
 object DaemonBoot extends BootApp
