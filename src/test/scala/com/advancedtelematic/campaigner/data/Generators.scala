@@ -35,7 +35,7 @@ object Generators {
     now      = Instant.now()
   } yield Campaign(ns, id, n, update, CampaignStatus.prepared, now, now, None, None)
 
-  def genCreateCampaign(genName: Gen[String] = arbitrary[String],
+  def genCreateCampaign(genName: Gen[String] = Gen.listOfN(128, Gen.alphaChar).map(_.mkString("")),
                         genGroupId: Gen[NonEmptyList[GroupId]] = arbitrary[NonEmptyList[GroupId]]): Gen[CreateCampaign] =
     for {
       n   <- genName
