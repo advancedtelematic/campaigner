@@ -114,7 +114,7 @@ class CampaignResourceSpec
         Future.successful(response)
       }
     }
-    val routes = new Routes(fakeDirector, testDeviceRegistry, fakeResolver, fakeUserProfile).routes
+    val routes = new Routes(testDeviceRegistry, fakeResolver, fakeUserProfile).routes
 
     val request = genCreateCampaign().map(_.copy(update = updateId, groups = groupIds)).generate
     val id = createCampaign(request) ~> routes ~> check {

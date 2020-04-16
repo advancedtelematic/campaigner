@@ -35,18 +35,19 @@ class ResolverHttpClient(httpClient: HttpRequest => Future[HttpResponse])(implic
     with ResolverClient {
 
   import akka.http.scaladsl.client.RequestBuilding._
+  import ServiceHttpClient._
+  import system.dispatcher
 
   override def availableUpdatesFor(resolverUri: Uri,
                                    ns: Namespace,
                                    devices: Set[DeviceId]): Future[Seq[ExternalUpdateId]] = {
     val query   = Uri.Query(Map("ids" -> devices.map(_.uuid).mkString(",")))
     val request = HttpRequest(HttpMethods.GET, resolverUri.withQuery(query)).withNs(ns)
-    execHttp[Seq[ExternalUpdateId]](request)()
+    execHttpUnmarshalled[Seq[ExternalUpdateId]](request).ok
   }
 
   override def updatesForDevice(resolverUri: Uri, ns: Namespace, deviceId: DeviceId): Future[List[ExternalUpdate]] = {
-    val uri =
-      resolverUri.withQuery(Uri.Query("device" -> deviceId.uuid.toString))
-    execHttp[List[ExternalUpdate]](Get(uri).withNs(ns))()
+    val uri = resolverUri.withQuery(Uri.Query("device" -> deviceId.uuid.toString))
+    execHttpUnmarshalled[List[ExternalUpdate]](Get(uri).withNs(ns)).ok
   }
 }

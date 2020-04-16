@@ -295,7 +295,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     slowRegistry.setGroup(groupId, devices)
     fakeUserProfile.setNamespaceSetting(testNs, testResolverUri)
     fakeResolver.setUpdates(testResolverUri, Seq(devices.last), Seq(request.updateSource.id))
-    val _routes = new Routes(fakeDirector, slowRegistry, fakeResolver, fakeUserProfile).routes
+    val _routes = new Routes(slowRegistry, fakeResolver, fakeUserProfile).routes
 
     getUpdates(Seq(groupId)) ~> _routes ~> check {
       status shouldBe GatewayTimeout

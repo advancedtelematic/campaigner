@@ -1,10 +1,12 @@
 package com.advancedtelematic.campaigner
 
 import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server.Route
 import com.advancedtelematic.campaigner.actor._
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.daemon._
+import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.http.tracing.NullServerRequestTracing
 import com.advancedtelematic.libats.http.{BootApp, ServiceHttpClientSupport}
 import com.advancedtelematic.libats.messaging.MessageListenerSupport
@@ -38,7 +40,11 @@ object DaemonBoot extends BootApp
   implicit val tracing = new NullServerRequestTracing
 
   val deviceRegistry = new DeviceRegistryHttpClient(deviceRegistryUri, defaultHttpClient)
-  val director = new DirectorHttpClient(directorUri, defaultHttpClient)
+
+  val namespaceDirectorConfig = new NamespaceDirectorConfig(config)
+
+  def director(ns: Namespace) = new DirectorHttpClient(namespaceDirectorConfig.getUri(ns), defaultHttpClient)
+
   val supervisor = system.actorOf(CampaignSupervisor.props(
     director,
     schedulerPollingTimeout,
@@ -48,6 +54,7 @@ object DaemonBoot extends BootApp
     "campaign-supervisor"
   )
 
+  NamespaceDirectorChangedListener.start(config, namespaceDirectorConfig)
   startMonitoredListener[DeviceUpdateEvent](new DeviceUpdateEventListener)
   startMonitoredListener[DeviceEventMessage](new DeviceEventListener(director), skipProcessingErrors = true)
 
