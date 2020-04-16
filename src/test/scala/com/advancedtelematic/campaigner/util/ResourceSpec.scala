@@ -43,7 +43,7 @@ trait ResourceSpec extends ScalatestRouteTest
   val fakeUserProfile = new FakeUserProfileClient
   val fakeResolver = new FakeResolverClient
 
-  lazy val routes: Route = new Routes(fakeDirector, fakeRegistry, fakeResolver, fakeUserProfile).routes
+  lazy val routes: Route = new Routes(fakeRegistry, fakeResolver, fakeUserProfile).routes
 
   def createCampaign(request: Json): HttpRequest =
     Post(apiUri("campaigns"), request).withHeaders(header)

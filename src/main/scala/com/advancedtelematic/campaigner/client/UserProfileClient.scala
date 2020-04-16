@@ -2,6 +2,7 @@ package com.advancedtelematic.campaigner.client
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model._
+import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
 import com.advancedtelematic.campaigner.data.Codecs.uriDecoder
 import com.advancedtelematic.libats.data.DataType.Namespace
@@ -30,14 +31,18 @@ class UserProfileHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResp
                            (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer, tracing: ServerRequestTracing)
   extends TracingHttpClient(httpClient, "user-profile") with UserProfileClient {
 
+  import com.advancedtelematic.libats.http.ServiceHttpClient._
+
   override def externalResolverUri(ns: Namespace): Future[Option[Uri]] = {
     val path = uri.path / "api" / "v1" / "namespace_settings" / ns.get
     val request = HttpRequest(HttpMethods.GET, uri.withPath(path)).withNs(ns)
 
-    val errorHandler: PartialFunction[Throwable, Option[Uri]] = {
-      case e: RemoteServiceError if e.status == StatusCodes.NotFound => None
+    val errorHandler: PartialFunction[RemoteServiceError, Future[Option[Uri]]] = {
+      case e if e.status == StatusCodes.NotFound => FastFuture.successful(None)
     }
-    execHttp[UserProfileClient.NsSettings](request)().map(_.resolverUri).recover(errorHandler)
-  }
 
+    execHttpUnmarshalled[UserProfileClient.NsSettings](request)
+      .map(_.map(_.resolverUri))
+      .handleErrors(errorHandler)
+  }
 }

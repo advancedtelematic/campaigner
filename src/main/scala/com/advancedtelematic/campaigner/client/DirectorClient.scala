@@ -58,6 +58,8 @@ class DirectorHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespons
 
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
   import io.circe.syntax._
+  import com.advancedtelematic.libats.http.ServiceHttpClient._
+  import system.dispatcher
 
   override def setMultiUpdateTarget(
     ns: Namespace,
@@ -72,7 +74,7 @@ class DirectorHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespons
       HttpMethods.POST,
       uri.withPath(path),
       entity = entity).withNs(ns)
-    execHttp[Seq[DeviceId]](req)()
+    execHttpUnmarshalled[Seq[DeviceId]](req).ok
   }
 
   override def cancelUpdate(
@@ -82,7 +84,7 @@ class DirectorHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespons
     val path   = uri.path / "api" / "v1" / "assignments"
     val entity = HttpEntity(ContentTypes.`application/json`, devices.asJson.noSpaces)
     val req = HttpRequest(HttpMethods.PATCH, uri.withPath(path), entity = entity).withNs(ns)
-    execHttp[Seq[DeviceId]](req)()
+    execHttpUnmarshalled[Seq[DeviceId]](req).ok
   }
 
   override def cancelUpdate(
@@ -91,7 +93,7 @@ class DirectorHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespons
 
     val path = uri.path / "api" / "v1" / "assignments" / device.show
     val req = HttpRequest(HttpMethods.DELETE, uri.withPath(path)).withNs(ns)
-    execHttp[Unit](req)()
+    execHttpUnmarshalled[Unit](req).ok
   }
 
   override def findAffected(ns: Namespace, updateId: ExternalUpdateId, devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
@@ -100,6 +102,6 @@ class DirectorHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespons
       ContentTypes.`application/json`,
       AssignUpdateRequest(devices, updateId, true).asJson.noSpaces)
     val req = HttpRequest(HttpMethods.POST, uri.withPath(path), entity = entity).withNs(ns)
-    execHttp[Seq[DeviceId]](req)()
+    execHttpUnmarshalled[Seq[DeviceId]](req).ok
   }
 }
