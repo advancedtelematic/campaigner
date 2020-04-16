@@ -28,6 +28,7 @@ trait Settings {
 
   val deviceRegistryUri = _config.getString("deviceRegistry.uri")
   val directorUri = _config.getString("director.uri")
+  val directorV2Uri = _config.getString("directorV2.uri")
   val userProfileUri = _config.getString("userProfile.uri")
 
   val schedulerPollingTimeout =
@@ -55,7 +56,6 @@ object Boot extends BootApp
   log.info(s"Starting $version on http://$host:$port")
 
   def deviceRegistry(implicit tracing: ServerRequestTracing) = new DeviceRegistryHttpClient(deviceRegistryUri, defaultHttpClient)
-  def director(implicit tracing: ServerRequestTracing) = new DirectorHttpClient(directorUri, defaultHttpClient)
   def userProfile(implicit tracing: ServerRequestTracing) = new UserProfileHttpClient(userProfileUri, defaultHttpClient)
   val resolver = new ResolverHttpClient(defaultHttpClient)
 
@@ -65,7 +65,7 @@ object Boot extends BootApp
     (versionHeaders(version) & requestMetrics(metricRegistry) & logResponseMetrics(projectName)) {
       prometheusMetricsRoutes ~
         tracing.traceRequests { implicit serverRequestTracing =>
-          new Routes(director, deviceRegistry, resolver, userProfile).routes
+          new Routes(deviceRegistry, resolver, userProfile).routes
         }
     }
 

@@ -52,18 +52,20 @@ class DeviceRegistryHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpR
     extends TracingHttpClient(httpClient, "device-registry") with DeviceRegistryClient {
 
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+  import com.advancedtelematic.libats.http.ServiceHttpClient._
+  import system.dispatcher
 
   override def devicesInGroup(ns: Namespace, groupId: GroupId, offset: Long, limit: Long): Future[Seq[DeviceId]] = {
     val path  = uri.path / "api" / "v1" / "device_groups" / groupId.show / "devices"
     val query = Uri.Query(Map("offset" -> offset.toString, "limit" -> limit.toString))
     val req = HttpRequest(HttpMethods.GET, uri.withPath(path).withQuery(query)).withNs(ns)
-    execHttp[PaginationResult[DeviceId]](req)().map(_.values)
+    execHttpUnmarshalled[PaginationResult[DeviceId]](req).ok.map(_.values)
   }
 
   override def fetchOemId(ns: Namespace, deviceId: DeviceId): Future[String] = {
     val path  = uri.path / "api" / "v1" / "devices" / deviceId.show
     val req = HttpRequest(HttpMethods.GET, uri.withPath(path)).withNs(ns)
     implicit val um = unmarshaller[String](Decoder.instance(_.get("deviceId")))
-    execHttp[String](req)()
+    execHttpUnmarshalled[String](req).ok
   }
 }

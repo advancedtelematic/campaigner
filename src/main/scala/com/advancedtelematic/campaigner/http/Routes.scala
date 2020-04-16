@@ -12,7 +12,7 @@ import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.ExecutionContext
 
-class Routes(director: DirectorClient, deviceRegistry: DeviceRegistryClient, resolver: ResolverClient, userProfile: UserProfileClient)
+class Routes(deviceRegistry: DeviceRegistryClient, resolver: ResolverClient, userProfile: UserProfileClient)
             (implicit val db: Database, ec: ExecutionContext)
     extends VersionInfo {
 
@@ -27,7 +27,7 @@ class Routes(director: DirectorClient, deviceRegistry: DeviceRegistryClient, res
     handleRejections(rejectionHandler) {
       ErrorHandler.handleErrors {
         pathPrefix("api" / "v2") {
-          new CampaignResource(extractAuth, director, deviceRegistry).route ~
+          new CampaignResource(extractAuth, deviceRegistry).route ~
           new DeviceResource(userProfile, resolver, defaultNamespaceExtractor).route ~
           new UpdateResource(defaultNamespaceExtractor, deviceRegistry, resolver, userProfile).route
         } ~ DbHealthResource(versionMap).route

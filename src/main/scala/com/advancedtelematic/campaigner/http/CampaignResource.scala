@@ -26,7 +26,6 @@ import slick.jdbc.MySQLProfile.api._
 import scala.concurrent.{ExecutionContext, Future}
 
 class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
-                       director: DirectorClient,
                        deviceRegistry: DeviceRegistryClient)
                       (implicit db: Database, ec: ExecutionContext) extends Settings {
 

@@ -22,7 +22,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 class DeviceEventListenerSpec extends CampaignerSpec with DatabaseSpec with DeviceUpdateSupport with UpdateSupport with DatabaseUpdateSpecUtil {
   lazy val director = new FakeDirectorClient()
 
-  val listener = new DeviceEventListener(director)
+  val listener = new DeviceEventListener(_ => director)
 
   val campaigns = Campaigns()
 
