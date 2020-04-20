@@ -1,32 +1,28 @@
 package com.advancedtelematic.campaigner.actor
 
 import akka.http.scaladsl.util.FastFuture
+import akka.stream.scaladsl.Sink
 import akka.testkit.TestProbe
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
+import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec, DatabaseUpdateSpecUtil}
 import com.advancedtelematic.libats.data.DataType.{CorrelationId, Namespace}
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
-import org.scalacheck.Arbitrary
-import org.scalacheck.Gen
+import org.scalacheck.{Arbitrary, Gen}
+import org.scalatest.Inspectors
 
 import scala.concurrent.Future
 
-class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with CampaignerSpec with UpdateSupport with DatabaseUpdateSpecUtil {
-  import Arbitrary._
+class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with CampaignerSpec with UpdateSupport
+  with DeviceUpdateSupport
+  with DatabaseUpdateSpecUtil with Inspectors {
   import CampaignScheduler._
 
   import scala.concurrent.duration._
 
   val campaigns = Campaigns()
-
-  def buildCampaignWithUpdate: Campaign = {
-    val update = genMultiTargetUpdate.generate
-    val updateId = updateRepo.persist(update).futureValue
-    arbitrary[Campaign].generate.copy(updateId = updateId)
-  }
 
   "campaign scheduler" should "trigger updates for each device" in {
     val campaign = buildCampaignWithUpdate
@@ -70,6 +66,30 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
     parent.expectMsg(1.minute, CampaignComplete(campaign.id))
 
     actualDevices shouldBe devices
+  }
+
+  "campaign scheduler" should "not schedule devices if campaign was canceled" in {
+    val campaign = buildCampaignWithUpdate
+    val parent   = TestProbe()
+    val devices = Gen.listOfN(batch, genDeviceId).generate.toSet
+
+    campaigns.create(campaign, Set.empty, devices, Seq.empty).futureValue
+
+    campaigns.cancel(campaign.id).futureValue
+
+    parent.childActorOf(CampaignScheduler.props(
+      director,
+      campaign,
+      schedulerDelay,
+      schedulerBatchSize
+    ))
+
+    parent.expectMsg(5.seconds, CampaignComplete(campaign.id))
+
+    val processed = deviceUpdateRepo.findByCampaignStream(campaign.id, DeviceStatus.requested)
+      .map(d => List(d._1)).runWith(Sink.fold(List.empty[DeviceId])(_ ++ _)).futureValue
+
+    processed should contain allElementsOf(devices.toList)
   }
 
   "PRO-3672: campaign with 0 affected devices" should "yield a `finished` status" in {

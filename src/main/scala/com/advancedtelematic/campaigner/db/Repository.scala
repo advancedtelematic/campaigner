@@ -1,6 +1,6 @@
 package com.advancedtelematic.campaigner.db
 
-import akka.NotUsed
+import akka.{Done, NotUsed}
 import akka.stream.scaladsl.Source
 import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus._
@@ -81,13 +81,13 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
       .result
       .map(_.toSet)
 
-  def findByCampaignStream(campaign: CampaignId, status: DeviceStatus*): Source[DeviceId, NotUsed] =
+  def findByCampaignStream(campaign: CampaignId, status: DeviceStatus*): Source[(DeviceId, DeviceStatus), NotUsed] =
     Source.fromPublisher {
       db.stream {
         Schema.deviceUpdates
           .filter(_.campaignId === campaign)
           .filter(_.status.inSet(status))
-          .map(_.deviceId)
+          .map { r => r.deviceId -> r.status }
           .result
           .withStatementParameters(fetchSize = 1024)
       }
@@ -204,7 +204,7 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
    * Returns all campaigns that have at least one device in `requested` state
    */
   def findAllWithRequestedDevices: DBIO[Set[Campaign]] =
-    Schema.deviceUpdates.join(Schema.campaigns).on(_.campaignId === _.id)
+    Schema.deviceUpdates.join(Schema.campaigns.filter(_.status =!= CampaignStatus.cancelled)).on(_.campaignId === _.id)
       .filter { case (deviceUpdate, _) => deviceUpdate.status === DeviceStatus.requested }
       .map(_._2)
       .result
@@ -225,7 +225,7 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
 
     val action = for {
       ids <- queryAllNewlyCreatedCampaignIds.map(_.map(CampaignId(_)))
-      campaigns <- Schema.campaigns.filter(_.id.inSet(ids)).result
+      campaigns <- Schema.campaigns.filter(_.id.inSet(ids)).filter(_.status =!= CampaignStatus.cancelled).result
     } yield campaigns.toSet
 
     action.transactionally
@@ -281,12 +281,16 @@ protected class CancelTaskRepository()(implicit db: Database, ec: ExecutionConte
       .map(_ => cancel)
   }
 
-  def setStatus(campaign: CampaignId, status: CancelTaskStatus): Future[Unit] = db.run {
+  def isCancelled(campaignId: CampaignId): Future[Boolean] = db.run {
+    Schema.cancelTasks.filter(_.campaignId === campaignId).exists.result
+  }
+
+  def setStatus(campaign: CampaignId, status: CancelTaskStatus): Future[Done] = db.run {
     Schema.cancelTasks
       .filter(_.campaignId === campaign)
       .map(_.taskStatus)
       .update(status)
-      .map(_ => ())
+      .map(_ => Done)
   }
 
   private def findStatus(status: CancelTaskStatus): DBIO[Seq[(Namespace, CampaignId)]] =

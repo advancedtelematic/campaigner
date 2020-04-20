@@ -1,7 +1,7 @@
 package com.advancedtelematic.campaigner.daemon
 
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{ConcurrentHashMap, TimeoutException}
 
 import akka.Done
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props, Status}
@@ -18,19 +18,63 @@ import com.advancedtelematic.libats.messaging_datatype.Messages.NamespaceDirecto
 import com.typesafe.config.Config
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.slf4j.LoggerFactory
 
+import scala.concurrent.duration._
 import scala.concurrent.Future
 
 object NamespaceDirectorChangedListener {
+  import com.advancedtelematic.libats.messaging_datatype.Messages.namespaceDirectorChangedMessageLike
+  import com.advancedtelematic.libats.messaging_datatype.MessageCodecs.namespaceDirectorChangedCodec
+
+  private val _log = LoggerFactory.getLogger(this.getClass)
+
   def props(config: Config, namespaceDirectorConfig: NamespaceDirectorConfig): Props =
     Props(new NamespaceDirectorChangedListener(config, namespaceDirectorConfig))
 
   def start(config: Config, namespaceDirectorConfig: NamespaceDirectorConfig)(implicit system: ActorSystem): ActorRef =
     system.actorOf(NamespaceDirectorChangedListener.props(config, namespaceDirectorConfig), "namespace-director-changed-listener")
+
+  def consumeAll(config: Config, namespaceDirectorConfig: NamespaceDirectorConfig, timeout: FiniteDuration = 5.seconds)
+                (implicit mat: ActorMaterializer, system: ActorSystem): Future[Done] = {
+    import system.dispatcher
+
+    val flow =
+      eventStream(config, consumerSettings(), namespaceDirectorConfig)
+        .idleTimeout(timeout)
+        .runWith(Sink.ignore)
+
+    flow.recover {
+      case _: TimeoutException =>
+        _log.info("No more namespace change events after {}", timeout)
+        Done
+    }
+  }
+
+  protected def eventStream(config: Config, consumerSettings: ConsumerSettings[Array[Byte], NamespaceDirectorChanged], namespaceDirectorConfig: NamespaceDirectorConfig) = {
+    val suffix = config.getString("messaging.kafka.topicSuffix")
+
+    Consumer.plainSource(consumerSettings, Subscriptions.topics(namespaceDirectorChangedMessageLike.streamName + "-" + suffix))
+      .log("event", _.value())
+      .map { event =>
+        val msg = event.value()
+        namespaceDirectorConfig.set(msg.namespace, msg.director)
+        _log.info("Set {} for {}", msg.director, msg.namespace)
+      }
+
+  }
+
+  protected def consumerSettings()(implicit system: ActorSystem) = {
+    ConsumerSettings(system, new ByteArrayDeserializer, new JsonDeserializer[NamespaceDirectorChanged](namespaceDirectorChangedCodec, throwException = true))
+      // every instance always consumes whole topic, no commit, unique group id
+      .withGroupId(s"ota-plus-server-${namespaceDirectorChangedMessageLike.streamName}-${UUID.randomUUID().toString}")
+      .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+  }
 }
 
 class NamespaceDirectorConfig(val conf: Config) extends Settings {
   private val mapping = new ConcurrentHashMap[Namespace, DirectorVersion]()
+
 
   def set(ns: Namespace, version: DirectorVersion): Unit = {
     mapping.put(ns, version)
@@ -49,34 +93,18 @@ class NamespaceDirectorConfig(val conf: Config) extends Settings {
 class NamespaceDirectorChangedListener(config: Config, namespaceDirectorConfig: NamespaceDirectorConfig) extends Actor with ActorLogging {
   import akka.pattern._
   import context.dispatcher
+  import NamespaceDirectorChangedListener._
 
   implicit val mat = ActorMaterializer()
 
-  import com.advancedtelematic.libats.messaging_datatype.Messages.namespaceDirectorChangedMessageLike
-  import com.advancedtelematic.libats.messaging_datatype.MessageCodecs.namespaceDirectorChangedCodec
-
   override def preStart(): Unit = {
-    val consumerSettings = ConsumerSettings(context.system, new ByteArrayDeserializer, new JsonDeserializer[NamespaceDirectorChanged](namespaceDirectorChangedCodec, throwException = true))
-      // every instance always consumes whole topic, no commit, unique group id
-      .withGroupId(s"ota-plus-server-${namespaceDirectorChangedMessageLike.streamName}-${UUID.randomUUID().toString}")
-      .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    context.become(start(consumerSettings))
+    context.become(start(consumerSettings()(context.system)))
   }
 
   private def start(consumerSettings: ConsumerSettings[Array[Byte], NamespaceDirectorChanged]): Receive = {
-    val suffix = config.getString("messaging.kafka.topicSuffix")
-
-    val flowResult: Future[Done] = Consumer
-      .plainSource(consumerSettings, Subscriptions.topics(namespaceDirectorChangedMessageLike.streamName + "-" + suffix))
-      .log("event")(log)
-      .map { _.value() }
-      .map { msg =>
-        namespaceDirectorConfig.set(msg.namespace, msg.director)
-        log.info("Set {} for {}", msg.director, msg.namespace)
-      }
+    eventStream(config, consumerSettings, namespaceDirectorConfig)
       .runWith(Sink.ignore)
-
-    flowResult pipeTo self
+      .pipeTo(self)
 
     active
   }
