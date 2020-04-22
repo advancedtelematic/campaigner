@@ -1,11 +1,10 @@
 package com.advancedtelematic.campaigner.actor
 
+import akka.actor.PoisonPill
 import akka.testkit.TestProbe
-import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
-import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 
 import scala.concurrent.duration._
@@ -16,12 +15,6 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
   import CampaignSupervisor._
 
   val campaigns = Campaigns()
-
-  def buildCampaignWithUpdate: Campaign = {
-    val update = genMultiTargetUpdate.generate
-    val updateId = updateRepo.persist(update).futureValue
-    arbitrary[Campaign].generate.copy(updateId = updateId)
-  }
 
   "campaign supervisor" should "pick up unfinished and fresh campaigns" in {
     val partiallyScheduledCampaign = buildCampaignWithUpdate
@@ -68,17 +61,9 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
 }
 
 class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with CampaignerSpec with UpdateSupport {
-
   import CampaignSupervisor._
-  import org.scalacheck.Arbitrary._
 
   val campaigns = Campaigns()
-
-  def buildCampaignWithUpdate: Campaign = {
-    val update = genMultiTargetUpdate.generate
-    val updateId = updateRepo.persist(update).futureValue
-    arbitrary[Campaign].generate.copy(updateId = updateId)
-  }
 
   "campaign supervisor" should "clean out campaigns that are marked to be cancelled" in {
     val campaign = buildCampaignWithUpdate
@@ -88,7 +73,7 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
 
     campaigns.create(campaign, Set.empty, devs, Seq.empty).futureValue
 
-    parent.childActorOf(CampaignSupervisor.props(
+    val child = parent.childActorOf(CampaignSupervisor.props(
       _ => director,
       schedulerPollingTimeout,
       10.seconds,
@@ -100,6 +85,33 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
     campaigns.cancel(campaign.id).futureValue
     parent.expectMsg(5.seconds, CampaignsCancelled(Set(campaign.id)))
     expectNoMessage(5.seconds)
+
+    parent.watch(child)
+    child ! PoisonPill
+    parent.expectTerminated(child)
   }
 
+  "campaign supervisor" should "not schedule campaigns that were cancelled" in {
+    val campaign = buildCampaignWithUpdate
+    val parent = TestProbe()
+    val devs = Gen.listOfN(batch, genDeviceId).generate.toSet
+
+    campaigns.create(campaign, Set.empty, devs, Seq.empty).futureValue
+
+    campaigns.cancel(campaign.id).futureValue
+
+    val child = parent.childActorOf(CampaignSupervisor.props(
+      _ => director,
+      schedulerPollingTimeout,
+      1.seconds,
+      schedulerBatchSize
+    ))
+
+    parent.expectMsg(CampaignsCancelled(Set(campaign.id)))
+    parent.expectNoMessage(5.seconds)
+
+    parent.watch(child)
+    child ! PoisonPill
+    parent.expectTerminated(child)
+  }
 }

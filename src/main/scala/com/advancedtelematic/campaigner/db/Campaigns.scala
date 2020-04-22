@@ -44,7 +44,7 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
    * state
    */
   def requestedDevicesStream(campaign: CampaignId): Source[DeviceId, NotUsed] =
-    deviceUpdateRepo.findByCampaignStream(campaign, DeviceStatus.requested)
+    deviceUpdateRepo.findByCampaignStream(campaign, DeviceStatus.requested).map(_._1)
 
   /**
    * Re-calculates the status of the campaign and updates the table
@@ -84,7 +84,8 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
     finishDevices(campaignId, devices, DeviceStatus.cancelled, None, None)
 
   private def finishDevices(campaignId: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[ResultCode], resultDescription: Option[ResultDescription]): Future[Unit] = db.run {
-    deviceUpdateRepo.setUpdateStatusAction(campaignId, devices, status, resultCode, resultDescription)
+    deviceUpdateRepo
+      .setUpdateStatusAction(campaignId, devices, status, resultCode, resultDescription)
       .andThen(campaignStatusTransition.devicesFinished(campaignId))
   }
 
@@ -311,12 +312,15 @@ protected [db] class CampaignStatusTransition(implicit db: Database, ec: Executi
   def devicesFinished(campaignId: CampaignId): DBIO[Unit] =
     updateToCalculatedStatus(campaignId)
 
-  def cancel(campaignId: CampaignId): DBIO[Unit] =
-    for {
+  def cancel(campaignId: CampaignId): DBIO[Unit] = {
+    val dbio = for {
       _ <- campaignRepo.findAction(campaignId)
       _ <- cancelTaskRepo.cancelAction(campaignId)
       _ <- campaignRepo.setStatusAction(campaignId, CampaignStatus.cancelled)
     } yield ()
+
+    dbio.transactionally
+  }
 
   protected[db] def updateToCalculatedStatus(campaignId: CampaignId): DBIO[Unit] =
     for {

@@ -11,13 +11,12 @@ import slick.jdbc.MySQLProfile.api._
 import scala.concurrent.{ExecutionContext, Future}
 
 object DeviceUpdateProcess {
-  final case class StartUpdateResult(
-    acceptedDevices: Set[DeviceId],
-    scheduledDevices: Set[DeviceId],
-    rejectedDevices: Set[DeviceId])
+  sealed trait StartUpdateResult
+  case class Started(acceptedDevices: Set[DeviceId], scheduledDevices: Set[DeviceId], rejectedDevices: Set[DeviceId]) extends StartUpdateResult
+  case object CampaignCancelled extends StartUpdateResult
 }
 
-class DeviceUpdateProcess(director: DirectorClient)(implicit db: Database, ec: ExecutionContext) extends UpdateSupport {
+class DeviceUpdateProcess(director: DirectorClient)(implicit db: Database, ec: ExecutionContext) extends UpdateSupport with CancelTaskSupport {
 
   import DeviceUpdateProcess._
 
@@ -26,35 +25,39 @@ class DeviceUpdateProcess(director: DirectorClient)(implicit db: Database, ec: E
   val campaigns = Campaigns()
 
   def startUpdateFor(devices: Set[DeviceId], campaign: Campaign): Future[StartUpdateResult] = {
-    updateRepo.findById(campaign.updateId).flatMap { update =>
-      val acceptDevices: Future[Set[DeviceId]] = {
-        if (campaign.autoAccept) {
-          director
-            .setMultiUpdateTarget(campaign.namespace, update.source.id,
-              devices.toSeq, CampaignCorrelationId(campaign.id.uuid))
-            .map(_.toSet)
-        } else {
-          FastFuture.successful(Set.empty)
+    updateRepo.findById(campaign.updateId).zip(cancelTaskRepo.isCancelled(campaign.id)).flatMap { case (update, cancelled) =>
+      if (cancelled)
+        FastFuture.successful(CampaignCancelled)
+      else {
+        val acceptDevices: Future[Set[DeviceId]] = {
+          if (campaign.autoAccept) {
+            director
+              .setMultiUpdateTarget(campaign.namespace, update.source.id,
+                devices.toSeq, CampaignCorrelationId(campaign.id.uuid))
+              .map(_.toSet)
+          } else {
+            FastFuture.successful(Set.empty)
+          }
         }
-      }
 
-      val scheduleDevices: Future[Set[DeviceId]] = {
-        if (campaign.autoAccept) {
-          FastFuture.successful(Set.empty)
-        } else if (update.source.sourceType == UpdateType.external) {
-          FastFuture.successful(devices)
-        } else {
-          director
-            .findAffected(campaign.namespace, update.source.id, devices.toSeq)
-            .map(_.toSet)
+        val scheduleDevices: Future[Set[DeviceId]] = {
+          if (campaign.autoAccept) {
+            FastFuture.successful(Set.empty)
+          } else if (update.source.sourceType == UpdateType.external) {
+            FastFuture.successful(devices)
+          } else {
+            director
+              .findAffected(campaign.namespace, update.source.id, devices.toSeq)
+              .map(_.toSet)
+          }
         }
-      }
 
-      for {
-        accepted <- acceptDevices
-        scheduled <- scheduleDevices
-        rejected = devices -- accepted -- scheduled
-      } yield StartUpdateResult(accepted, scheduled, rejected)
+        for {
+          accepted <- acceptDevices
+          scheduled <- scheduleDevices
+          rejected = devices -- accepted -- scheduled
+        } yield Started(accepted, scheduled, rejected)
+      }
     }
   }
 
