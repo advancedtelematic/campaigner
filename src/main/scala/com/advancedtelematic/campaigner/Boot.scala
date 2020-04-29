@@ -28,7 +28,6 @@ trait Settings {
 
   val deviceRegistryUri = _config.getString("deviceRegistry.uri")
   val directorUri = _config.getString("director.uri")
-  val directorV2Uri = _config.getString("directorV2.uri")
   val userProfileUri = _config.getString("userProfile.uri")
 
   val schedulerPollingTimeout =

@@ -23,7 +23,7 @@ object CampaignSupervisor {
   final case class CampaignsScheduled(campaigns: Set[CampaignId])
   final case class CampaignsCancelled(campaigns: Set[CampaignId])
 
-  def props(director: Namespace => DirectorClient,
+  def props(director: DirectorClient,
             pollingTimeout: FiniteDuration,
             delay: FiniteDuration,
             batchSize: Int)
@@ -32,7 +32,7 @@ object CampaignSupervisor {
 
 }
 
-class CampaignSupervisor(director: Namespace => DirectorClient,
+class CampaignSupervisor(director: DirectorClient,
                          pollingTimeout: FiniteDuration,
                          delay: FiniteDuration,
                          batchSize: Int)
@@ -70,14 +70,14 @@ class CampaignSupervisor(director: Namespace => DirectorClient,
 
   def cancelCampaign(ns: Namespace, campaign: CampaignId): ActorRef =
     context.actorOf(CampaignCanceler.props(
-      director(ns),
+      director,
       campaign,
       ns,
       batchSize
     ))
 
   def scheduleCampaign(campaign: Campaign): ActorRef = {
-    val childProps = CampaignScheduler.props(director(campaign.namespace), campaign, delay, batchSize)
+    val childProps = CampaignScheduler.props(director, campaign, delay, batchSize)
 
     val props = BackoffSupervisor.props(
       BackoffOpts.onFailure(
