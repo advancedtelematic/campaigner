@@ -10,7 +10,7 @@ import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, Upda
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec, DatabaseUpdateSpecUtil}
 import com.advancedtelematic.libats.data.DataType.{CorrelationId, Namespace}
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
-import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.Gen
 import org.scalatest.Inspectors
 
 import scala.concurrent.Future

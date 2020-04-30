@@ -3,7 +3,7 @@ package com.advancedtelematic.campaigner.actor
 import akka.actor.Terminated
 import akka.stream.scaladsl.Sink
 import akka.testkit.TestProbe
-import com.advancedtelematic.campaigner.data.DataType.{Campaign, DeviceStatus}
+import com.advancedtelematic.campaigner.data.DataType.DeviceStatus
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec, DatabaseUpdateSpecUtil}

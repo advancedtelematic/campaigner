@@ -25,7 +25,7 @@ object DeviceEventListener {
   implicit val acceptedCampaignDecoder: Decoder[AcceptedCampaign] = deriveDecoder
 }
 
-class DeviceEventListener(directorClient: Namespace => DirectorClient)(implicit db: Database, ec: ExecutionContext)
+class DeviceEventListener(directorClient: DirectorClient)(implicit db: Database, ec: ExecutionContext)
   extends (DeviceEventMessage => Future[Done]) with CampaignSupport {
 
   import DeviceEventListener._
@@ -34,7 +34,7 @@ class DeviceEventListener(directorClient: Namespace => DirectorClient)(implicit 
 
   val campaigns = Campaigns()
 
-  def deviceUpdateProcess(ns: Namespace) = new DeviceUpdateProcess(directorClient(ns))
+  def deviceUpdateProcess(ns: Namespace) = new DeviceUpdateProcess(directorClient)
 
   def apply(msg: DeviceEventMessage): Future[Done] =
     msg.event.eventType match {

@@ -45,7 +45,7 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
       partiallyScheduledCampaignDevices.take(nScheduled).toSeq).futureValue
 
     parent.childActorOf(CampaignSupervisor.props(
-      _ => director,
+      director,
       schedulerPollingTimeout,
       schedulerDelay,
       schedulerBatchSize
@@ -74,7 +74,7 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
     campaigns.create(campaign, Set.empty, devs, Seq.empty).futureValue
 
     val child = parent.childActorOf(CampaignSupervisor.props(
-      _ => director,
+      director,
       schedulerPollingTimeout,
       10.seconds,
       schedulerBatchSize
@@ -101,7 +101,7 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
     campaigns.cancel(campaign.id).futureValue
 
     val child = parent.childActorOf(CampaignSupervisor.props(
-      _ => director,
+      director,
       schedulerPollingTimeout,
       1.seconds,
       schedulerBatchSize
