@@ -92,6 +92,5 @@ dockerCommands := Seq(
   Cmd("USER", "daemon")
 )
 
-enablePlugins(JavaAppPackaging)
+enablePlugins(JavaAppPackaging, GitVersioning)
 
-Release.settings
