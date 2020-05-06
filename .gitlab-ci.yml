@@ -1,10 +1,7 @@
 stages:
-  - prepare
   - test
   - build image
   - trigger deploy
-  - update deployment
-  - integration test
   - veracode scan
   - deps scan
   - generate pages
@@ -28,8 +25,6 @@ default:
 
 test:
   stage: test
-  tags:
-    - docker-sock
   image: advancedtelematic/gitlab-jobs:0.2.3
   variables:
     DB_URL: "jdbc:mariadb://db:3306/campaigner"
@@ -38,7 +33,7 @@ test:
     - mysqladmin ping --protocol=TCP -h db -P 3306 -u root -proot
     - mysql -v -h db -u root -proot < db_user.sql
   script:
-    - sbt -sbt-dir ./.sbt -ivy ./.ivy2 -J-Xmx1G -J-XX:MaxPermSize=256m -J-XX:ReservedCodeCacheSize=128m test
+    - sbt -sbt-dir ./.sbt -ivy ./.ivy2 -J-Xmx1G -J-XX:MaxPermSize=256m -J-XX:ReservedCodeCacheSize=128m clean coverage test coverageReport sonarScan
   cache:
     paths:
       - .ivy2/
@@ -140,7 +135,3 @@ pages:
     paths:
       - public
     expire_in: 64 days
-
-include:
-  - project: olp/edge/ota/testing/dynamic-hats
-    file: /.gitlab-ci.yml
