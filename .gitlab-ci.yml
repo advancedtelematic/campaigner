@@ -73,6 +73,7 @@ trigger dev deploy:
     NEW_TAG: $CI_COMMIT_SHA
     SERVICE: campaigner
     CREATE_COMMIT: "true"
+    UPSTREAM_COMMIT_MESSAGE: $CI_COMMIT_MESSAGE
   trigger:
     project: OLP/EDGE/OTA/infra/deployment-descriptors
     branch: master
@@ -88,6 +89,7 @@ trigger sit deploy:
     NEW_TAG: $CI_COMMIT_SHA
     SERVICE: campaigner
     CREATE_COMMIT: "true"
+    UPSTREAM_COMMIT_MESSAGE: $CI_COMMIT_MESSAGE
   trigger:
     project: OLP/EDGE/OTA/infra/deployment-descriptors
     branch: master
