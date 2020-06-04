@@ -1,10 +1,7 @@
 stages:
-  - prepare
   - test
   - build image
   - trigger deploy
-  - update deployment
-  - integration test
   - veracode scan
   - deps scan
   - generate pages
@@ -15,7 +12,6 @@ variables:
   MYSQL_USER: "campaigner"
   MYSQL_PASSWORD: "campaigner"
   VAULT_ADDR: "http://vault.sit-ota.aws.in.here.com"
-  SERVICE_IMAGE: "advancedtelematic/campaigner"
 
 default:
   services:
@@ -140,7 +136,3 @@ pages:
     paths:
       - public
     expire_in: 64 days
-
-include:
-  - project: olp/edge/ota/testing/dynamic-hats
-    file: /.gitlab-ci.yml
