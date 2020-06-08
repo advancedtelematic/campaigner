@@ -12,7 +12,6 @@ variables:
   MYSQL_USER: "campaigner"
   MYSQL_PASSWORD: "campaigner"
   VAULT_ADDR: "http://vault.sit-ota.aws.in.here.com"
-  SERVICE_IMAGE: "advancedtelematic/campaigner"
 
 default:
   services:
