@@ -25,6 +25,10 @@ default:
 test:
   stage: test
   image: advancedtelematic/gitlab-jobs:0.2.3
+  except:
+    refs:
+      - schedules
+      - deploy/sit
   variables:
     DB_URL: "jdbc:mariadb://db:3306/campaigner"
   before_script:
