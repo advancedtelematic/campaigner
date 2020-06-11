@@ -2,7 +2,7 @@ package com.advancedtelematic.campaigner.http
 
 import akka.http.scaladsl.server.{Directive1, Directives, Route}
 import com.advancedtelematic.campaigner.VersionInfo
-import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, DirectorClient, ResolverClient, UserProfileClient}
+import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, ResolverClient, UserProfileClient}
 import com.advancedtelematic.libats.auth.NamespaceDirectives
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.http.DefaultRejectionHandler.rejectionHandler

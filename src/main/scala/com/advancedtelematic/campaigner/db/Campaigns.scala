@@ -55,11 +55,8 @@ protected [db] class Campaigns(implicit db: Database, ec: ExecutionContext)
   def freshCancelled(): Future[Seq[(Namespace, CampaignId)]] =
     cancelTaskRepo.findPending()
 
-  /**
-   * Returns all newly created, not yet scheduled campaigns
-   */
-  def freshCampaigns(): Future[Set[Campaign]] =
-    db.run(campaignRepo.findAllNewlyCreated)
+  def launchedCampaigns: Future[Set[Campaign]] =
+    db.run(campaignRepo.findAllLaunched)
 
   /**
    * Sets status of each given device to `rejected` for a given campaign and

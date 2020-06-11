@@ -48,7 +48,7 @@ trait DeviceRegistryClient {
 }
 
 class DeviceRegistryHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResponse])
-    (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer, tracing: ServerRequestTracing)
+    (implicit system: ActorSystem, mat: Materializer, tracing: ServerRequestTracing)
     extends TracingHttpClient(httpClient, "device-registry") with DeviceRegistryClient {
 
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._

@@ -19,10 +19,8 @@ import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, Updat
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
-import java.util.UUID
 
 import slick.jdbc.MySQLProfile.api._
-import slick.jdbc.GetResult
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Failure
@@ -210,26 +208,11 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
       .result
       .map(_.toSet)
 
-  /**
-   * Returns all campaigns that have all devices in `requested` state
-   */
-  def findAllNewlyCreated: DBIO[Set[Campaign]] = {
-    implicit val `GetResult[UUID]` = GetResult(r => UUID.fromString(r.nextString))
-
-    val queryAllNewlyCreatedCampaignIds = sql"""
-      select campaign_id
-      from device_updates
-      group by campaign_id
-      having group_concat(distinct status) = 'requested';
-    """.as[UUID]
-
-    val action = for {
-      ids <- queryAllNewlyCreatedCampaignIds.map(_.map(CampaignId(_)))
-      campaigns <- Schema.campaigns.filter(_.id.inSet(ids)).filter(_.status =!= CampaignStatus.cancelled).result
-    } yield campaigns.toSet
-
-    action.transactionally
-  }
+  def findAllLaunched: DBIO[Set[Campaign]] =
+    Schema.campaigns
+      .filter(_.status === CampaignStatus.launched)
+      .result
+      .map(_.toSet)
 
   def update(campaign: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
     db.run {

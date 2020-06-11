@@ -8,7 +8,7 @@ import akka.http.scaladsl.server.{Directive1, Route}
 import akka.http.scaladsl.unmarshalling.{FromStringUnmarshaller, Unmarshaller}
 import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.Settings
-import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, DirectorClient}
+import com.advancedtelematic.campaigner.client.DeviceRegistryClient
 import com.advancedtelematic.campaigner.data.AkkaSupport._
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.CsvSerializer
