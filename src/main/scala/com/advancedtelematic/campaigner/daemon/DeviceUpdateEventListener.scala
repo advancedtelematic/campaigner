@@ -5,6 +5,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
 import com.advancedtelematic.campaigner.http.Errors
 import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId}
+import com.advancedtelematic.libats.messaging.MsgOperation.MsgOperation
 import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceUpdateCanceled, DeviceUpdateCompleted, DeviceUpdateEvent}
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
@@ -12,7 +13,7 @@ import slick.jdbc.MySQLProfile.api._
 import scala.concurrent.{ExecutionContext, Future}
 
 class DeviceUpdateEventListener()(implicit db: Database, ec: ExecutionContext)
-  extends (DeviceUpdateEvent => Future[Unit]) with UpdateSupport {
+  extends MsgOperation[DeviceUpdateEvent] with UpdateSupport {
 
   private lazy val _log = LoggerFactory.getLogger(this.getClass)
 
