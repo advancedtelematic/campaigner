@@ -56,6 +56,8 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
 
     val freshCampaignDevices = Gen.listOfN(n, genDeviceId).generate.toSet
     campaigns.create(freshCampaign, Set.empty, freshCampaignDevices, Seq.empty).futureValue
+    parent.expectNoMessage(3.seconds)
+    campaigns.launch(freshCampaign.id)
     parent.expectMsg(3.seconds, CampaignsScheduled(Set(freshCampaign.id)))
   }
 }

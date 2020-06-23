@@ -101,7 +101,7 @@ class CampaignSupervisor(director: DirectorClient,
     case PickUpCampaigns =>
       log.debug(s"picking up campaigns")
       campaigns
-        .freshCampaigns()
+        .launchedCampaigns
         .map(ResumeCampaigns)
         .pipeTo(self)
 

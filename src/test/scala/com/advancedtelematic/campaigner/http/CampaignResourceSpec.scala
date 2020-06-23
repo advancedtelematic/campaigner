@@ -93,8 +93,10 @@ class CampaignResourceSpec
     )
     campaign.createdAt shouldBe campaign.updatedAt
 
-    val campaigns = getCampaignsOk()
-    campaigns.values should contain (id)
+    Get(apiUri(s"campaigns/${id.uuid}")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+      responseAs[GetCampaign].status shouldBe CampaignStatus.prepared
+    }
 
     checkStats(id, CampaignStatus.prepared)
   }
