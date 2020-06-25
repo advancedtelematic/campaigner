@@ -19,8 +19,10 @@ import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, Updat
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
+import java.util.UUID
 
 import slick.jdbc.MySQLProfile.api._
+import slick.jdbc.GetResult
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Failure
@@ -208,11 +210,26 @@ protected class CampaignRepository()(implicit db: Database, ec: ExecutionContext
       .result
       .map(_.toSet)
 
-  def findAllLaunched: DBIO[Set[Campaign]] =
-    Schema.campaigns
-      .filter(_.status === CampaignStatus.launched)
-      .result
-      .map(_.toSet)
+  def findAllLaunched: DBIO[Set[Campaign]] = {
+    implicit val gr = GetResult(r => CampaignId(UUID.fromString(r.nextString)))
+
+    // I brought back this query because it keeps the campaign supervisor actor from picking up
+    // and scheduling campaigns indefinitely. There should be a less surprising way to do this.
+    val queryAllNewlyCreatedCampaignIds = sql"""
+      select campaign_id
+      from device_updates
+      group by campaign_id
+      having group_concat(distinct status) = 'requested';
+    """.as[CampaignId]
+
+    queryAllNewlyCreatedCampaignIds.flatMap { cids =>
+      Schema.campaigns
+        .filter(_.status === CampaignStatus.launched)
+        .filter(_.id inSet cids)
+        .result
+        .map(_.toSet)
+    }
+  }
 
   def update(campaign: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
     db.run {
