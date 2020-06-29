@@ -11,6 +11,8 @@ variables:
   MYSQL_USER: "campaigner"
   MYSQL_PASSWORD: "campaigner"
   VAULT_ADDR: "http://vault.sit-ota.aws.in.here.com"
+  # The same image have to be used by test and code coverage jobs:
+  TEST_IMAGE: advancedtelematic/gitlab-jobs:0.2.4
 
 default:
   services:
@@ -23,8 +25,7 @@ default:
 
 test:
   stage: test
-  image: advancedtelematic/gitlab-jobs:0.2.3
-  # Keep image and except stanzas in sync with code coverage job below
+  image: $TEST_IMAGE
   except:
     refs:
       - deploy/sit
@@ -43,7 +44,7 @@ test:
   cache:
     paths:
       - .ivy2/
-      - .sbt
+      - .sbt/
 
 code coverage:
   extends: .report_scala_coverage
@@ -52,7 +53,7 @@ code coverage:
     refs:
       - deploy/sit
   allow_failure: true
-  image: advancedtelematic/gitlab-jobs:0.2.3
+  image: $TEST_IMAGE
 
 build docker image:
   stage: build image
@@ -112,5 +113,5 @@ trigger sit deploy:
 
 include:
   - project: olp/edge/ota/infra/security
-    ref: v0.0.6
+    ref: v0.0.7
     file: /shared.yaml
