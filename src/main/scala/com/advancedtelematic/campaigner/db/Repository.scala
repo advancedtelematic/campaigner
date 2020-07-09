@@ -73,6 +73,9 @@ protected [db] class DeviceUpdateRepository()(implicit db: Database, ec: Executi
   def findByCampaign(campaign: CampaignId, status: DeviceStatus): Future[Set[DeviceId]] =
     db.run(findByCampaignAction(campaign, status))
 
+  def findByDeviceCampaign(campaign: CampaignId, deviceId: DeviceId): Future[Option[DeviceUpdate]] =
+    db.run(Schema.deviceUpdates.filter(_.campaignId === campaign).filter(_.deviceId === deviceId).result.headOption)
+
   protected[db] def findByCampaignAction(campaign: CampaignId, status: DeviceStatus): DBIO[Set[DeviceId]] =
     Schema.deviceUpdates
       .filter(_.campaignId === campaign)
