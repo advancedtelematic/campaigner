@@ -1,11 +1,13 @@
 package com.advancedtelematic.campaigner.daemon
 
+import akka.http.scaladsl.util.FastFuture
 import cats.syntax.show._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.{Campaigns, UpdateSupport}
 import com.advancedtelematic.campaigner.http.Errors
 import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId}
 import com.advancedtelematic.libats.messaging.MsgOperation.MsgOperation
+import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceUpdateCanceled, DeviceUpdateCompleted, DeviceUpdateEvent}
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
@@ -34,19 +36,33 @@ class DeviceUpdateEventListener()(implicit db: Database, ec: ExecutionContext)
   private def handleUpdateCanceled(campaignId: CampaignId, msg: DeviceUpdateCanceled): Future[Unit] =
     campaigns.cancelDevices(campaignId, Seq(msg.deviceUuid))
 
+
+  private def completedEventReceived(campaignId: CampaignId, deviceId: DeviceId): Future[Boolean] = {
+    campaigns.deviceUpdateRepo.findByDeviceCampaign(campaignId,deviceId).map {
+      case Some(d) if d.status == DeviceStatus.successful || d.status == DeviceStatus.failed || d.status == DeviceStatus.cancelled => true
+      case _ => false
+    }
+  }
+
   private def handleUpdateCompleted(campaignId: CampaignId, msg: DeviceUpdateCompleted): Future[Unit] = {
     val resultCode = msg.result.code
     val resultDescription = msg.result.description
 
-    val f = if (msg.result.success) {
-      campaigns.succeedDevices(campaignId, Seq(msg.deviceUuid), resultCode, resultDescription)
-    } else {
-      campaigns.failDevices(campaignId, Seq(msg.deviceUuid), resultCode, resultDescription)
-    }
+    completedEventReceived(campaignId, msg.deviceUuid).flatMap {
+      case true =>
+        _log.warn(s"Already received a DeviceUpdateCompleted for $msg, ignoring event")
+        FastFuture.successful(())
+      case false =>
+        val f = if (msg.result.success) {
+          campaigns.succeedDevices(campaignId, Seq(msg.deviceUuid), resultCode, resultDescription)
+        } else {
+          campaigns.failDevices(campaignId, Seq(msg.deviceUuid), resultCode, resultDescription)
+        }
 
-    f.recover {
-      case Errors.DeviceNotScheduled =>
-        _log.info(s"Got DeviceUpdateEvent for device ${msg.deviceUuid.show} which is not scheduled by campaigner, ignoring this message.")
+        f.recover {
+          case Errors.DeviceNotScheduled =>
+            _log.info(s"Got DeviceUpdateEvent for device ${msg.deviceUuid.show} which is not scheduled by campaigner, ignoring this message.")
+        }
     }
   }
 }
