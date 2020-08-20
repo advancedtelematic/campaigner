@@ -206,7 +206,7 @@ class CampaignResourceSpec
       responseAs[CampaignId]
     }
 
-    assertRetryCampaign(Eval.later(getCampaignOk(retryCampaignId)), failureCode, mainCampaign.update, mainCampaignId)
+    assertRetryCampaign(Eval.always(getCampaignOk(retryCampaignId)), failureCode, mainCampaign.update, mainCampaignId)
   }
 
   "POST /campaigns/:campaign_id/retry-failed" should "create and launch a second retry-campaign when the device fails with a new code after the first retry" in {
@@ -234,7 +234,7 @@ class CampaignResourceSpec
       responseAs[CampaignId]
     }
 
-    assertRetryCampaign(Eval.later(getCampaignOk(retryCampaignId2)), failureCode2, mainCampaign.update, mainCampaignId)
+    assertRetryCampaign(Eval.always(getCampaignOk(retryCampaignId2)), failureCode2, mainCampaign.update, mainCampaignId)
   }
 
   "POST /campaigns/:campaign_id/retry-failed" should "fail if there are no failed devices for the given failure code" in {

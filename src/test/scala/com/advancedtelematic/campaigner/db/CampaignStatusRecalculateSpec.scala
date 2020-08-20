@@ -14,6 +14,7 @@ import org.scalatest._
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
+import org.scalatest.time.SpanSugar._
 import scala.concurrent.Future
 import slick.jdbc.MySQLProfile.api._
 
@@ -46,7 +47,7 @@ final class CampaignStatusRecalculateSpec
       _ <- new CampaignStatusRecalculate().run
     } yield campaign
 
-    whenReady(setupTest) { campaign =>
+    whenReady(setupTest, timeout(40 seconds)) { campaign =>
       val updatedCampaign = campaignRepo.find(campaign.id).futureValue
       updatedCampaign.status shouldBe CampaignStatus.finished
     }
@@ -65,7 +66,7 @@ final class CampaignStatusRecalculateSpec
       _ <- new CampaignStatusRecalculate().run
     } yield campaign
 
-    whenReady(setupTest) { campaign =>
+    whenReady(setupTest, timeout(40 seconds)) { campaign =>
       val updatedCampaign = campaignRepo.find(campaign.id).futureValue
       updatedCampaign.status shouldBe CampaignStatus.launched
     }
