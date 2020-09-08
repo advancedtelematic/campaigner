@@ -558,7 +558,7 @@ class CampaignResourceSpec
   }
 
   private def assertRetryCampaign(retryCampaign: Eval[GetCampaign], failureCode: ResultCode, updateId: UpdateId, mainCampaignId: CampaignId): Assertion = {
-    eventually(timeout(10 seconds)) {
+    eventually(timeout(20 seconds)) {
       val retry = retryCampaign.value
 
       retry shouldBe GetCampaign(

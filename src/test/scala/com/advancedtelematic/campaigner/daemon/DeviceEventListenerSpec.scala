@@ -83,4 +83,19 @@ class DeviceEventListenerSpec extends CampaignerSpec with DatabaseSpec with Devi
     val msg = mkEventOfType(EventType("whatever", 42))
     listener.apply(msg).futureValue shouldBe Done
   }
+
+  it should "not launch director update after acceptance of cancelled campaign" in {
+    val campaign = createDbCampaignWithUpdate().futureValue
+    val device = arbitrary[DeviceId].generate
+
+    deviceUpdateRepo.persistMany(Seq(DeviceUpdate(campaign.id, campaign.updateId, device, DeviceStatus.scheduled))).futureValue
+
+    campaigns.cancel(campaign.id).futureValue
+
+    val msg = mkDeviceEvent(campaign, device)
+    listener.apply(msg).futureValue shouldBe Done
+
+    val update = updateRepo.findById(campaign.updateId).futureValue
+    Option(director.updates.get(update.source.id)) shouldBe None
+  }
 }
