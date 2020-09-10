@@ -8,6 +8,7 @@ import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
 
+import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
 
 object DeviceUpdateProcess {
@@ -61,21 +62,23 @@ class DeviceUpdateProcess(director: DirectorClient)(implicit db: Database, ec: E
     }
   }
 
-  def processDeviceAcceptedUpdate(ns: Namespace, campaignId: CampaignId, deviceId: DeviceId): Future[Unit] = {
-    for {
-      campaign <- campaigns.findClientCampaign(campaignId)
-      update <- updateRepo.findById(campaign.update)
-      affected <- director.setMultiUpdateTarget(ns, update.source.id, Seq(deviceId), CampaignCorrelationId(campaignId.uuid))
-      _ <- affected.find(_ == deviceId) match {
-        case Some(_) =>
-          campaigns.markDevicesAccepted(campaignId, Seq(deviceId))
-        case None =>
-          _logger.warn(s"Could not start mtu update for device $deviceId after device accepted, device is no longer affected")
+  def processDeviceAcceptedUpdate(ns: Namespace, campaignId: CampaignId, deviceId: DeviceId): Future[Unit] = async {
+    if (await(cancelTaskRepo.isCancelled(campaignId))) {
+      _logger.warn(s"Ignoring acceptance of cancelled campaign $campaignId by device $deviceId")
+    } else {
+      val campaign = await(campaigns.findClientCampaign(campaignId))
+      val update = await(updateRepo.findById(campaign.update))
+      val affected = await(director.setMultiUpdateTarget(ns, update.source.id, Seq(deviceId), CampaignCorrelationId(campaignId.uuid)))
 
-          campaigns.scheduleDevices(campaignId, Seq(deviceId)).flatMap { _ =>
-            campaigns.failDevices(campaignId, Seq(deviceId), ResultCode("DEVICE_UPDATE_PROCESS_FAILED"), ResultDescription("DeviceUpdateProcess#processDeviceAcceptedUpdate failed"))
-          }
+      if (affected.contains(deviceId)) {
+        await(campaigns.markDevicesAccepted(campaignId, Seq(deviceId)))
+      } else {
+        _logger.warn(s"Could not start mtu update for device $deviceId after device accepted, device is no longer affected")
+
+        await(campaigns.scheduleDevices(campaignId, Seq(deviceId)))
+        await(campaigns.failDevices(campaignId, Seq(deviceId), ResultCode("DEVICE_UPDATE_PROCESS_FAILED"),
+                                    ResultDescription("DeviceUpdateProcess#processDeviceAcceptedUpdate failed")))
       }
-    } yield ()
+    }
   }
 }
