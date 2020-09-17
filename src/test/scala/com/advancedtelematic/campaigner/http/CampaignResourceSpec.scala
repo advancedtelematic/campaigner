@@ -101,6 +101,35 @@ class CampaignResourceSpec
     checkStats(id, CampaignStatus.prepared)
   }
 
+  "POST and GET /campaigns" should "create a campaign, return the created campaign if metadata contains emoji" in {
+    val metadataWithEmoji = CreateCampaignMetadata(MetadataType.DESCRIPTION, "text with emoji: \uD83D\uDE33\uD83D\uDE97\uD83D\uDE12")
+    val createData = genCreateCampaign().map(_.copy(metadata = Some(Seq(metadataWithEmoji))))
+    val (id, request) = createCampaignWithUpdateOk(createData)
+
+    val campaign = getCampaignOk(id)
+    campaign shouldBe GetCampaign(
+      testNs,
+      id,
+      request.name,
+      request.update,
+      CampaignStatus.prepared,
+      campaign.createdAt,
+      campaign.updatedAt,
+      None,
+      Set.empty,
+      request.metadata.toList.flatten,
+      autoAccept = true
+    )
+    campaign.createdAt shouldBe campaign.updatedAt
+
+    Get(apiUri(s"campaigns/${id.uuid}")).withHeaders(header) ~> routes ~> check {
+      status shouldBe OK
+      responseAs[GetCampaign].status shouldBe CampaignStatus.prepared
+    }
+
+    checkStats(id, CampaignStatus.prepared)
+  }
+
   "POST /campaigns" should "create a campaign and populate it with all the devices in groups" in {
     val createUpdateReq = genCreateUpdate().map(cu => cu.copy(updateSource = UpdateSource(cu.updateSource.id, UpdateType.multi_target))).generate
     val updateId = createUpdateOk(createUpdateReq)
