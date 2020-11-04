@@ -39,7 +39,7 @@ class DeviceUpdateEventListener()(implicit db: Database, ec: ExecutionContext)
 
   private def completedEventReceived(campaignId: CampaignId, deviceId: DeviceId): Future[Boolean] = {
     campaigns.deviceUpdateRepo.findByDeviceCampaign(campaignId,deviceId).map {
-      case Some(d) if d.status == DeviceStatus.successful || d.status == DeviceStatus.failed || d.status == DeviceStatus.cancelled => true
+      case Some(d) if d.status == DeviceStatus.successful || d.status == DeviceStatus.cancelled => true
       case _ => false
     }
   }
