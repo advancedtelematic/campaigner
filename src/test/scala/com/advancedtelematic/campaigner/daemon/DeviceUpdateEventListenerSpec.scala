@@ -61,6 +61,28 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
     deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.successful).futureValue should contain(deviceUpdate.device)
   }
 
+  "Listener" should "not ignore event if already received an failed event" in {
+    val (_, campaign, deviceUpdate) = prepareTest()
+
+    val report = makeReport(
+      campaign,
+      deviceUpdate,
+      CampaignCorrelationId(campaign.id.uuid),
+      isSuccessful = false)
+
+    listener.apply(report).futureValue shouldBe (())
+    deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.successful).futureValue shouldBe Set.empty
+
+    val report02 = makeReport(
+      campaign,
+      deviceUpdate,
+      CampaignCorrelationId(campaign.id.uuid),
+      isSuccessful = true)
+
+    listener.apply(report02).futureValue shouldBe (())
+    deviceUpdateRepo.findByCampaign(campaign.id, DeviceStatus.successful).futureValue should contain only deviceUpdate.device
+  }
+
   "Listener" should "mark a device as failed using campaign CorrelationId" in {
     val (_, campaign, deviceUpdate) = prepareTest()
     val report = makeReport(
