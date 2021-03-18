@@ -50,8 +50,8 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
       'nameContains.as[String].?,
       'withErrors.as[Boolean].?,
       'sortBy.as[SortBy] ? (SortBy.CreatedAt : SortBy),
-      'offset.as[Long] ? 0L,
-      'limit.as[Long] ? 50L)).as(SearchCampaignParams) { params: SearchCampaignParams =>
+      'offset.as(nonNegativeLongUnmarshaller) ? 0L,
+      'limit.as(nonNegativeLongUnmarshaller) ? 50L)).as(SearchCampaignParams) { params: SearchCampaignParams =>
       val f = params.withErrors match {
         case Some(true) =>
           campaigns.findCampaignsWithErrors(ns, params.sortBy, params.offset, params.limit)

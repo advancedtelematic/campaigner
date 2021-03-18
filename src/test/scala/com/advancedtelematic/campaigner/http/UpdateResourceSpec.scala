@@ -37,9 +37,18 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
       responseAs[UpdateId]
     }
 
-  private def getUpdates(groups: Seq[GroupId] = Seq(), nameContains: Option[String] = None): HttpRequest = {
-    val m = nameContains.map(x => Seq("nameContains" -> x)).getOrElse(Seq.empty) ++ groups.map("groupId" -> _.show) :+ ("limit" -> "200")
-    Get(apiUri("updates").withQuery(Query(m:_*))).withHeaders(header)
+  private def getUpdates(groups: Seq[GroupId] = Seq(),
+                         nameContains: Option[String] = None,
+                         limit: Option[Long] = Some(200),
+                         offset: Option[Long] = None): HttpRequest = {
+
+    val queryParams = Seq(
+      "nameContains" -> nameContains,
+      "limit" -> limit,
+      "offset" -> offset
+    ).collect { case (k, Some(v)) => (k, v.toString) } ++ groups.map("groupId" -> _.show)
+
+    Get(apiUri("updates").withQuery(Query(queryParams: _*))).withHeaders(header)
   }
 
   private def getUpdateOk(updateId: UpdateId): Update =
@@ -249,6 +258,22 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     val nameContains = arbitrary[String].generate
     getUpdates(Seq(groupId), Some(nameContains)) ~> routes ~> check {
       status shouldBe BadRequest
+    }
+  }
+
+  "GET /updates with negative pagination limit" should "fail with BadRequest" in {
+    val groupId = GroupId.generate()
+    getUpdates(Seq(groupId), limit = Some(-1)) ~> routes ~> check {
+      status shouldBe BadRequest
+      responseAs[ErrorRepresentation].description should include("The query parameter 'limit' was malformed")
+    }
+  }
+
+  "GET /updates with negative pagination offset" should "fail with BadRequest" in {
+    val groupId = GroupId.generate()
+    getUpdates(Seq(groupId), offset = Some(-1)) ~> routes ~> check {
+      status shouldBe BadRequest
+      responseAs[ErrorRepresentation].description should include("The query parameter 'offset' was malformed")
     }
   }
 
