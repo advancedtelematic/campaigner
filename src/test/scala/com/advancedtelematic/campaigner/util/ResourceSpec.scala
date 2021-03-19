@@ -76,12 +76,16 @@ trait ResourceSpec extends ScalatestRouteTest
                    nameContains: Option[String] = None,
                    sortBy: Option[SortBy] = None,
                    withErrors: Option[Boolean] = None,
+                   limit: Option[Long] = None,
+                   offset: Option[Long] = None
                   ): HttpRequest = {
     val m = Seq(
       "status" -> campaignStatus,
       "nameContains" -> nameContains,
       "sortBy" -> sortBy,
       "withErrors" -> withErrors,
+      "limit" -> limit,
+      "offset" -> offset
     ).collect { case (k, Some(v)) => k -> v.toString }.toMap
     Get(apiUri("campaigns").withQuery(Query(m))).withHeaders(header)
   }

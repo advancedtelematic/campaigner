@@ -104,7 +104,7 @@ class UpdateResource(extractNamespace: Directive1[Namespace], deviceRegistry: De
           (post & entity(as[CreateUpdate])) { request =>
             createUpdate(ns, request)
           } ~
-          (get & parameters(('groupId.as[GroupId].*, 'nameContains.as[String].?, 'sortBy.as[SortBy].?, 'offset.as[Long] ? 0L, 'limit.as[Long] ? 50L))) {
+          (get & parameters(('groupId.as[GroupId].*, 'nameContains.as[String].?, 'sortBy.as[SortBy].?, 'offset.as(nonNegativeLongUnmarshaller) ? 0L, 'limit.as(nonNegativeLongUnmarshaller) ? 50L))) {
             (groupId, nameContains, sortBy, offset, limit) => (groupId, nameContains) match {
               case (Nil, _) => complete(getAllUpdates(ns, offset, limit, sortBy, nameContains))
               case (groups, None) => availableUpdatesForGroups(ns, groups.toSet)

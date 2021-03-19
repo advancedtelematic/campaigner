@@ -463,6 +463,20 @@ class CampaignResourceSpec
     }
   }
 
+  "GET /campaigns?limit=<negativeLong>" should "fail with a BadRequest" in {
+    getCampaigns(limit = Some(-1)) ~> routes ~> check {
+      status shouldBe BadRequest
+      responseAs[ErrorRepresentation].description should include ("The query parameter 'limit' was malformed")
+    }
+  }
+
+  "GET /campaigns?offset=<negativeLong>" should "fail with a BadRequest" in {
+    getCampaigns(offset = Some(-1)) ~> routes ~> check {
+      status shouldBe BadRequest
+      responseAs[ErrorRepresentation].description should include ("The query parameter 'offset' was malformed")
+    }
+  }
+
   "GET /campaigns/:id/failed-installations.csv" should "export the failed installations in a CSV" in {
 
     def assertCsvResponse(expected: Seq[String]): Unit = {
