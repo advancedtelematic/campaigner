@@ -112,6 +112,9 @@ class CampaignSupervisor(director: DirectorClient,
       become(supervising(campaignSchedulers -- cs.map(_._2)))
       parent ! CampaignsCancelled(cs.map(_._2))
 
+    case CancelCampaigns(cs) if cs.isEmpty =>
+      log.debug("empty CancelCampaigns event")
+
     case ResumeCampaigns(cs) if cs.nonEmpty =>
       log.info(s"resume campaigns ${cs.map(_.id)}")
       // only create schedulers for campaigns without a scheduler
@@ -125,6 +128,9 @@ class CampaignSupervisor(director: DirectorClient,
         parent ! CampaignsScheduled(newlyScheduled.keySet)
       } else
         log.debug(s"Not creating scheduler for campaigns, scheduler already exists")
+
+    case ResumeCampaigns(cs) if cs.isEmpty =>
+      log.debug("empty ResumeCampaigns event")
 
     case CampaignComplete(id) =>
       log.info(s"$id completed")
