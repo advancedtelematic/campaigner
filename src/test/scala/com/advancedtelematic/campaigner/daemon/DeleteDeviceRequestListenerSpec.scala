@@ -3,7 +3,6 @@ package com.advancedtelematic.campaigner.daemon
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.data.DataType.{DeviceStatus, DeviceUpdate}
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.{DeviceUpdateSupport, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil, FakeDirectorClient}
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
@@ -18,9 +17,9 @@ import scala.concurrent.Future
 
 class DeleteDeviceRequestListenerSpec extends CampaignerSpec
   with DatabaseSpec
-  with DeviceUpdateSupport
-  with UpdateSupport
   with DatabaseUpdateSpecUtil {
+
+  import repositories.deviceUpdateRepo
 
   private val director = new FakeDirectorClient() {
     override def cancelUpdate(ns: Namespace, devices: Seq[DeviceId]): Future[Seq[DeviceId]] = {
@@ -29,7 +28,7 @@ class DeleteDeviceRequestListenerSpec extends CampaignerSpec
     }
   }
 
-  val listener = new DeleteDeviceRequestListener(director)
+  val listener = new DeleteDeviceRequestListener(director, campaigns)
 
   "listener" should "cancel device update with `requested` status" in {
     val campaign = createDbCampaignWithUpdate().futureValue

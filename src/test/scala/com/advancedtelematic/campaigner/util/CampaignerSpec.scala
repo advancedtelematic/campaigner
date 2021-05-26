@@ -2,7 +2,7 @@ package com.advancedtelematic.campaigner.util
 
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.data.DataType.Campaign
-import com.advancedtelematic.campaigner.db.UpdateSupport
+import com.advancedtelematic.campaigner.db.UpdateRepository
 import com.advancedtelematic.libats.test.LongTest
 import slick.jdbc.MySQLProfile.api._
 import org.scalacheck.Gen
@@ -27,9 +27,9 @@ trait CampaignerSpec extends FlatSpecLike
   with CampaignerSpecUtil {
 
   def buildCampaignWithUpdate(implicit db: Database, ec: ExecutionContext): Campaign = {
-    val updateSupport = new UpdateSupport {}
+    val updateRepo = new UpdateRepository()
     val update = genMultiTargetUpdate.generate
-    val updateId = updateSupport.updateRepo.persist(update)
+    val updateId = updateRepo.persist(update)
     updateId.map(uid => genCampaign.generate.copy(updateId = uid)).futureValue
   }
 }

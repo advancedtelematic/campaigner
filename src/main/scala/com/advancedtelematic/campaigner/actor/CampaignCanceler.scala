@@ -9,10 +9,9 @@ import akka.stream.scaladsl.Sink
 import com.advancedtelematic.campaigner.client.DirectorClient
 import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.{Campaign, CampaignId, CancelTaskStatus, DeviceStatus}
-import com.advancedtelematic.campaigner.db.{CampaignSupport, Campaigns, CancelTaskSupport, DeviceUpdateSupport}
+import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
-import slick.jdbc.MySQLProfile.api.Database
 
 import scala.concurrent.Future
 
@@ -20,29 +19,27 @@ object CampaignCanceler {
   private object Start
 
   def props(director: DirectorClient,
-            campaign: CampaignId,
+            campaigns: Campaigns,
+            campaignId: CampaignId,
             ns: Namespace,
             batchSize: Int)
-           (implicit db: Database, mat: Materializer): Props =
-    Props(new CampaignCanceler(director, campaign, ns, batchSize))
+           (implicit mat: Materializer): Props =
+    Props(new CampaignCanceler(director, campaigns, campaignId, ns, batchSize))
 }
 
 class CampaignCanceler(director: DirectorClient,
+                       campaigns: Campaigns,
                        campaignId: CampaignId,
                        ns: Namespace,
                        batchSize: Int)
-                      (implicit db: Database, mat: Materializer)
+                      (implicit mat: Materializer)
     extends Actor
-    with ActorLogging
-    with CampaignSupport
-    with DeviceUpdateSupport
-    with CancelTaskSupport {
+    with ActorLogging {
 
   import CampaignCanceler._
   import akka.pattern.pipe
+  import campaigns.repositories._
   import context._
-
-  private val campaigns = Campaigns()
 
   override def preStart(): Unit =
     self ! Start
@@ -80,6 +77,7 @@ class CampaignCanceler(director: DirectorClient,
 
   def run(): Future[Done] = for {
     campaign <- campaignRepo.find(campaignId)
+    _ <- cancelTaskRepo.setStatus(campaignId, CancelTaskStatus.inprogress)
     _ <- deviceUpdateRepo.findByCampaignStream(campaignId, DeviceStatus.scheduled, DeviceStatus.accepted, DeviceStatus.requested)
       .grouped(batchSize)
       .mapAsync(1)(cancel(_, campaign))

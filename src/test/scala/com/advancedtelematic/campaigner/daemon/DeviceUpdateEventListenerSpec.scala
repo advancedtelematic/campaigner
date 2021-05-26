@@ -6,7 +6,6 @@ import java.util.UUID
 import org.scalatest.OptionValues._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport, UpdateSupport}
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil}
 import com.advancedtelematic.libats.data.DataType.{CorrelationId, ResultCode, ResultDescription, CampaignId => CampaignCorrelationId}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, InstallationResult}
@@ -19,13 +18,10 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 class DeviceUpdateEventListenerSpec extends CampaignerSpec
   with DatabaseSpec
-  with DeviceUpdateSupport
-  with UpdateSupport
   with DatabaseUpdateSpecUtil {
+  import repositories.{updateRepo, deviceUpdateRepo}
 
-  val listener = new DeviceUpdateEventListener()
-
-  val campaigns = Campaigns()
+  val listener = new DeviceUpdateEventListener(campaigns)
 
   "Listener" should "mark a device as successful using campaign CorrelationId" in {
     val (_, campaign, deviceUpdate) = prepareTest()

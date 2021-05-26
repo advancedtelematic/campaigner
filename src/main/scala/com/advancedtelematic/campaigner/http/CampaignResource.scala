@@ -21,15 +21,13 @@ import com.advancedtelematic.libats.data.DataType.{CorrelationId, Namespace, Res
 import com.advancedtelematic.libats.http.UUIDKeyAkka._
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
 
 class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
-                       deviceRegistry: DeviceRegistryClient)
-                      (implicit db: Database, ec: ExecutionContext) extends Settings {
-
-  val campaigns = Campaigns()
+                       deviceRegistry: DeviceRegistryClient,
+                       campaigns: Campaigns)
+                      (implicit ec: ExecutionContext) extends Settings {
 
   implicit val resultCodeUnmarshaller: FromStringUnmarshaller[ResultCode] = Unmarshaller.strict(ResultCode)
 

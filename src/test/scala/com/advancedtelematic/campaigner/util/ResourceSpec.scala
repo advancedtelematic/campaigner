@@ -11,6 +11,7 @@ import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
+import com.advancedtelematic.campaigner.db.{Campaigns, Repositories}
 import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode}
 import com.advancedtelematic.libats.data.PaginationResult
@@ -43,7 +44,7 @@ trait ResourceSpec extends ScalatestRouteTest
   val fakeUserProfile = new FakeUserProfileClient
   val fakeResolver = new FakeResolverClient
 
-  lazy val routes: Route = new Routes(fakeRegistry, fakeResolver, fakeUserProfile).routes
+  lazy val routes: Route = new Routes(fakeRegistry, fakeResolver, fakeUserProfile, Campaigns()).routes
 
   def createCampaign(request: Json): HttpRequest =
     Post(apiUri("campaigns"), request).withHeaders(header)

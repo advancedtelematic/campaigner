@@ -2,7 +2,7 @@ package com.advancedtelematic.campaigner.daemon
 
 import com.advancedtelematic.campaigner.client.DirectorClient
 import com.advancedtelematic.campaigner.data.DataType.{CampaignId, DeviceStatus}
-import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateSupport}
+import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging.MsgOperation.MsgOperation
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
@@ -12,11 +12,10 @@ import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class DeleteDeviceRequestListener(directorClient: DirectorClient)(implicit val db: Database, val ec: ExecutionContext)
-  extends MsgOperation[DeleteDeviceRequest] with DeviceUpdateSupport {
+class DeleteDeviceRequestListener(directorClient: DirectorClient, campaigns: Campaigns)(implicit val db: Database, val ec: ExecutionContext)
+  extends MsgOperation[DeleteDeviceRequest] {
 
   private val log = LoggerFactory.getLogger(this.getClass)
-  private val campaigns = Campaigns()
 
   override def apply(message: DeleteDeviceRequest): Future[Unit] = {
     log.info(s"Received delete device request: $message")
@@ -28,7 +27,7 @@ class DeleteDeviceRequestListener(directorClient: DirectorClient)(implicit val d
   }
 
   private def findScheduledCampaigns(deviceId: DeviceId): Future[Seq[CampaignId]] = {
-    deviceUpdateRepo.findDeviceCampaigns(deviceId, DeviceStatus.requested, DeviceStatus.scheduled)
+    campaigns.repositories.deviceUpdateRepo.findDeviceCampaigns(deviceId, DeviceStatus.requested, DeviceStatus.scheduled)
       .map(_.map { case (campaign, _) => campaign.id })
       .recover { case e: Exception =>
         log.error(s"Cannot load campaigns for device $deviceId", e)

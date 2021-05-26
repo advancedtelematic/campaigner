@@ -19,14 +19,10 @@ class CampaignsSpec extends AsyncFlatSpec
   with DatabaseSpec
   with Matchers
   with ScalaFutures
-  with CampaignSupport
-  with UpdateSupport
   with DatabaseUpdateSpecUtil
   with CampaignerSpecUtil {
 
   import Arbitrary._
-
-  val campaigns = Campaigns()
 
   "count campaigns" should "return a list of how many campaigns there are for each status" in {
     val statuses = Seq(launched, finished, finished, cancelled, cancelled, cancelled)
@@ -56,7 +52,7 @@ class CampaignsSpec extends AsyncFlatSpec
       _ <- campaigns.scheduleDevices(campaign.id, devices)
       _ <- campaigns.cancel(campaign.id)
       _ <- campaigns.failDevices(campaign.id, devices, ResultCode("failure-code-1"), ResultDescription("failure-description-1"))
-      finalStatus <- db.run(campaignRepo.findAction(campaign.id).map(_.status))
+      finalStatus <- db.run(repositories.campaignRepo.findAction(campaign.id).map(_.status))
     } yield finalStatus shouldBe CampaignStatus.cancelled
   }
 }
@@ -65,12 +61,9 @@ final class CampaignsFindFailedDevicesSpec extends AsyncFlatSpec
   with DatabaseSpec
   with Matchers
   with ScalaFutures
-  with CampaignSupport
-  with UpdateSupport
   with DatabaseUpdateSpecUtil
   with CampaignerSpecUtil {
 
-  val campaigns = Campaigns()
   implicit val defaultPatience = PatienceConfig(timeout = 2 seconds)
 
   "findFailedDeviceUpdates" should "find all failed device update from all the given campaigns and return only the most recent ones" in {

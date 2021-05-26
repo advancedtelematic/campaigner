@@ -5,6 +5,7 @@ import akka.http.scaladsl.server.Route
 import com.advancedtelematic.campaigner.actor._
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.daemon._
+import com.advancedtelematic.campaigner.db.{Campaigns, Repositories}
 import com.advancedtelematic.libats.http.tracing.NullServerRequestTracing
 import com.advancedtelematic.libats.http.{BootApp, ServiceHttpClientSupport}
 import com.advancedtelematic.libats.messaging.MessageListenerSupport
@@ -46,16 +47,19 @@ object DaemonBoot extends BootApp
       DbHealthResource(versionMap).route
   }
 
+  val campaigns = Campaigns()
+
   Http().bindAndHandle(routes, host, port)
 
   system.actorOf(CampaignSupervisor.props(
     director,
+    campaigns,
     schedulerPollingTimeout,
     schedulerDelay,
     schedulerBatchSize
   ), "campaign-supervisor")
 
-  startMonitoredListener[DeviceUpdateEvent](new DeviceUpdateEventListener)
-  startMonitoredListener[DeviceEventMessage](new DeviceEventListener(director), skipProcessingErrors = true)
-  startMonitoredListener[DeleteDeviceRequest](new DeleteDeviceRequestListener(director))
+  startMonitoredListener[DeviceUpdateEvent](new DeviceUpdateEventListener(campaigns))
+  startMonitoredListener[DeviceEventMessage](new DeviceEventListener(director, campaigns), skipProcessingErrors = true)
+  startMonitoredListener[DeleteDeviceRequest](new DeleteDeviceRequestListener(director, campaigns))
 }
