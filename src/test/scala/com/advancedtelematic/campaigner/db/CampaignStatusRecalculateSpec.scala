@@ -23,9 +23,6 @@ final class CampaignStatusRecalculateSpec
     with FlatSpecLike
     with ScalaFutures
     with DatabaseSpec
-    with CampaignSupport
-    with DeviceUpdateSupport
-    with UpdateSupport
     with Matchers
     with DatabaseUpdateSpecUtil
     with CampaignerSpecUtil {
@@ -44,11 +41,11 @@ final class CampaignStatusRecalculateSpec
       campaign <- createCampaignWithoutStatus(maybeGroups = Some(groups.map(_.id)))
       _ <- insertDeviceUpdatesFor(campaign, devicesNumToSucceed, DeviceStatus.successful)
       _ <- insertDeviceUpdatesFor(campaign, devicesNumToFail, DeviceStatus.failed)
-      _ <- new CampaignStatusRecalculate().run
+      _ <- new CampaignStatusRecalculate(repositories).run
     } yield campaign
 
     whenReady(setupTest, timeout(40 seconds)) { campaign =>
-      val updatedCampaign = campaignRepo.find(campaign.id).futureValue
+      val updatedCampaign = repositories.campaignRepo.find(campaign.id).futureValue
       updatedCampaign.status shouldBe CampaignStatus.finished
     }
   }
@@ -63,11 +60,11 @@ final class CampaignStatusRecalculateSpec
       campaign <- createCampaignWithoutStatus(maybeGroups = Some(groups.map(_.id)))
       _ <- insertDeviceUpdatesFor(campaign, numOfDevicesToSchedule, DeviceStatus.scheduled)
       _ <- insertDeviceUpdatesFor(campaign, numOfDevicesToFinish, DeviceStatus.successful)
-      _ <- new CampaignStatusRecalculate().run
+      _ <- new CampaignStatusRecalculate(repositories).run
     } yield campaign
 
     whenReady(setupTest, timeout(40 seconds)) { campaign =>
-      val updatedCampaign = campaignRepo.find(campaign.id).futureValue
+      val updatedCampaign = repositories.campaignRepo.find(campaign.id).futureValue
       updatedCampaign.status shouldBe CampaignStatus.launched
     }
   }
@@ -82,7 +79,7 @@ final class CampaignStatusRecalculateSpec
   private def insertDeviceUpdatesFor(campaign: Campaign, numOfDevicesToFinish: Int, status: DeviceStatus.Value): Future[Unit] = {
     val updates = 1.to(numOfDevicesToFinish).map(_ =>
         DeviceUpdate(campaign.id, campaign.updateId, genDeviceId.generate, status))
-    deviceUpdateRepo.persistMany(updates)
+    repositories.deviceUpdateRepo.persistMany(updates)
   }
 
   private case class GroupWithDevices(id: GroupId, devicesNum: Int)

@@ -1,7 +1,6 @@
 package com.advancedtelematic.campaigner.http
 
 import java.util.UUID
-
 import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.Uri.Query
@@ -13,7 +12,7 @@ import com.advancedtelematic.campaigner.data.DataType.GroupId._
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.db.UpdateSupport
+import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec, SlowFakeDeviceRegistry}
 import com.advancedtelematic.libats.data.{ErrorRepresentation, PaginationResult}
 import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
@@ -21,7 +20,7 @@ import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import org.scalacheck.Arbitrary._
 import org.scalacheck.Gen
 
-class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSupport {
+class UpdateResourceSpec extends CampaignerSpec with ResourceSpec {
 
   import scala.concurrent.duration._
   implicit def default(): RouteTestTimeout = RouteTestTimeout(15.seconds)
@@ -320,7 +319,7 @@ class UpdateResourceSpec extends CampaignerSpec with ResourceSpec with UpdateSup
     slowRegistry.setGroup(groupId, devices)
     fakeUserProfile.setNamespaceSetting(testNs, testResolverUri)
     fakeResolver.setUpdates(testResolverUri, Seq(devices.last), Seq(request.updateSource.id))
-    val _routes = new Routes(slowRegistry, fakeResolver, fakeUserProfile).routes
+    val _routes = new Routes(slowRegistry, fakeResolver, fakeUserProfile, Campaigns()).routes
 
     getUpdates(Seq(groupId)) ~> _routes ~> check {
       status shouldBe GatewayTimeout

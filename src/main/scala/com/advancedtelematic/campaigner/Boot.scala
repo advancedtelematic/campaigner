@@ -3,6 +3,7 @@ package com.advancedtelematic.campaigner
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.{Directives, Route}
 import com.advancedtelematic.campaigner.client.{DeviceRegistryHttpClient, ResolverHttpClient, UserProfileHttpClient}
+import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.campaigner.http.Routes
 import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.http.VersionDirectives._
@@ -60,11 +61,13 @@ object Boot extends BootApp
 
   val tracing = Tracing.fromConfig(config, projectName)
 
+  val campaigns = Campaigns()
+
   val routes: Route =
     (versionHeaders(version) & requestMetrics(metricRegistry) & logResponseMetrics(projectName)) {
       prometheusMetricsRoutes ~
         tracing.traceRequests { implicit serverRequestTracing =>
-          new Routes(deviceRegistry, resolver, userProfile).routes
+          new Routes(deviceRegistry, resolver, userProfile, campaigns).routes
         }
     }
 
