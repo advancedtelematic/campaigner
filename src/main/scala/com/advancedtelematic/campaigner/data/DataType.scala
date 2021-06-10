@@ -2,23 +2,19 @@ package com.advancedtelematic.campaigner.data
 
 import java.time.Instant
 import java.util.UUID
-
 import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
-import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
 import com.advancedtelematic.campaigner.data.DataType.RetryStatus.RetryStatus
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
+import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceStatus.DeviceStatus
+import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId, UpdateId}
 
 object DataType {
-
-  final case class CampaignId(uuid: UUID) extends UUIDKey
-  object CampaignId extends UUIDKeyObj[CampaignId]
 
   final case class GroupId(uuid: UUID) extends UUIDKey
   object GroupId extends UUIDKeyObj[GroupId]
@@ -183,25 +179,6 @@ object DataType {
   object RetryStatus extends Enumeration {
     type RetryStatus = Value
     val not_launched, launched, finished = Value
-  }
-
-  /**
-   * Status of a device in the campaign:
-   * - `requested` when a device is initially added to the campaign (corresponds
-   *   to `processed` state in the UI until a device goes to the Director)
-   * - `rejected` when a device is rejected by Director and is not a part of the
-   *    campaign anymore (corresponds to `not impacted` state in the UI)
-   * - `scheduled` when a device is approved by Director and is scheduled for
-   *    an update (partly corresponds to `queued` state in the UI)
-   * - `accepted` when an update was accepted on a device and is about to be
-   *    installed (partly corresponds to `queued` state in the UI)
-   * - `successful` when a device update was applied successfully
-   * - `cancelled` when a device update was cancelled
-   * - `failed` when a device update was failed
-   */
-  object DeviceStatus extends Enumeration {
-    type DeviceStatus = Value
-    val requested, rejected, scheduled, accepted, successful, cancelled, failed = Value
   }
 
   object CancelTaskStatus extends Enumeration {

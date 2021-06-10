@@ -1,18 +1,19 @@
 package com.advancedtelematic.campaigner.db
 
 import java.time.Instant
-
 import akka.NotUsed
 import akka.stream.scaladsl.Source
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
-import com.advancedtelematic.campaigner.data.DataType.DeviceStatus.DeviceStatus
+import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.SlickMapping._
 import com.advancedtelematic.campaigner.http.Errors._
 import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
 import com.advancedtelematic.libats.data.PaginationResult
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
+import com.advancedtelematic.libats.messaging.MessageBusPublisher
+import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId, DeviceStatus, UpdateId}
+import com.advancedtelematic.libats.messaging_datatype.Messages._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import slick.jdbc.MySQLProfile.api._
@@ -20,10 +21,10 @@ import slick.jdbc.MySQLProfile.api._
 import scala.concurrent.{ExecutionContext, Future}
 
 object Campaigns {
-  def apply()(implicit db: Database, ec: ExecutionContext): Campaigns = new Campaigns(Repositories())
+  def apply()(implicit db: Database, ec: ExecutionContext, messageBusPublisher: MessageBusPublisher): Campaigns = new Campaigns(Repositories())
 }
 
-class Campaigns(val repositories: Repositories)(implicit db: Database, ec: ExecutionContext) {
+class Campaigns(val repositories: Repositories)(implicit db: Database, ec: ExecutionContext, messageBusPublisher: MessageBusPublisher) {
   import  repositories._
 
   val campaignStatusTransition = new CampaignStatusTransition(repositories)
@@ -78,18 +79,42 @@ class Campaigns(val repositories: Repositories)(implicit db: Database, ec: Execu
     finishDevices(campaignId, devices, DeviceStatus.cancelled, None, None)
 
   private def finishDevices(campaignId: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[ResultCode], resultDescription: Option[ResultDescription]): Future[Unit] = db.run {
-    deviceUpdateRepo
+    val campaignUpdateEventsFromNamespace = { namespace: Namespace =>
+      devices.map { deviceId =>
+        CampaignUpdateEvent(
+          namespace,
+          deviceId,
+          campaignId = campaignId,
+          status,
+          resultCode,
+          resultDescription,
+          updatedAt = Instant.now
+        )
+      }
+    }
+
+    for {
+      _ <- deviceUpdateRepo
       .setUpdateStatusAction(campaignId, devices, status, resultCode, resultDescription)
       .andThen(campaignStatusTransition.devicesFinished(campaignId))
+      campaign <- campaignRepo.findAction(campaignId)
+      campaignUpdateEvents = campaignUpdateEventsFromNamespace(campaign.namespace)
+    } yield campaignUpdateEvents
+  }.flatMap { campaignUpdateEvents =>
+    Future.sequence(campaignUpdateEvents.map(messageBusPublisher.publish(_)(ec, campaignUpdateEventMsgLike))).map(_ => ())
   }
 
   private def updateDevicesStatus(campaignId: CampaignId, deviceIds: Seq[DeviceId], status: DeviceStatus): Future[Unit] = db.run {
     for {
       campaign <- campaignRepo.findAction(campaignId)
-      _ <- deviceUpdateRepo.persistManyAction(deviceIds.map(deviceId =>
+      deviceUpdates = deviceIds.map { deviceId =>
         DeviceUpdate(campaign.id, campaign.updateId, deviceId, status)
-      ))
-    } yield ()
+      }
+      _ <- deviceUpdateRepo.persistManyAction(deviceUpdates)
+      campaignUpdateEvents = campaignUpdateEventsFromCampaign(campaign, deviceUpdates.toSet)
+    } yield campaignUpdateEvents
+  }.flatMap { campaignUpdateEvents =>
+    Future.sequence(campaignUpdateEvents.map(messageBusPublisher.publish(_)(ec, campaignUpdateEventMsgLike))).map(_ => ())
   }
 
   /**
@@ -239,8 +264,30 @@ class Campaigns(val repositories: Repositories)(implicit db: Database, ec: Execu
     action.transactionally
   }
 
-  def create(campaign: Campaign, groups: Set[GroupId], devices: Set[DeviceId], metadata: Seq[CampaignMetadata]): Future[CampaignId] =
-    campaignRepo.persist(campaign, groups, devices, metadata)
+  private def campaignUpdateEventsFromCampaign(campaign: Campaign, deviceUpdates: Set[DeviceUpdate]): Set[CampaignUpdateEvent] = {
+    deviceUpdates.map { deviceUpdate =>
+      CampaignUpdateEvent(
+        campaign.namespace,
+        deviceUpdate.device,
+        campaignId = campaign.id,
+        deviceStatus = deviceUpdate.status,
+        resultCode = deviceUpdate.resultCode,
+        resultDescription = deviceUpdate.resultDescription,
+        updatedAt = deviceUpdate.updatedAt
+      )
+    }
+  }
+
+
+  def create(campaign: Campaign, groups: Set[GroupId], devices: Set[DeviceId], metadata: Seq[CampaignMetadata]): Future[CampaignId] = {
+    val deviceUpdates = devices.map(did => DeviceUpdate(campaign.id, campaign.updateId, did, DeviceStatus.requested))
+    val campaignUpdateEvents = campaignUpdateEventsFromCampaign(campaign, deviceUpdates)
+
+    for {
+      campaignId <- campaignRepo.persist(campaign, groups, deviceUpdates, metadata)
+      _ <- Future.sequence(campaignUpdateEvents.map(messageBusPublisher.publish(_)(ec, campaignUpdateEventMsgLike)))
+    } yield campaignId
+  }
 
   /**
     * Create and immediately launch a retry-campaign for all the devices that were processed by `mainCampaign` and
@@ -282,19 +329,22 @@ class Campaigns(val repositories: Repositories)(implicit db: Database, ec: Execu
       acceptedDeviceIds: Set[DeviceId],
       scheduledDeviceIds: Set[DeviceId],
       rejectedDeviceIds: Set[DeviceId]): Future[Unit] = {
-    def persistDeviceUpdates(deviceIds: Set[DeviceId], status: DeviceStatus): DBIO[Unit] =
-      deviceUpdateRepo.persistManyAction(deviceIds.toSeq.map(deviceId =>
-        DeviceUpdate(campaign.id, campaign.updateId, deviceId, status)
-      ))
+    def persistDeviceUpdates(deviceIds: Set[DeviceId], status: DeviceStatus): DBIO[Set[CampaignUpdateEvent]] = {
+      val deviceUpdates = deviceIds.toSeq.map(deviceId => DeviceUpdate(campaign.id, campaign.updateId, deviceId, status))
+      val campaignUpdateEvents = campaignUpdateEventsFromCampaign(campaign, deviceUpdates.toSet)
+      deviceUpdateRepo.persistManyAction(deviceUpdates).map(_ => campaignUpdateEvents)
+    }
 
     val action = for {
-      _ <- persistDeviceUpdates(acceptedDeviceIds, DeviceStatus.accepted)
-      _ <- persistDeviceUpdates(scheduledDeviceIds, DeviceStatus.scheduled)
-      _ <- persistDeviceUpdates(rejectedDeviceIds, DeviceStatus.rejected)
+      deviceUpdateEventsAccepted <- persistDeviceUpdates(acceptedDeviceIds, DeviceStatus.accepted)
+      deviceUpdateEventsScheduled <- persistDeviceUpdates(scheduledDeviceIds, DeviceStatus.scheduled)
+      deviceUpdateEventsRejected <- persistDeviceUpdates(rejectedDeviceIds, DeviceStatus.rejected)
       _ <- campaignStatusTransition.updateToCalculatedStatus(campaign.id)
-    } yield ()
+    } yield deviceUpdateEventsAccepted ++ deviceUpdateEventsScheduled ++ deviceUpdateEventsRejected
 
-    db.run(action.transactionally)
+    db.run(action.transactionally).flatMap{campaignUpdateEvents =>
+      Future.sequence(campaignUpdateEvents.map(messageBusPublisher.publish(_)(ec, campaignUpdateEventMsgLike))).map(_ => ())
+    }
   }
 }
 

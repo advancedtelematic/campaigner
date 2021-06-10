@@ -2,12 +2,11 @@ package com.advancedtelematic.campaigner.daemon
 
 import akka.http.scaladsl.util.FastFuture
 import cats.syntax.show._
-import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.campaigner.http.Errors
-import com.advancedtelematic.libats.data.DataType.{CampaignId => CampaignCorrelationId}
+import com.advancedtelematic.libats.data.DataType.CorrelationCampaignId
 import com.advancedtelematic.libats.messaging.MsgOperation.MsgOperation
-import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
+import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId, DeviceStatus}
 import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceUpdateCanceled, DeviceUpdateCompleted, DeviceUpdateEvent}
 import org.slf4j.LoggerFactory
 
@@ -19,7 +18,7 @@ class DeviceUpdateEventListener(campaigns: Campaigns)(implicit ec: ExecutionCont
   private lazy val _log = LoggerFactory.getLogger(this.getClass)
 
   def apply(event: DeviceUpdateEvent): Future[Unit] = event.correlationId match {
-    case CampaignCorrelationId(uuid) => dispatch(CampaignId(uuid), event)
+    case CorrelationCampaignId(uuid) => dispatch(CampaignId(uuid), event)
     case _ => Future.successful(())
   }
 

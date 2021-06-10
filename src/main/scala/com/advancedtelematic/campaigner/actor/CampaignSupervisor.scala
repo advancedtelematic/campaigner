@@ -10,6 +10,7 @@ import com.advancedtelematic.libats.data.DataType.Namespace
 
 import scala.concurrent.duration._
 import cats.syntax.show._
+import com.advancedtelematic.libats.messaging_datatype.DataType.CampaignId
 
 object CampaignSupervisor {
 

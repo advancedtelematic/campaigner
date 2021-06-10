@@ -5,7 +5,7 @@ import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, Repositories}
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
+import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId, UpdateId}
 import com.advancedtelematic.libats.test.DatabaseSpec
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import org.scalacheck.Arbitrary._
@@ -15,6 +15,7 @@ import org.scalatest.concurrent.ScalaFutures
 import CampaignerSpecUtil._
 import cats.data.NonEmptyList
 import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.messaging.MessageBusPublisher
 
 import scala.concurrent.Future
 
@@ -49,6 +50,7 @@ trait DatabaseUpdateSpecUtil {
   import scala.concurrent.ExecutionContext.Implicits.global
 
   val repositories = Repositories()
+  implicit val messageBusPublisher = MessageBusPublisher.ignore
   val campaigns = new Campaigns(repositories)
 
   def createDbUpdate(updateId: UpdateId): Future[UpdateId] = {

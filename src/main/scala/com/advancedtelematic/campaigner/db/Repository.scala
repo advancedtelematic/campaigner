@@ -5,7 +5,6 @@ import akka.stream.scaladsl.Source
 import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus._
 import com.advancedtelematic.campaigner.data.DataType.CancelTaskStatus.CancelTaskStatus
-import com.advancedtelematic.campaigner.data.DataType.DeviceStatus._
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.campaigner.data.DataType._
@@ -15,7 +14,8 @@ import com.advancedtelematic.campaigner.db.SlickUtil.{sortBySlickOrderedCampaign
 import com.advancedtelematic.campaigner.http.Errors._
 import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
 import com.advancedtelematic.libats.data.PaginationResult
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
+import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceStatus.DeviceStatus
+import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId, DeviceStatus, UpdateId}
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
@@ -153,14 +153,14 @@ class DeviceUpdateRepository()(implicit db: Database, ec: ExecutionContext) {
 class CampaignRepository()(implicit db: Database, ec: ExecutionContext) {
   import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 
-  def persist(campaign: Campaign, groups: Set[GroupId], devices: Set[DeviceId], metadata: Seq[CampaignMetadata]): Future[CampaignId] = db.run {
+  def persist(campaign: Campaign, groups: Set[GroupId], deviceUpdates: Set[DeviceUpdate], metadata: Seq[CampaignMetadata]): Future[CampaignId] = db.run {
     val f = for {
       _ <- (Schema.campaigns += campaign).recover {
         case Failure(UpdateFKViolation()) => DBIO.failed(MissingUpdateSource)
         case Failure(CampaignFKViolation()) => DBIO.failed(MissingMainCampaign)
       }.handleIntegrityErrors(ConflictingCampaign)
       _ <- Schema.campaignGroups ++= groups.map(campaign.id -> _)
-      _ <- Schema.deviceUpdates ++= devices.map(did => DeviceUpdate(campaign.id, campaign.updateId, did, DeviceStatus.requested))
+      _ <- Schema.deviceUpdates ++= deviceUpdates
       _ <- (Schema.campaignMetadata ++= metadata).handleIntegrityErrors(ConflictingMetadata)
     } yield campaign.id
 

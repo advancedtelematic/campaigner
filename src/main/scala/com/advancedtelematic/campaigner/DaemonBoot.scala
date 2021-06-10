@@ -2,13 +2,14 @@ package com.advancedtelematic.campaigner
 
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Route
+import com.advancedtelematic.campaigner.Boot.{config, system}
 import com.advancedtelematic.campaigner.actor._
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.daemon._
-import com.advancedtelematic.campaigner.db.{Campaigns, Repositories}
+import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.http.tracing.NullServerRequestTracing
 import com.advancedtelematic.libats.http.{BootApp, ServiceHttpClientSupport}
-import com.advancedtelematic.libats.messaging.MessageListenerSupport
+import com.advancedtelematic.libats.messaging.{MessageBus, MessageListenerSupport}
 import com.advancedtelematic.libats.messaging_datatype.Messages.{DeleteDeviceRequest, DeviceEventMessage, DeviceUpdateEvent}
 import com.advancedtelematic.libats.slick.db.{BootMigrations, CheckMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.slick.monitoring.{DatabaseMetrics, DbHealthResource}
@@ -33,6 +34,8 @@ object DaemonBoot extends BootApp
   import com.advancedtelematic.libats.http.VersionDirectives._
 
   implicit val _db = db
+
+  implicit val msgPublisher = MessageBus.publisher(system, config)
 
   log.info("Starting campaigner daemon")
 

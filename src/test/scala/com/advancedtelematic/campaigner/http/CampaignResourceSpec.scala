@@ -2,7 +2,6 @@ package com.advancedtelematic.campaigner.http
 
 import java.time.Duration
 import java.time.temporal.ChronoUnit
-
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.{ContentTypes, _}
 import akka.util.ByteString
@@ -20,7 +19,7 @@ import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec, Upda
 import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
 import com.advancedtelematic.libats.data.ErrorCodes.InvalidEntity
 import com.advancedtelematic.libats.data.{ErrorRepresentation, PaginationResult}
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
+import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId, DeviceStatus, UpdateId}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.parser.parse
 import org.scalacheck.Arbitrary._

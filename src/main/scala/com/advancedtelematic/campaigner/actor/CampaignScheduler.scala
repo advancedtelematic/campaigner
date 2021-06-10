@@ -7,7 +7,7 @@ import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.DeviceUpdateProcess.{CampaignCancelled, StartUpdateResult, Started}
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateProcess}
-import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
+import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId}
 
 import scala.concurrent.Future
 import scala.concurrent.duration._

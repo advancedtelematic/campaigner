@@ -4,11 +4,10 @@ import akka.actor.Terminated
 import akka.stream.scaladsl.Sink
 import akka.testkit.TestProbe
 import com.advancedtelematic.campaigner.client.DirectorClient
-import com.advancedtelematic.campaigner.data.DataType.DeviceStatus
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec, DatabaseUpdateSpecUtil, FakeDirectorClient}
 import com.advancedtelematic.libats.data.DataType
-import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, DeviceStatus}
 import org.scalacheck.Gen
 import org.scalatest.Inspectors
 
