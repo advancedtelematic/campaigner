@@ -3,10 +3,9 @@ package com.advancedtelematic.campaigner.daemon
 import akka.Done
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.client.DirectorClient
-import com.advancedtelematic.campaigner.data.DataType.CampaignId
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateProcess}
 import com.advancedtelematic.libats.messaging.MsgOperation.MsgOperation
-import com.advancedtelematic.libats.messaging_datatype.DataType.EventType
+import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, EventType}
 import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceEventMessage
 import org.slf4j.LoggerFactory
 

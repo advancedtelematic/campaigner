@@ -3,7 +3,8 @@ package com.advancedtelematic.campaigner.db
 import akka.Done
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Sink, Source}
-import com.advancedtelematic.campaigner.data.DataType.{CampaignId, CampaignStatus}
+import com.advancedtelematic.campaigner.data.DataType.CampaignStatus
+import com.advancedtelematic.libats.messaging_datatype.DataType.CampaignId
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey
 import org.slf4j.LoggerFactory
 import slick.jdbc.GetResult

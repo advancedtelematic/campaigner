@@ -1,11 +1,10 @@
 package com.advancedtelematic.campaigner.daemon
 
 import com.advancedtelematic.campaigner.client.DirectorClient
-import com.advancedtelematic.campaigner.data.DataType.{CampaignId, DeviceStatus}
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging.MsgOperation.MsgOperation
-import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
+import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId, DeviceStatus}
 import com.advancedtelematic.libats.messaging_datatype.Messages.DeleteDeviceRequest
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._

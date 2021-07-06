@@ -2,9 +2,9 @@ package com.advancedtelematic.campaigner.db
 
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.campaigner.client.DirectorClient
-import com.advancedtelematic.campaigner.data.DataType.{Campaign, CampaignId, UpdateType}
-import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription, CampaignId => CampaignCorrelationId}
-import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
+import com.advancedtelematic.campaigner.data.DataType.{Campaign, UpdateType}
+import com.advancedtelematic.libats.data.DataType.{CorrelationCampaignId, Namespace, ResultCode, ResultDescription}
+import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId}
 import org.slf4j.LoggerFactory
 
 import scala.async.Async.{async, await}
@@ -32,7 +32,7 @@ class DeviceUpdateProcess(director: DirectorClient, campaigns: Campaigns)(implic
           if (campaign.autoAccept) {
             director
               .setMultiUpdateTarget(campaign.namespace, update.source.id,
-                devices.toSeq, CampaignCorrelationId(campaign.id.uuid))
+                devices.toSeq, CorrelationCampaignId(campaign.id.uuid))
               .map(_.toSet)
           } else {
             FastFuture.successful(Set.empty)
@@ -66,7 +66,7 @@ class DeviceUpdateProcess(director: DirectorClient, campaigns: Campaigns)(implic
     } else {
       val campaign = await(campaigns.findClientCampaign(campaignId))
       val update = await(updateRepo.findById(campaign.update))
-      val affected = await(director.setMultiUpdateTarget(ns, update.source.id, Seq(deviceId), CampaignCorrelationId(campaignId.uuid)))
+      val affected = await(director.setMultiUpdateTarget(ns, update.source.id, Seq(deviceId), CorrelationCampaignId(campaignId.uuid)))
 
       if (affected.contains(deviceId)) {
         await(campaigns.markDevicesAccepted(campaignId, Seq(deviceId)))

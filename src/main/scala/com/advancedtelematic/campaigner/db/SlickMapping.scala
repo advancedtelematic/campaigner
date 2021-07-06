@@ -1,6 +1,7 @@
 package com.advancedtelematic.campaigner.db
 
 import com.advancedtelematic.campaigner.data.DataType._
+import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceStatus
 import com.advancedtelematic.libats.slick.codecs.SlickEnumMapper
 
 object SlickMapping {

@@ -2,13 +2,12 @@ package com.advancedtelematic.campaigner.daemon
 
 import java.time.Instant
 import java.util.UUID
-
 import org.scalatest.OptionValues._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil}
-import com.advancedtelematic.libats.data.DataType.{CorrelationId, ResultCode, ResultDescription, CampaignId => CampaignCorrelationId}
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, InstallationResult}
+import com.advancedtelematic.libats.data.DataType.{CorrelationCampaignId, CorrelationId, ResultCode, ResultDescription}
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, DeviceStatus, InstallationResult}
 import com.advancedtelematic.libats.messaging_datatype.Messages.{DeviceUpdateCanceled, DeviceUpdateCompleted, DeviceUpdateEvent}
 import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.Arbitrary._
@@ -28,7 +27,7 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
     val report = makeReport(
       campaign,
       deviceUpdate,
-      CampaignCorrelationId(campaign.id.uuid),
+      CorrelationCampaignId(campaign.id.uuid),
       isSuccessful = true)
 
     listener.apply(report).futureValue shouldBe (())
@@ -41,7 +40,7 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
     val report = makeReport(
       campaign,
       deviceUpdate,
-      CampaignCorrelationId(campaign.id.uuid),
+      CorrelationCampaignId(campaign.id.uuid),
       isSuccessful = true)
 
     listener.apply(report).futureValue shouldBe (())
@@ -50,7 +49,7 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
     val report02 = makeReport(
       campaign,
       deviceUpdate,
-      CampaignCorrelationId(campaign.id.uuid),
+      CorrelationCampaignId(campaign.id.uuid),
       isSuccessful = false)
 
     listener.apply(report02).futureValue shouldBe (())
@@ -63,7 +62,7 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
     val report = makeReport(
       campaign,
       deviceUpdate,
-      CampaignCorrelationId(campaign.id.uuid),
+      CorrelationCampaignId(campaign.id.uuid),
       isSuccessful = false)
 
     listener.apply(report).futureValue shouldBe (())
@@ -72,7 +71,7 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
     val report02 = makeReport(
       campaign,
       deviceUpdate,
-      CampaignCorrelationId(campaign.id.uuid),
+      CorrelationCampaignId(campaign.id.uuid),
       isSuccessful = true)
 
     listener.apply(report02).futureValue shouldBe (())
@@ -84,7 +83,7 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
     val report = makeReport(
       campaign,
       deviceUpdate,
-      CampaignCorrelationId(campaign.id.uuid),
+      CorrelationCampaignId(campaign.id.uuid),
       isSuccessful = false)
 
     listener.apply(report).futureValue shouldBe (())
@@ -99,7 +98,7 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
     val report = makeReport(
       campaign,
       deviceUpdate,
-      CampaignCorrelationId(campaign.id.uuid),
+      CorrelationCampaignId(campaign.id.uuid),
       isSuccessful = false,
       resultDescription = Option(ResultDescription(longDescription)))
 
@@ -114,7 +113,7 @@ class DeviceUpdateEventListenerSpec extends CampaignerSpec
     val event = DeviceUpdateCanceled(
       campaign.namespace,
       Instant.now,
-      CampaignCorrelationId(campaign.id.uuid),
+      CorrelationCampaignId(campaign.id.uuid),
       deviceUpdate.device)
 
     listener.apply(event).futureValue shouldBe (())

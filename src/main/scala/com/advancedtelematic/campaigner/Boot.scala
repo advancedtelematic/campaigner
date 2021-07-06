@@ -10,6 +10,7 @@ import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.tracing.Tracing
 import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
 import com.advancedtelematic.libats.http.{BootApp, ServiceHttpClientSupport}
+import com.advancedtelematic.libats.messaging.MessageBus
 import com.advancedtelematic.libats.slick.db.{CheckMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.metrics.{AkkaHttpRequestMetrics, MetricsSupport}
@@ -52,6 +53,8 @@ object Boot extends BootApp
   with ServiceHttpClientSupport {
 
   implicit val _db = db
+
+  implicit val msgPublisher = MessageBus.publisher(system, config)
 
   log.info(s"Starting $version on http://$host:$port")
 

@@ -1,11 +1,11 @@
 package com.advancedtelematic.campaigner.daemon
 
 import akka.http.scaladsl.util.FastFuture
-import com.advancedtelematic.campaigner.data.DataType.{DeviceStatus, DeviceUpdate}
+import com.advancedtelematic.campaigner.data.DataType.DeviceUpdate
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil, FakeDirectorClient}
 import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceId
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, DeviceStatus}
 import com.advancedtelematic.libats.messaging_datatype.Messages.DeleteDeviceRequest
 import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.Arbitrary._

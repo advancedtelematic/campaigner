@@ -1,13 +1,12 @@
 package com.advancedtelematic.campaigner.data
 
 import java.time.Instant
-
 import cats.data.NonEmptyList
 import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
+import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId, DeviceStatus, UpdateId}
 import org.scalacheck.Arbitrary._
 import org.scalacheck.{Arbitrary, Gen}
 

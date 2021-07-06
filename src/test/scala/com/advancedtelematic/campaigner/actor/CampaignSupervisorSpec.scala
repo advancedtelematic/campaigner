@@ -5,6 +5,7 @@ import akka.testkit.TestProbe
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, Repositories}
 import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec}
+import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import org.scalacheck.Gen
 
 import scala.concurrent.duration._
@@ -13,6 +14,8 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
 
   import CampaignScheduler._
   import CampaignSupervisor._
+
+  implicit val messageBusPublisher = MessageBusPublisher.ignore
 
   val campaigns = new Campaigns(Repositories())
 
@@ -65,6 +68,8 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
 
 class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with CampaignerSpec {
   import CampaignSupervisor._
+
+  implicit val messageBusPublisher = MessageBusPublisher.ignore
 
   val campaigns = new Campaigns(Repositories())
 

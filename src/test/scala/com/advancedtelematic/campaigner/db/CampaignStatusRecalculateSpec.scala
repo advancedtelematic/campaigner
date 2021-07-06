@@ -8,6 +8,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.util.CampaignerSpecUtil
 import com.advancedtelematic.campaigner.util.DatabaseUpdateSpecUtil
+import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceStatus
 import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalacheck.Gen
 import org.scalatest._
@@ -15,6 +16,7 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.Seconds
 import org.scalatest.time.Span
 import org.scalatest.time.SpanSugar._
+
 import scala.concurrent.Future
 import slick.jdbc.MySQLProfile.api._
 

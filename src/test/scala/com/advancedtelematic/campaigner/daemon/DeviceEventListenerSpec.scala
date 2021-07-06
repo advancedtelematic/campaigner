@@ -1,14 +1,13 @@
 package com.advancedtelematic.campaigner.daemon
 
 import java.time.Instant
-
 import akka.Done
 import com.advancedtelematic.campaigner.daemon.DeviceEventListener.AcceptedCampaign
-import com.advancedtelematic.campaigner.data.DataType.{Campaign, DeviceStatus, DeviceUpdate}
+import com.advancedtelematic.campaigner.data.DataType.{Campaign, DeviceUpdate}
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, DatabaseUpdateSpecUtil, FakeDirectorClient}
 import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, Event, EventType}
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, DeviceStatus, Event, EventType}
 import com.advancedtelematic.libats.messaging_datatype.Messages
 import com.advancedtelematic.libats.messaging_datatype.Messages.DeviceEventMessage
 import com.advancedtelematic.libats.test.DatabaseSpec
