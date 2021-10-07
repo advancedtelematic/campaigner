@@ -13,6 +13,7 @@ variables:
   # VAULT_ADDR: defined in GitLab variables
   # The same image have to be used by test and code coverage jobs:
   TEST_IMAGE: advancedtelematic/gitlab-jobs:0.2.5
+  TEST_IMAGE_SONAR: advancedtelematic/gitlab-jobs-sonar:0.0.3
 
 default:
   services:
@@ -41,6 +42,7 @@ test:
     paths:
       - "target/scala-*/scoverage-data"
       - "target/scala-*/src_managed"
+      - "target/scala-*/classes"
   cache:
     paths:
       - .ivy2/
@@ -53,7 +55,7 @@ code coverage:
     refs:
       - deploy/sit
   allow_failure: true
-  image: $TEST_IMAGE
+  image: $TEST_IMAGE_SONAR
 
 build docker image:
   stage: build image
@@ -116,5 +118,5 @@ include:
     file: "ITT-Secret-Detection.gitlab-ci.yml"
   - template: License-Scanning.gitlab-ci.yml
   - project: olp/edge/ota/infra/security
-    ref: v0.0.9
+    ref: v0.1.0
     file: /shared.yaml
