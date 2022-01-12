@@ -25,13 +25,13 @@ resolvers += "ATS Snapshots" at "https://nexus.ota.here.com/content/repositories
 libraryDependencies ++= {
   val akkaV = "2.6.5"
   val akkaHttpV = "10.1.12"
-  val libatsV = "0.4.0-18-g2c8fa26"
-  val libtufV = "0.7.1-6-gd36661d"
+  val libatsV = "0.4.1-2-gf689d68"
+  val libtufV = "0.7.4-21-g94b8744"
   val scalaTestV = "3.0.8"
   val slickV = "3.2.0"
 
   Seq(
-    "ch.qos.logback" % "logback-classic" % "1.2.3",
+    "ch.qos.logback" % "logback-classic" % "1.2.10",
     "com.typesafe.akka" %% "akka-actor" % akkaV,
     "com.typesafe.akka" %% "akka-http" % akkaHttpV,
     "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % Test,
@@ -69,7 +69,7 @@ sonarProperties ++= Map(
   "sonar.links.scm" -> "https://main.gitlab.in.here.com/olp/edge/ota/connect/back-end/campaigner",
   "sonar.links.ci" -> "https://main.gitlab.in.here.com/olp/edge/ota/connect/back-end/campaigner/pipelines",
   "sonar.projectVersion" -> version.value,
-  "sonar.java.binaries" -> "./target/scala-*/classes", 
+  "sonar.java.binaries" -> "./target/scala-*/classes",
   "sonar.scala.coverage.reportPaths"->"target/scala-2.12/scoverage-report/scoverage.xml",
   "sonar.language" -> "scala")
 
