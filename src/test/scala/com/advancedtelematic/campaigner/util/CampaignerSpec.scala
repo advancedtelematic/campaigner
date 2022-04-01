@@ -1,5 +1,6 @@
 package com.advancedtelematic.campaigner.util
 
+import akka.actor.Scheduler
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.data.DataType.Campaign
 import com.advancedtelematic.campaigner.db.UpdateRepository
@@ -26,7 +27,7 @@ trait CampaignerSpec extends FlatSpecLike
   with LongTest
   with CampaignerSpecUtil {
 
-  def buildCampaignWithUpdate(implicit db: Database, ec: ExecutionContext): Campaign = {
+  def buildCampaignWithUpdate(implicit db: Database, ec: ExecutionContext, scheduler: Scheduler): Campaign = {
     val updateRepo = new UpdateRepository()
     val update = genMultiTargetUpdate.generate
     val updateId = updateRepo.persist(update)

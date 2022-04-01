@@ -1,10 +1,12 @@
 package com.advancedtelematic.campaigner.db
 
 import akka.Done
+import akka.actor.Scheduler
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Sink, Source}
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus
 import com.advancedtelematic.libats.messaging_datatype.DataType.CampaignId
+import com.advancedtelematic.libats.slick.db.DatabaseHelper.DatabaseWithRetry
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey
 import org.slf4j.LoggerFactory
 import slick.jdbc.GetResult
@@ -12,7 +14,7 @@ import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class CampaignStatusRecalculate(repositories: Repositories)(implicit db: Database, ec: ExecutionContext, mat: Materializer) {
+class CampaignStatusRecalculate(repositories: Repositories)(implicit db: Database, ec: ExecutionContext, mat: Materializer, scheduler: Scheduler) {
 
   private val _log = LoggerFactory.getLogger(this.getClass)
 
@@ -28,7 +30,7 @@ class CampaignStatusRecalculate(repositories: Repositories)(implicit db: Databas
     val source = db.stream(campaignsSql)
 
     Source.fromPublisher(source).mapAsyncUnordered(3) { campaignId =>
-      db.run {
+      db.runWithRetry {
         statusTransition.isFinished(campaignId).map {
           case true => CampaignStatus.finished
           case false => CampaignStatus.launched

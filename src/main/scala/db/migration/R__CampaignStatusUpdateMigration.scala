@@ -1,6 +1,6 @@
 package db.migration
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Scheduler}
 import akka.stream.ActorMaterializer
 import com.advancedtelematic.campaigner.db.{CampaignStatusRecalculate, Repositories}
 import com.advancedtelematic.libats.slick.db.AppMigration
@@ -14,6 +14,7 @@ class R__CampaignStatusUpdateMigration extends AppMigration  {
 
   implicit val system = ActorSystem(this.getClass.getSimpleName)
   implicit val materializer = ActorMaterializer()
+  implicit val scheduler: Scheduler = system.scheduler
   import system.dispatcher
 
   override def migrate(implicit db: Database) = new CampaignStatusRecalculate(Repositories()).run.map(_ => ())

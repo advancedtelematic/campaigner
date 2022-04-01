@@ -1,5 +1,6 @@
 package com.advancedtelematic.campaigner
 
+import akka.actor.Scheduler
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.{Directives, Route}
 import com.advancedtelematic.campaigner.client.{DeviceRegistryHttpClient, ResolverHttpClient, UserProfileHttpClient}
@@ -53,6 +54,7 @@ object Boot extends BootApp
   with ServiceHttpClientSupport {
 
   implicit val _db = db
+  implicit val scheduler: Scheduler = system.scheduler
 
   implicit val msgPublisher = MessageBus.publisher(system, config)
 

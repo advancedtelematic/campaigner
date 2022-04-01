@@ -1,5 +1,6 @@
 package com.advancedtelematic.campaigner.db
 
+import akka.actor.Scheduler
 import akka.{Done, NotUsed}
 import akka.stream.scaladsl.Source
 import cats.data.NonEmptyList
@@ -16,6 +17,7 @@ import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, Result
 import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId, DeviceStatus, UpdateId}
+import com.advancedtelematic.libats.slick.db.DatabaseHelper.DatabaseWithRetry
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
@@ -34,7 +36,7 @@ case class Repositories(campaignRepo: CampaignRepository,
                         campaignMetadataRepo: CampaignMetadataRepository)
 
 object Repositories {
-  def apply()(implicit db: Database, ec: ExecutionContext): Repositories =
+  def apply()(implicit db: Database, ec: ExecutionContext, scheduler: Scheduler): Repositories =
     Repositories(
       new CampaignRepository(),
       new DeviceUpdateRepository(),
@@ -44,16 +46,16 @@ object Repositories {
     )
 }
 
-class CampaignMetadataRepository()(implicit db: Database) {
-  def findFor(campaign: CampaignId): Future[Seq[CampaignMetadata]] = db.run {
+class CampaignMetadataRepository()(implicit db: Database, scheduler: Scheduler) {
+  def findFor(campaign: CampaignId): Future[Seq[CampaignMetadata]] = db.runWithRetry {
     Schema.campaignMetadata.filter(_.campaignId === campaign).result
   }
 }
 
 
-class DeviceUpdateRepository()(implicit db: Database, ec: ExecutionContext) {
+class DeviceUpdateRepository()(implicit db: Database, ec: ExecutionContext, scheduler: Scheduler) {
 
-  def findDeviceCampaigns(deviceId: DeviceId, status: DeviceStatus*): Future[Seq[(Campaign, Option[CampaignMetadata])]] = db.run {
+  def findDeviceCampaigns(deviceId: DeviceId, status: DeviceStatus*): Future[Seq[(Campaign, Option[CampaignMetadata])]] = db.runWithRetry {
     assert(status.nonEmpty)
 
     Schema.deviceUpdates
@@ -65,10 +67,10 @@ class DeviceUpdateRepository()(implicit db: Database, ec: ExecutionContext) {
   }
 
   def findAllByCampaign(campaign: CampaignId): Future[Set[DeviceId]] =
-    db.run(Schema.deviceUpdates.filter(_.campaignId === campaign).map(_.deviceId).result.map(_.toSet))
+    db.runWithRetry(Schema.deviceUpdates.filter(_.campaignId === campaign).map(_.deviceId).result.map(_.toSet))
 
   def findByCampaign(campaign: CampaignId, status: DeviceStatus): Future[Set[DeviceId]] =
-    db.run(findByCampaignAction(campaign, status))
+    db.runWithRetry(findByCampaignAction(campaign, status))
 
   private val findUpdateStatusByDeviceCampaignQuery =
     Compiled { (campaignId: Rep[CampaignId], deviceId: Rep[DeviceId]) =>
@@ -79,7 +81,7 @@ class DeviceUpdateRepository()(implicit db: Database, ec: ExecutionContext) {
   }
 
   def findUpdateStatusByDeviceCampaign(campaign: CampaignId, deviceId: DeviceId): Future[Option[DeviceStatus]] =
-    db.run(findUpdateStatusByDeviceCampaignQuery((campaign, deviceId)).result.headOption)
+    db.runWithRetry(findUpdateStatusByDeviceCampaignQuery((campaign, deviceId)).result.headOption)
 
   protected[db] def findByCampaignAction(campaign: CampaignId, status: DeviceStatus): DBIO[Set[DeviceId]] =
     Schema.deviceUpdates
@@ -105,7 +107,7 @@ class DeviceUpdateRepository()(implicit db: Database, ec: ExecutionContext) {
    * Returns the IDs of all the devices that were processed in the campaign with `campaignId` and failed with
    * the code `failureCode`.
    */
-  protected[db] def findFailedByFailureCode(campaignId: CampaignId, failureCode: ResultCode): Future[Set[DeviceId]] = db.run {
+  protected[db] def findFailedByFailureCode(campaignId: CampaignId, failureCode: ResultCode): Future[Set[DeviceId]] = db.runWithRetry {
     Schema.deviceUpdates
       .filter(_.campaignId === campaignId)
       .filter(_.status === DeviceStatus.failed)
@@ -131,7 +133,7 @@ class DeviceUpdateRepository()(implicit db: Database, ec: ExecutionContext) {
 
 
   def persistMany(updates: Seq[DeviceUpdate]): Future[Unit] =
-    db.run(persistManyAction(updates))
+    db.runWithRetry(persistManyAction(updates))
 
   def persistManyAction(updates: Seq[DeviceUpdate]): DBIO[Unit] =
     DBIO.sequence(updates.map(Schema.deviceUpdates.insertOrUpdate)).transactionally.map(_ => ())
@@ -150,10 +152,10 @@ class DeviceUpdateRepository()(implicit db: Database, ec: ExecutionContext) {
   }
 }
 
-class CampaignRepository()(implicit db: Database, ec: ExecutionContext) {
+class CampaignRepository()(implicit db: Database, ec: ExecutionContext, scheduler: Scheduler) {
   import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 
-  def persist(campaign: Campaign, groups: Set[GroupId], deviceUpdates: Set[DeviceUpdate], metadata: Seq[CampaignMetadata]): Future[CampaignId] = db.run {
+  def persist(campaign: Campaign, groups: Set[GroupId], deviceUpdates: Set[DeviceUpdate], metadata: Seq[CampaignMetadata]): Future[CampaignId] = db.runWithRetry {
     val f = for {
       _ <- (Schema.campaigns += campaign).recover {
         case Failure(UpdateFKViolation()) => DBIO.failed(MissingUpdateSource)
@@ -183,10 +185,10 @@ class CampaignRepository()(implicit db: Database, ec: ExecutionContext) {
     Schema.campaigns.filter(_.update === update).result
 
   def find(campaign: CampaignId, ns: Option[Namespace] = None): Future[Campaign] =
-    db.run(findAction(campaign, ns))
+    db.runWithRetry(findAction(campaign, ns))
 
   def all(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, status: Option[CampaignStatus], nameContains: Option[String]): Future[PaginationResult[Campaign]] = {
-    db.run {
+    db.runWithRetry {
       Schema.campaigns
         .filter(_.namespace === ns)
         .filter(_.mainCampaignId.isEmpty)
@@ -201,7 +203,7 @@ class CampaignRepository()(implicit db: Database, ec: ExecutionContext) {
    * Return all the failed campaigns, i.e campaigns with at least one failed device.
    */
   def allWithErrors(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long): Future[PaginationResult[Campaign]] =
-    db.run {
+    db.runWithRetry {
       Schema.campaigns
         .filter(_.namespace === ns)
         .join(Schema.deviceUpdates)
@@ -245,7 +247,7 @@ class CampaignRepository()(implicit db: Database, ec: ExecutionContext) {
   }
 
   def update(campaign: CampaignId, name: String, metadata: Seq[CampaignMetadata]): Future[Unit] =
-    db.run {
+    db.runWithRetry {
       findAction(campaign).flatMap { _ =>
         Schema.campaigns
           .filter(_.id === campaign)
@@ -274,7 +276,7 @@ class CampaignRepository()(implicit db: Database, ec: ExecutionContext) {
    * Given a main campaign ID, finds all the corresponding retry campaigns.
    */
   def findRetryCampaignsOf(mainId: CampaignId): Future[Set[Campaign]] =
-    db.run(findRetryCampaignsOfAction(mainId))
+    db.runWithRetry(findRetryCampaignsOfAction(mainId))
 
   /**
    * Given a main campaign ID, finds all the corresponding retry campaigns.
@@ -287,7 +289,7 @@ class CampaignRepository()(implicit db: Database, ec: ExecutionContext) {
 }
 
 
-class CancelTaskRepository()(implicit db: Database, ec: ExecutionContext) {
+class CancelTaskRepository()(implicit db: Database, ec: ExecutionContext, scheduler: Scheduler) {
   protected [db] def cancelAction(campaign: CampaignId): DBIO[CancelTask] = {
     val cancel = CancelTask(campaign, CancelTaskStatus.pending)
     (Schema.cancelTasks += cancel)
@@ -298,9 +300,9 @@ class CancelTaskRepository()(implicit db: Database, ec: ExecutionContext) {
     Compiled((campaignId: Rep[CampaignId]) => Schema.cancelTasks.filter(_.campaignId === campaignId).exists)
 
   def isCancelled(campaignId: CampaignId): Future[Boolean] =
-    db.run(cancelTaskExistsQuery(campaignId).result)
+    db.runWithRetry(cancelTaskExistsQuery(campaignId).result)
 
-  def setStatus(campaign: CampaignId, status: CancelTaskStatus): Future[Done] = db.run {
+  def setStatus(campaign: CampaignId, status: CancelTaskStatus): Future[Done] = db.runWithRetry {
     Schema.cancelTasks
       .filter(_.campaignId === campaign)
       .map(_.taskStatus)
@@ -317,42 +319,42 @@ class CancelTaskRepository()(implicit db: Database, ec: ExecutionContext) {
       .distinct
       .result
 
-  def findPending(): Future[Seq[(Namespace, CampaignId)]] = db.run {
+  def findPending(): Future[Seq[(Namespace, CampaignId)]] = db.runWithRetry {
     findStatus(CancelTaskStatus.pending)
   }
 
-  def findInprogress(): Future[Seq[(Namespace, CampaignId)]] = db.run {
+  def findInprogress(): Future[Seq[(Namespace, CampaignId)]] = db.runWithRetry {
     findStatus(CancelTaskStatus.inprogress)
   }
 }
 
-class UpdateRepository()(implicit db: Database, ec: ExecutionContext) {
+class UpdateRepository()(implicit db: Database, ec: ExecutionContext, scheduler: Scheduler) {
   import com.advancedtelematic.libats.slick.db.SlickPagination._
 
-  def persist(update: Update): Future[UpdateId] = db.run {
+  def persist(update: Update): Future[UpdateId] = db.runWithRetry {
     (Schema.updates += update).map(_ => update.uuid).handleIntegrityErrors(ConflictingUpdate)
   }
 
-  def findById(id: UpdateId): Future[Update] = db.run {
+  def findById(id: UpdateId): Future[Update] = db.runWithRetry {
     Schema.updates.filter(_.uuid === id).result.failIfNotSingle(MissingUpdate(id))
   }
 
-  def findByIds(ns: Namespace, ids: NonEmptyList[UpdateId]): Future[List[Update]] = db.run(
+  def findByIds(ns: Namespace, ids: NonEmptyList[UpdateId]): Future[List[Update]] = db.runWithRetry(
     Schema.updates.filter(xs => xs.namespace === ns && xs.uuid.inSet(ids.toList)).to[List].result
   )
 
   private def findByExternalIdsAction(ns: Namespace, ids: Seq[ExternalUpdateId]): DBIO[Seq[Update]] =
     Schema.updates.filter(_.namespace === ns).filter(_.updateId.inSet(ids)).result
 
-  def findByExternalIds(ns: Namespace, ids: Seq[ExternalUpdateId]): Future[Seq[Update]] = db.run {
+  def findByExternalIds(ns: Namespace, ids: Seq[ExternalUpdateId]): Future[Seq[Update]] = db.runWithRetry {
     findByExternalIdsAction(ns, ids)
   }
 
-  def findByExternalId(ns: Namespace, id: ExternalUpdateId): Future[Update] = db.run {
+  def findByExternalId(ns: Namespace, id: ExternalUpdateId): Future[Update] = db.runWithRetry {
     findByExternalIdsAction(ns, Seq(id)).failIfNotSingle(MissingExternalUpdate(id))
   }
 
-  def all(ns: Namespace, sortBy: SortBy = SortBy.Name, nameContains: Option[String] = None, updateType: Option[UpdateType] = None): Future[Seq[Update]] = db.run {
+  def all(ns: Namespace, sortBy: SortBy = SortBy.Name, nameContains: Option[String] = None, updateType: Option[UpdateType] = None): Future[Seq[Update]] = db.runWithRetry {
     Schema.updates
       .filter(_.namespace === ns)
       .maybeFilter(_.updateSourceType === updateType)
@@ -361,7 +363,7 @@ class UpdateRepository()(implicit db: Database, ec: ExecutionContext) {
       .result
   }
 
-  def allPaginated(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, nameContains: Option[String]): Future[PaginationResult[Update]] = db.run {
+  def allPaginated(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, nameContains: Option[String]): Future[PaginationResult[Update]] = db.runWithRetry {
     Schema.updates
       .filter(_.namespace === ns)
       .maybeContains(_.name, nameContains)

@@ -1,8 +1,10 @@
 package com.advancedtelematic.campaigner.db
 
+import akka.actor.Scheduler
 import com.advancedtelematic.campaigner.data.DataType.SortBy
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.db.Schema.{CampaignsTable, UpdatesTable}
+import com.advancedtelematic.libats.slick.db.DatabaseHelper.DatabaseWithRetry
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import slick.dbio.DBIO
 import slick.jdbc.MySQLProfile.api._
@@ -12,8 +14,8 @@ import scala.language.implicitConversions
 
 
 object SlickUtil {
-  implicit class DBIOActionToFutureOps[T](value: DBIO[T]) {
-    def run(implicit db: Database): Future[T] = db.run(value)
+  implicit class DBIOActionToFutureOps[T](value: DBIO[T])(implicit scheduler: Scheduler) {
+    def run(implicit db: Database): Future[T] = db.runWithRetry(value)
   }
 
   implicit def sortBySlickOrderedCampaignConversion(sortBy: SortBy): CampaignsTable => slick.lifted.Ordered =

@@ -1,5 +1,6 @@
 package com.advancedtelematic.campaigner.http
 
+import akka.actor.Scheduler
 import akka.http.scaladsl.server.{Directive1, Directives, Route}
 import com.advancedtelematic.campaigner.VersionInfo
 import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, ResolverClient, UserProfileClient}
@@ -16,7 +17,7 @@ import scala.concurrent.ExecutionContext
 class Routes(deviceRegistry: DeviceRegistryClient,
              resolver: ResolverClient,
              userProfile: UserProfileClient,
-             campaigns: Campaigns)(implicit val db: Database, ec: ExecutionContext)
+             campaigns: Campaigns)(implicit val db: Database, ec: ExecutionContext, scheduler: Scheduler)
     extends VersionInfo {
 
   import Directives._
