@@ -2,6 +2,7 @@ package com.advancedtelematic.campaigner.db
 
 import java.time.Instant
 import akka.NotUsed
+import akka.actor.Scheduler
 import akka.stream.scaladsl.Source
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceStatus.DeviceStatus
@@ -14,6 +15,7 @@ import com.advancedtelematic.libats.data.PaginationResult
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId, DeviceStatus, UpdateId}
 import com.advancedtelematic.libats.messaging_datatype.Messages._
+import com.advancedtelematic.libats.slick.db.DatabaseHelper.DatabaseWithRetry
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import slick.jdbc.MySQLProfile.api._
@@ -21,10 +23,12 @@ import slick.jdbc.MySQLProfile.api._
 import scala.concurrent.{ExecutionContext, Future}
 
 object Campaigns {
-  def apply()(implicit db: Database, ec: ExecutionContext, messageBusPublisher: MessageBusPublisher): Campaigns = new Campaigns(Repositories())
+  def apply()(implicit db: Database, ec: ExecutionContext, messageBusPublisher: MessageBusPublisher,
+              scheduler: Scheduler): Campaigns = new Campaigns(Repositories())
 }
 
-class Campaigns(val repositories: Repositories)(implicit db: Database, ec: ExecutionContext, messageBusPublisher: MessageBusPublisher) {
+class Campaigns(val repositories: Repositories)(implicit db: Database, ec: ExecutionContext,
+                                                messageBusPublisher: MessageBusPublisher, scheduler: Scheduler) {
   import  repositories._
 
   val campaignStatusTransition = new CampaignStatusTransition(repositories)
@@ -35,7 +39,7 @@ class Campaigns(val repositories: Repositories)(implicit db: Database, ec: Execu
    * Returns all campaigns that have devices in `requested` state
    */
   def remainingCampaigns(): Future[Set[Campaign]] =
-    db.run(campaignRepo.findAllWithRequestedDevices)
+    db.runWithRetry(campaignRepo.findAllWithRequestedDevices)
 
   /**
    * Given a campaign ID, returns IDs of all devices that are in `requested`
@@ -48,13 +52,13 @@ class Campaigns(val repositories: Repositories)(implicit db: Database, ec: Execu
    * Re-calculates the status of the campaign and updates the table
    */
   def updateStatus(campaignId: CampaignId): Future[Unit] =
-    db.run(campaignStatusTransition.updateToCalculatedStatus(campaignId))
+    db.runWithRetry(campaignStatusTransition.updateToCalculatedStatus(campaignId))
 
   def freshCancelled(): Future[Seq[(Namespace, CampaignId)]] =
     cancelTaskRepo.findPending()
 
   def launchedCampaigns: Future[Set[Campaign]] =
-    db.run(campaignRepo.findAllLaunched)
+    db.runWithRetry(campaignRepo.findAllLaunched)
 
   /**
    * Sets status of each given device to `rejected` for a given campaign and
@@ -78,7 +82,8 @@ class Campaigns(val repositories: Repositories)(implicit db: Database, ec: Execu
   def cancelDevices(campaignId: CampaignId, devices: Seq[DeviceId]): Future[Unit] =
     finishDevices(campaignId, devices, DeviceStatus.cancelled, None, None)
 
-  private def finishDevices(campaignId: CampaignId, devices: Seq[DeviceId], status: DeviceStatus, resultCode: Option[ResultCode], resultDescription: Option[ResultDescription]): Future[Unit] = db.run {
+  private def finishDevices(campaignId: CampaignId, devices: Seq[DeviceId], status: DeviceStatus,resultCode: Option[ResultCode],
+                            resultDescription: Option[ResultDescription]): Future[Unit] = db.runWithRetry {
     val campaignUpdateEventsFromNamespace = { namespace: Namespace =>
       devices.map { deviceId =>
         CampaignUpdateEvent(
@@ -104,7 +109,7 @@ class Campaigns(val repositories: Repositories)(implicit db: Database, ec: Execu
     Future.sequence(campaignUpdateEvents.map(messageBusPublisher.publish(_)(ec, campaignUpdateEventMsgLike))).map(_ => ())
   }
 
-  private def updateDevicesStatus(campaignId: CampaignId, deviceIds: Seq[DeviceId], status: DeviceStatus): Future[Unit] = db.run {
+  private def updateDevicesStatus(campaignId: CampaignId, deviceIds: Seq[DeviceId], status: DeviceStatus): Future[Unit] = db.runWithRetry {
     for {
       campaign <- campaignRepo.findAction(campaignId)
       deviceUpdates = deviceIds.map { deviceId =>
@@ -121,7 +126,7 @@ class Campaigns(val repositories: Repositories)(implicit db: Database, ec: Execu
     * Returns the most recent device updates that have failed with the code `failureCode` in the campaign with ID
     * `mainCampaignId` or any of its retry-campaigns.
     */
-  def findLatestFailedUpdates(mainCampaignId: CampaignId, failureCode: ResultCode): Future[Set[DeviceUpdate]] = db.run {
+  def findLatestFailedUpdates(mainCampaignId: CampaignId, failureCode: ResultCode): Future[Set[DeviceUpdate]] = db.runWithRetry {
     campaignRepo
       .findRetryCampaignsOfAction(mainCampaignId)
       .flatMap(cids => findFailedDeviceUpdatesAction(cids.map(_.id) + mainCampaignId))
@@ -130,7 +135,7 @@ class Campaigns(val repositories: Repositories)(implicit db: Database, ec: Execu
 
   def countByStatus: Future[Map[CampaignStatus, Int]] =
     db
-      .run(campaignRepo.countByStatus)
+      .runWithRetry(campaignRepo.countByStatus)
       .map { counts =>
         CampaignStatus.values.map(s => s -> counts.getOrElse(s, 0)).toMap
       }
@@ -151,7 +156,7 @@ class Campaigns(val repositories: Repositories)(implicit db: Database, ec: Execu
   } yield GetCampaign(c, retryIds, metadata)
 
   def findCampaignsByUpdate(update: UpdateId): Future[Seq[Campaign]] =
-    db.run(campaignRepo.findByUpdateAction(update))
+    db.runWithRetry(campaignRepo.findByUpdateAction(update))
 
   /**
    * Given a set of campaign IDs, finds all device updates that happened in
@@ -178,7 +183,7 @@ class Campaigns(val repositories: Repositories)(implicit db: Database, ec: Execu
    * Calculates campaign-wide statistic counters, also taking retry campaigns
    * into account if any exist.
    */
-  def campaignStats(campaignId: CampaignId): Future[CampaignStats] = db.run {
+  def campaignStats(campaignId: CampaignId): Future[CampaignStats] = db.runWithRetry {
     final case class Counts(
       processed: Long,
       affected: Long,
@@ -246,11 +251,11 @@ class Campaigns(val repositories: Repositories)(implicit db: Database, ec: Execu
     statsAction.transactionally
   }
 
-  def cancel(campaignId: CampaignId): Future[Unit] = db.run {
+  def cancel(campaignId: CampaignId): Future[Unit] = db.runWithRetry {
     campaignStatusTransition.cancel(campaignId)
   }
 
-  def launch(campaignId: CampaignId): Future[Unit] = db.run {
+  def launch(campaignId: CampaignId): Future[Unit] = db.runWithRetry {
     val action = for {
       campaign <- campaignRepo.findAction(campaignId)
       _ <- if (campaign.status != CampaignStatus.prepared) {
@@ -342,7 +347,7 @@ class Campaigns(val repositories: Repositories)(implicit db: Database, ec: Execu
       _ <- campaignStatusTransition.updateToCalculatedStatus(campaign.id)
     } yield deviceUpdateEventsAccepted ++ deviceUpdateEventsScheduled ++ deviceUpdateEventsRejected
 
-    db.run(action.transactionally).flatMap{campaignUpdateEvents =>
+    db.runWithRetry(action.transactionally).flatMap{campaignUpdateEvents =>
       Future.sequence(campaignUpdateEvents.map(messageBusPublisher.publish(_)(ec, campaignUpdateEventMsgLike))).map(_ => ())
     }
   }

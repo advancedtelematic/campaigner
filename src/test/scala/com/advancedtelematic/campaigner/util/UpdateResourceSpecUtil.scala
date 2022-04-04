@@ -13,6 +13,7 @@ import org.scalacheck.Gen
 import org.scalatest.Matchers
 import org.scalatest.concurrent.ScalaFutures
 import CampaignerSpecUtil._
+import akka.actor.{ActorSystem, Scheduler}
 import cats.data.NonEmptyList
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
@@ -48,6 +49,9 @@ trait DatabaseUpdateSpecUtil {
   self: DatabaseSpec with ScalaFutures =>
 
   import scala.concurrent.ExecutionContext.Implicits.global
+  
+  private implicit val system: ActorSystem = ActorSystem(this.getClass.getSimpleName)
+  implicit val scheduler: Scheduler = system.scheduler
 
   val repositories = Repositories()
   implicit val messageBusPublisher = MessageBusPublisher.ignore

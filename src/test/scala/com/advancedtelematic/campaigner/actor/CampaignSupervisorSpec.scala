@@ -1,6 +1,6 @@
 package com.advancedtelematic.campaigner.actor
 
-import akka.actor.PoisonPill
+import akka.actor.{PoisonPill, Scheduler}
 import akka.testkit.TestProbe
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.db.{Campaigns, Repositories}
@@ -16,6 +16,7 @@ class CampaignSupervisorSpec extends ActorSpec[CampaignSupervisor] with Campaign
   import CampaignSupervisor._
 
   implicit val messageBusPublisher = MessageBusPublisher.ignore
+  implicit val scheduler: Scheduler = system.scheduler
 
   val campaigns = new Campaigns(Repositories())
 
@@ -70,6 +71,7 @@ class CampaignSupervisorSpec2 extends ActorSpec[CampaignSupervisor] with Campaig
   import CampaignSupervisor._
 
   implicit val messageBusPublisher = MessageBusPublisher.ignore
+  implicit val scheduler: Scheduler = system.scheduler
 
   val campaigns = new Campaigns(Repositories())
 

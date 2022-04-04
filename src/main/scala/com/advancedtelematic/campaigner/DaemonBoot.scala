@@ -1,5 +1,6 @@
 package com.advancedtelematic.campaigner
 
+import akka.actor.Scheduler
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Route
 import com.advancedtelematic.campaigner.Boot.{config, system}
@@ -34,6 +35,7 @@ object DaemonBoot extends BootApp
   import com.advancedtelematic.libats.http.VersionDirectives._
 
   implicit val _db = db
+  implicit val scheduler: Scheduler = system.scheduler
 
   implicit val msgPublisher = MessageBus.publisher(system, config)
 

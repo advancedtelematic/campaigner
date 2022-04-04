@@ -1,5 +1,6 @@
 package com.advancedtelematic.campaigner.util
 
+import akka.actor.Scheduler
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.Uri.Query
 import akka.http.scaladsl.model.headers.RawHeader
@@ -34,6 +35,8 @@ trait ResourceSpec extends ScalatestRouteTest
   implicit val messageBusPublisher = MessageBusPublisher.ignore
 
   implicit val defaultTimeout: RouteTestTimeout = RouteTestTimeout(Span(5, Seconds))
+
+  implicit val scheduler: Scheduler = system.scheduler
 
   def apiUri(path: String): Uri = "/api/v2/" + path
 
