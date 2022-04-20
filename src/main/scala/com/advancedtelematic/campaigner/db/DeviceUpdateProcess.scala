@@ -13,6 +13,7 @@ import scala.concurrent.{ExecutionContext, Future}
 object DeviceUpdateProcess {
   sealed trait StartUpdateResult
   case class Started(acceptedDevices: Set[DeviceId], scheduledDevices: Set[DeviceId], rejectedDevices: Set[DeviceId]) extends StartUpdateResult
+  case class Failed(devices: Set[DeviceId], campaign: Campaign, throwable: Throwable) extends StartUpdateResult
   case object CampaignCancelled extends StartUpdateResult
 }
 
@@ -57,6 +58,10 @@ class DeviceUpdateProcess(director: DirectorClient, campaigns: Campaigns)(implic
           rejected = devices -- accepted -- scheduled
         } yield Started(accepted, scheduled, rejected)
       }
+    }.recover {
+      case t: Throwable =>
+        _logger.error(s"Cannot assign the update. An error occurred: ${t.getMessage}", t)
+        Failed(devices, campaign, t)
     }
   }
 

@@ -6,16 +6,17 @@ import akka.testkit.TestProbe
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
-import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec, DatabaseUpdateSpecUtil}
+import com.advancedtelematic.campaigner.util.{ActorSpec, CampaignerSpec, DatabaseUpdateSpecUtil, FakeDirectorClient}
 import com.advancedtelematic.libats.data.DataType.{CorrelationId, Namespace}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, DeviceStatus}
 import org.scalacheck.Gen
-import org.scalatest.Inspectors
+import org.scalatest.{Inspectors, LoneElement}
 
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.concurrent.Future
 
 class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with CampaignerSpec
-  with DatabaseUpdateSpecUtil with Inspectors {
+  with DatabaseUpdateSpecUtil with Inspectors with LoneElement {
   import CampaignScheduler._
 
   import scala.concurrent.duration._
@@ -146,5 +147,69 @@ class CampaignSchedulerSpec extends ActorSpec[CampaignScheduler] with Campaigner
     parent.expectMsg(20.seconds, CampaignComplete(campaign.id))
 
     campaigns.campaignStats(campaign.id).futureValue.status shouldBe CampaignStatus.finished
+  }
+
+  "campaign scheduler" should "handle errors during update assigning" in {
+    val campaign = buildCampaignWithUpdate
+    val devs = Gen.listOfN(1, genDeviceId).generate.toSet
+
+    campaigns.create(campaign, Set.empty, devs, Seq.empty).futureValue
+    campaigns.launch(campaign.id)
+
+    val director = new FakeDirectorClient() {
+      override def setMultiUpdateTarget(namespace: Namespace, update: ExternalUpdateId, devices: Seq[DeviceId], correlationId: CorrelationId): Future[Seq[DeviceId]] =
+        Future.failed(new Exception("Some unexpected error"))
+    }
+
+    val parent = TestProbe()
+    parent.childActorOf(CampaignScheduler.props(
+      director,
+      campaigns,
+      campaign,
+      10.millis,
+      schedulerBatchSize
+    ))
+
+    parent.expectMsg(3.seconds, CampaignComplete(campaign.id))
+    val stats = campaigns.campaignStats(campaign.id).futureValue
+
+    stats.failed shouldBe 1
+    stats.failures.loneElement.code shouldBe CampaignScheduler.AssignUpdateFailed
+    stats.failures.loneElement.count shouldBe 1
+  }
+
+  "campaign scheduler" should "handle errors during update assigning for one of batch" in {
+    val campaign = buildCampaignWithUpdate
+    val devs = Gen.listOfN(schedulerBatchSize * 3, genDeviceId).generate.toSet
+
+    campaigns.create(campaign, Set.empty, devs, Seq.empty).futureValue
+    campaigns.launch(campaign.id)
+
+    val director = new FakeDirectorClient() {
+      private val shouldFail = new AtomicBoolean(true)
+      override def setMultiUpdateTarget(namespace: Namespace, update: ExternalUpdateId, devices: Seq[DeviceId], correlationId: CorrelationId): Future[Seq[DeviceId]] = {
+        if(shouldFail.get()) {
+          shouldFail.set(false) //to emulate failing only for one batch
+          Future.failed(new Exception("Some unexpected error"))
+        } else super.setMultiUpdateTarget(namespace, update, devices, correlationId)
+      }
+    }
+
+    val parent = TestProbe()
+    parent.childActorOf(CampaignScheduler.props(
+      director,
+      campaigns,
+      campaign,
+      10.millis,
+      schedulerBatchSize
+    ))
+
+    parent.expectMsg(3.seconds, CampaignComplete(campaign.id))
+    val stats = campaigns.campaignStats(campaign.id).futureValue
+
+    stats.processed shouldBe devs.size
+    stats.failed shouldBe schedulerBatchSize
+    stats.failures.loneElement.code shouldBe CampaignScheduler.AssignUpdateFailed
+    stats.failures.loneElement.count shouldBe schedulerBatchSize
   }
 }
