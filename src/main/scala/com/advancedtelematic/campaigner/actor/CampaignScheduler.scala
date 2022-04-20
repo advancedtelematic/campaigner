@@ -5,8 +5,9 @@ import akka.http.scaladsl.util.FastFuture
 import akka.stream.ActorMaterializer
 import com.advancedtelematic.campaigner.client._
 import com.advancedtelematic.campaigner.data.DataType._
-import com.advancedtelematic.campaigner.db.DeviceUpdateProcess.{CampaignCancelled, StartUpdateResult, Started}
+import com.advancedtelematic.campaigner.db.DeviceUpdateProcess.{CampaignCancelled, Failed, StartUpdateResult, Started}
 import com.advancedtelematic.campaigner.db.{Campaigns, DeviceUpdateProcess}
+import com.advancedtelematic.libats.data.DataType.{ResultCode, ResultDescription}
 import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId}
 
 import scala.concurrent.Future
@@ -18,6 +19,8 @@ object CampaignScheduler {
   private final object NextBatch
   private final case class BatchToSchedule(devices: Set[DeviceId])
   final case class CampaignComplete(campaign: CampaignId)
+
+  val AssignUpdateFailed = ResultCode("ASSIGN_UPDATE_FAILED")
 
   def props(director: DirectorClient,
             campaigns: Campaigns,
@@ -51,6 +54,10 @@ class CampaignScheduler(director: DirectorClient,
         campaigns
           .updateCampaignAndDevicesStatuses(campaign, accepted, scheduled, rejected)
           .map(_ => res)
+      case res @ Failed(devices, campaign, throwable) =>
+        campaigns
+          .failDevices(campaign.id, devices.toSeq, AssignUpdateFailed, ResultDescription(throwable.getMessage))
+          .map(_ => res)
       case CampaignCancelled =>
         FastFuture.successful(CampaignCancelled)
     }
@@ -77,6 +84,10 @@ class CampaignScheduler(director: DirectorClient,
     case DeviceUpdateProcess.Started(accepted, scheduled, rejected) =>
       val affected = accepted ++ scheduled
       log.debug(s"Completed a batch. Affected: ${affected.size}. Rejected: ${rejected.size}.")
+      scheduler.scheduleOnce(delay, self, NextBatch)
+
+    case DeviceUpdateProcess.Failed(_, _, _) =>
+      log.info(s"Scheduling a batch failed. Trying next batch")
       scheduler.scheduleOnce(delay, self, NextBatch)
 
     case DeviceUpdateProcess.CampaignCancelled =>
