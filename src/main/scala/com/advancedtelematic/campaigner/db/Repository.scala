@@ -14,7 +14,7 @@ import com.advancedtelematic.campaigner.db.SlickMapping._
 import com.advancedtelematic.campaigner.db.SlickUtil.{sortBySlickOrderedCampaignConversion, sortBySlickOrderedUpdateConversion}
 import com.advancedtelematic.campaigner.http.Errors._
 import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
-import com.advancedtelematic.libats.data.PaginationResult
+import com.advancedtelematic.libats.data.{Limit, Offset, PaginationResult}
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId, DeviceStatus, UpdateId}
 import com.advancedtelematic.libats.slick.db.DatabaseHelper.DatabaseWithRetry
@@ -187,7 +187,7 @@ class CampaignRepository()(implicit db: Database, ec: ExecutionContext, schedule
   def find(campaign: CampaignId, ns: Option[Namespace] = None): Future[Campaign] =
     db.runWithRetry(findAction(campaign, ns))
 
-  def all(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, status: Option[CampaignStatus], nameContains: Option[String]): Future[PaginationResult[Campaign]] = {
+  def all(ns: Namespace, sortBy: SortBy, offset: Offset, limit: Limit, status: Option[CampaignStatus], nameContains: Option[String]): Future[PaginationResult[Campaign]] = {
     db.runWithRetry {
       Schema.campaigns
         .filter(_.namespace === ns)
@@ -202,7 +202,7 @@ class CampaignRepository()(implicit db: Database, ec: ExecutionContext, schedule
   /**
    * Return all the failed campaigns, i.e campaigns with at least one failed device.
    */
-  def allWithErrors(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long): Future[PaginationResult[Campaign]] =
+  def allWithErrors(ns: Namespace, sortBy: SortBy, offset: Offset, limit: Limit): Future[PaginationResult[Campaign]] =
     db.runWithRetry {
       Schema.campaigns
         .filter(_.namespace === ns)
@@ -363,7 +363,7 @@ class UpdateRepository()(implicit db: Database, ec: ExecutionContext, scheduler:
       .result
   }
 
-  def allPaginated(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, nameContains: Option[String]): Future[PaginationResult[Update]] = db.runWithRetry {
+  def allPaginated(ns: Namespace, sortBy: SortBy, offset: Offset, limit: Limit, nameContains: Option[String]): Future[PaginationResult[Update]] = db.runWithRetry {
     Schema.updates
       .filter(_.namespace === ns)
       .maybeContains(_.name, nameContains)

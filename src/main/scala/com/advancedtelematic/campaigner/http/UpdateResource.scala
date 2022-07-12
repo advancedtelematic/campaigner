@@ -5,6 +5,7 @@ import akka.http.scaladsl.model.headers.Location
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive1, Route}
+import akka.http.scaladsl.unmarshalling.Unmarshaller
 import com.advancedtelematic.campaigner.Settings
 import com.advancedtelematic.campaigner.client.{DeviceRegistryClient, ResolverClient, UserProfileClient}
 import com.advancedtelematic.campaigner.data.AkkaSupport._
@@ -14,7 +15,8 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.UpdateRepository
 import com.advancedtelematic.campaigner.http.Errors.ConflictingUpdate
 import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.data.{ErrorRepresentation, PaginationResult}
+import com.advancedtelematic.libats.data.{ErrorRepresentation, Limit, Offset, PaginationResult}
+import com.advancedtelematic.libats.http.FromLongUnmarshallers._
 import com.advancedtelematic.libats.http.UUIDKeyAkka._
 import com.advancedtelematic.libats.messaging_datatype.DataType.UpdateId
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
@@ -48,6 +50,8 @@ class UpdateResource(extractNamespace: Directive1[Namespace],
                      resolver: ResolverClient,
                      userProfile: UserProfileClient,
                      updateRepo: UpdateRepository)(implicit ec: ExecutionContext) extends Settings {
+
+  implicit val limitUnmarshaller: Unmarshaller[String, Limit] = getLimitUnmarshaller()
 
   private[this] val pathToUpdates = Path.Empty / "api" / "v2" / "updates"
 
@@ -83,7 +87,7 @@ class UpdateResource(extractNamespace: Directive1[Namespace],
     }
   }
 
-  private def getAllUpdates(ns: Namespace, offset: Long, limit: Long, sortBy: Option[SortBy], nameContains: Option[String]) =
+  private def getAllUpdates(ns: Namespace, offset: Offset, limit: Limit, sortBy: Option[SortBy], nameContains: Option[String]) =
     updateRepo.allPaginated(ns, sortBy.getOrElse(SortBy.Name), offset, limit, nameContains).map(_.map(linkToSelf))
 
   private def getGroupUpdates(ns: Namespace, groups: Set[GroupId]): Future[PaginationResult[HypermediaResource[Update]]] =
@@ -93,7 +97,7 @@ class UpdateResource(extractNamespace: Directive1[Namespace],
         case Some(uri) => new GroupUpdateResolver(deviceRegistry, resolver, uri, updateRepo).groupUpdates(ns, groups)
         case None => updateRepo.all(ns, updateType = Some(UpdateType.multi_target)) // TODO use the internal resolver from director once it's implemented
       }
-      .map(updates => PaginationResult(updates, updates.size.toLong, 0, updates.size.toLong).map(linkToSelf))
+      .map(updates => PaginationResult(updates, updates.size.toLong, Offset(0), Limit(updates.size.toLong)).map(linkToSelf))
 
   val route: Route =
     extractNamespace { ns =>
@@ -105,7 +109,7 @@ class UpdateResource(extractNamespace: Directive1[Namespace],
           (post & entity(as[CreateUpdate])) { request =>
             createUpdate(ns, request)
           } ~
-          (get & parameters(('groupId.as[GroupId].*, 'nameContains.as[String].?, 'sortBy.as[SortBy].?, 'offset.as(nonNegativeLongUnmarshaller) ? 0L, 'limit.as(nonNegativeLongUnmarshaller) ? 50L))) {
+          (get & parameters(('groupId.as[GroupId].*, 'nameContains.as[String].?, 'sortBy.as[SortBy].?, 'offset.as[Offset] ? Offset(0L), 'limit.as[Limit] ? Limit(50L)))) {
             (groupId, nameContains, sortBy, offset, limit) => (groupId, nameContains) match {
               case (Nil, _) => complete(getAllUpdates(ns, offset, limit, sortBy, nameContains))
               case (groups, None) => availableUpdatesForGroups(ns, groups.toSet)

@@ -10,6 +10,7 @@ import com.advancedtelematic.campaigner.data.DataType.RetryStatus.RetryStatus
 import com.advancedtelematic.campaigner.data.DataType.SortBy.SortBy
 import com.advancedtelematic.campaigner.data.DataType.UpdateType.UpdateType
 import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
+import com.advancedtelematic.libats.data.{Limit, Offset}
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.libats.messaging_datatype.DataType.DeviceStatus.DeviceStatus
 import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId, UpdateId}
@@ -122,8 +123,8 @@ object DataType {
                                         nameContains: Option[String],
                                         withErrors: Option[Boolean],
                                         sortBy: SortBy,
-                                        offset: Long,
-                                        limit: Long,
+                                        offset: Offset,
+                                        limit: Limit,
                                        ) {
     if (withErrors.isDefined) {
       require(withErrors.get, "Invalid parameters: only value 'true' is supported for parameter 'withErrors'.")
