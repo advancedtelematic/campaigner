@@ -11,7 +11,7 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.SlickMapping._
 import com.advancedtelematic.campaigner.http.Errors._
 import com.advancedtelematic.libats.data.DataType.{Namespace, ResultCode, ResultDescription}
-import com.advancedtelematic.libats.data.PaginationResult
+import com.advancedtelematic.libats.data.{Limit, Offset, PaginationResult}
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId, DeviceStatus, UpdateId}
 import com.advancedtelematic.libats.messaging_datatype.Messages._
@@ -140,10 +140,10 @@ class Campaigns(val repositories: Repositories)(implicit db: Database, ec: Execu
         CampaignStatus.values.map(s => s -> counts.getOrElse(s, 0)).toMap
       }
 
-  def findCampaignsWithErrors(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long): Future[PaginationResult[Campaign]] =
+  def findCampaignsWithErrors(ns: Namespace, sortBy: SortBy, offset: Offset, limit: Limit): Future[PaginationResult[Campaign]] =
     campaignRepo.allWithErrors(ns, sortBy, offset, limit)
 
-  def findCampaigns(ns: Namespace, sortBy: SortBy, offset: Long, limit: Long, status: Option[CampaignStatus], nameContains: Option[String]): Future[PaginationResult[Campaign]] =
+  def findCampaigns(ns: Namespace, sortBy: SortBy, offset: Offset, limit: Limit, status: Option[CampaignStatus], nameContains: Option[String]): Future[PaginationResult[Campaign]] =
     campaignRepo.all(ns, sortBy, offset, limit, status, nameContains)
 
   def findNamespaceCampaign(ns: Namespace, campaignId: CampaignId): Future[Campaign] =

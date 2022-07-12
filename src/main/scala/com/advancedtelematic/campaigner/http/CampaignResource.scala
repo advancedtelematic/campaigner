@@ -18,6 +18,8 @@ import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.db.Campaigns
 import com.advancedtelematic.libats.auth.AuthedNamespaceScope
 import com.advancedtelematic.libats.data.DataType.{CorrelationId, Namespace, ResultCode, ResultDescription}
+import com.advancedtelematic.libats.data.{Limit, Offset}
+import com.advancedtelematic.libats.http.FromLongUnmarshallers._
 import com.advancedtelematic.libats.http.UUIDKeyAkka._
 import com.advancedtelematic.libats.messaging_datatype.DataType.{CampaignId, DeviceId}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
@@ -30,6 +32,7 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
                       (implicit ec: ExecutionContext) extends Settings {
 
   implicit val resultCodeUnmarshaller: FromStringUnmarshaller[ResultCode] = Unmarshaller.strict(ResultCode)
+  implicit val limitUnmarshaller: Unmarshaller[String, Limit] = getLimitUnmarshaller()
 
   def createCampaign(ns: Namespace, request: CreateCampaign): Future[CampaignId] = {
     val campaign = request.mkCampaign(ns)
@@ -48,8 +51,8 @@ class CampaignResource(extractAuth: Directive1[AuthedNamespaceScope],
       'nameContains.as[String].?,
       'withErrors.as[Boolean].?,
       'sortBy.as[SortBy] ? (SortBy.CreatedAt : SortBy),
-      'offset.as(nonNegativeLongUnmarshaller) ? 0L,
-      'limit.as(nonNegativeLongUnmarshaller) ? 50L)).as(SearchCampaignParams) { params: SearchCampaignParams =>
+      'offset.as[Offset] ? Offset(0L),
+      'limit.as[Limit] ? Limit(50L))).as(SearchCampaignParams) { params: SearchCampaignParams =>
       val f = params.withErrors match {
         case Some(true) =>
           campaigns.findCampaignsWithErrors(ns, params.sortBy, params.offset, params.limit)
