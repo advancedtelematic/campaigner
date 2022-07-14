@@ -41,7 +41,7 @@ trait DeviceRegistryClient {
         }
     }
 
-    fetchDevices(groupId, offset = 0, limit = 1024)
+    fetchDevices(groupId, offset = 0, limit = 1000)
   }
 
   def fetchOemId(ns: Namespace, deviceIds: DeviceId): Future[String]
