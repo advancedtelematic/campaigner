@@ -66,6 +66,10 @@ class DeviceRegistryHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpR
     val path  = uri.path / "api" / "v1" / "devices" / deviceId.show
     val req = HttpRequest(HttpMethods.GET, uri.withPath(path)).withNs(ns)
     implicit val um = unmarshaller[String](Decoder.instance(_.get("deviceId")))
-    execHttpUnmarshalled[String](req).ok
+    execHttpUnmarshalled[String](req).flatMap {
+      case Right(value) => FastFuture.successful(value)
+      case Left(error) if error.status == StatusCodes.NotFound => FastFuture.successful("Device not found")
+      case Left(error) => FastFuture.failed(error)
+    }
   }
 }
