@@ -12,8 +12,21 @@ object Codecs {
   import DataType.RetryStatus.RetryStatus
   import io.circe.generic.semiauto._
 
+  val MaxAllowedTextSize = 65533 //64Kb - 2Bytes
+
   implicit val createCampaignMetadataEncoder: Encoder[CreateCampaignMetadata] = deriveEncoder
-  implicit val createCampaignMetadataDecoder: Decoder[CreateCampaignMetadata] = deriveDecoder
+  implicit val createCampaignMetadataDecoder: Decoder[CreateCampaignMetadata] =
+    deriveDecoder[CreateCampaignMetadata]
+      .ensure { metadata =>
+        if (metadata.value.getBytes("UTF-8").length > MaxAllowedTextSize) {
+          val metadataTypeString = metadata.`type` match {
+            case MetadataType.DESCRIPTION => "Release note"
+            case MetadataType.ESTIMATED_PREPARATION_DURATION => "Estimated time to prepare this update"
+            case MetadataType.ESTIMATED_INSTALLATION_DURATION => "Estimated time to install this update"
+          }
+          List(s"$metadataTypeString value too long. Max allowed size - 64Kb")
+        } else List.empty
+      }
 
   implicit val campaignMetadataEncoder: Encoder[CampaignMetadata] = deriveEncoder
   implicit val campaignMetadataDecoder: Decoder[CampaignMetadata] = deriveDecoder

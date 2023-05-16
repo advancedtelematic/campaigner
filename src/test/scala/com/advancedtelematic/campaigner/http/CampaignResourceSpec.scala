@@ -13,6 +13,7 @@ import cats.syntax.show._
 import com.advancedtelematic.campaigner.client.DeviceRegistryHttpClient
 import com.advancedtelematic.campaigner.data.Codecs._
 import com.advancedtelematic.campaigner.data.DataType.CampaignStatus.CampaignStatus
+import com.advancedtelematic.campaigner.data.DataType.MetadataType.MetadataType
 import com.advancedtelematic.campaigner.data.DataType._
 import com.advancedtelematic.campaigner.data.Generators._
 import com.advancedtelematic.campaigner.util.{CampaignerSpec, ResourceSpec, UpdateResourceSpecUtil}
@@ -31,6 +32,7 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import scala.annotation.tailrec
 import scala.concurrent.Future
+import scala.util.Random
 
 class CampaignResourceSpec
     extends CampaignerSpec
@@ -186,6 +188,27 @@ class CampaignResourceSpec
     createCampaign(request) ~> routes ~> check {
       status shouldBe BadRequest
       responseAs[ErrorRepresentation].code shouldBe InvalidEntity
+    }
+  }
+
+  "POST /campaigns with too long metadata" should "fail with InvalidEntity" in {
+    def tooLongMetadata(metadataType: MetadataType) = Seq(
+      CreateCampaignMetadata(metadataType, Random.alphanumeric.take(MaxAllowedTextSize + 1).mkString)
+    )
+
+    forAll(Table(
+      ("type", "expectedError"),
+      (MetadataType.DESCRIPTION, "Release note value too long"),
+      (MetadataType.ESTIMATED_PREPARATION_DURATION, "Estimated time to prepare this update"),
+      (MetadataType.ESTIMATED_INSTALLATION_DURATION, "Estimated time to install this update")
+    )) { case (metadataType: MetadataType, expectedErrorMsg: String) =>
+
+      val request = genCreateCampaign().map(_.copy(metadata = Some(tooLongMetadata(metadataType)))).generate
+      createCampaign(request) ~> routes ~> check {
+        status shouldBe BadRequest
+        responseAs[ErrorRepresentation].code shouldBe InvalidEntity
+        responseAs[ErrorRepresentation].description should startWith(expectedErrorMsg)
+      }
     }
   }
 
